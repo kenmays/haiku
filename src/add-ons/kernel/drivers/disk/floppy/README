@@ -1,16 +1,28 @@
 # Haiku floppy driver
 
-This driver currently contains the common floppy block-device interface and a PC NEC-765 backend.
+This driver provides a common floppy block-device interface and a PC NEC-765-compatible backend.
 
 ## PC media
 
-* 3.5-inch 1.44 MiB: 80 cylinders, 2 heads, 18 sectors/track.
-* 5.25-inch 1.2 MiB: 80 cylinders, 2 heads, 15 sectors/track.
+* 3.5-inch 1.44 MiB: 80 cylinders, 2 heads, 18 sectors/track, 500 kbps.
+* 5.25-inch 1.2 MiB: 80 cylinders, 2 heads, 15 sectors/track, 500 kbps.
+* 5.25-inch 360 KiB: 40 cylinders, 2 heads, 9 sectors/track, 250 kbps.
 
-The 5.25-inch profile is selected through `disk/floppy/N/1.2m/raw`.
+Published raw nodes are:
+
+* `disk/floppy/0/raw`
+* `disk/floppy/1/raw`
+* `disk/floppy/0/1.2m/raw`
+* `disk/floppy/1/1.2m/raw`
+* `disk/floppy/0/360k/raw`
+* `disk/floppy/1/360k/raw`
+
+The PC backend uses PIO through the ISA FDC interface. It programs the controller data rate, performs motor spin-up, uses kernel-safe user-buffer copies, and retries failed sector operations with controller reset/recalibration.
+
+The current backend still uses bounded polling for the NEC-765 completion/result phase. A future hardware pass should replace the mechanical-operation sleeps with IRQ6/semaphore synchronization and add explicit media-change and write-protect handling.
 
 ## Amiga
 
-Amiga floppy controllers are not NEC-765 devices. Paula uses a track-oriented DMA/MFM mechanism. The m68k build therefore has a separate backend boundary for Paula register access, track decoding, motor/select control, and write precompensation. The current common driver deliberately returns `B_DEV_NOT_READY` until the platform-specific Paula DMA/track implementation is wired into the Haiku m68k hardware abstraction.
+Amiga floppy controllers are not NEC-765 devices. Paula uses a track-oriented DMA/MFM mechanism. The m68k build therefore has a separate backend boundary for Paula register access, track decoding, motor/select control, disk-change/write-protect sensing, and write-track encoding/precompensation.
 
-This prevents an x86 implementation from accidentally programming Amiga custom-chip addresses and makes the remaining Amiga work independently testable.
+The current Haiku m68k tree does not expose an Amiga custom-chip/Paula hardware abstraction or an Amiga board implementation that this driver can safely bind to. Consequently the m68k path remains disabled rather than inventing register mappings that could corrupt unrelated hardware. Standard Amiga DD media is 880 KiB (80 tracks, 2 sides, 11 sectors/track); 1.76 MiB HD media must only be enabled on hardware that actually provides HD-capable mechanics and signaling.

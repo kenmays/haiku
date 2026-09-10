@@ -1,7 +1,7 @@
 /*
  * Legacy floppy disk driver for Haiku.
  * PC NEC765 backend: 1.44 MiB and 1.2 MiB 5.25-inch media.
- * Amiga Paula support is provided by the architecture backend.
+ * Amiga Paula support is provided by the architecture backend boundary.
  *
  * Copyright 2026, Ken Mays.
  * Distributed under the terms of the MIT License.
@@ -29,9 +29,8 @@ struct Device { recursive_lock lock; int drive; uint32 type; uint32 cylinder; };
 #define DOR 0x3f2
 #define MSR 0x3f4
 #define FIFO 0x3f5
-#define CCR 0x3f7
 #define DOR_RESET 0x04
-#define DOR_DMA 0x08
+#define DOR_IRQ_ENABLE 0x08
 #define M0 0x10
 #define M1 0x20
 #define RQM 0x80
@@ -45,7 +44,6 @@ struct Device { recursive_lock lock; int drive; uint32 type; uint32 cylinder; };
 
 static isa_module_info* sISA;
 static Device sPC[2];
-
 static const Geometry k1440 = {18, 2, 80, SECTOR_SIZE};
 static const Geometry k1200 = {15, 2, 80, SECTOR_SIZE};
 
@@ -54,7 +52,7 @@ static status_t wait_phase(bool input)
 	bigtime_t deadline = system_time() + 2000000;
 	while (system_time() < deadline) {
 		uint8 status = sISA->read_io_8(MSR);
-		if ((status & RQM) && (((status & DIO) != 0) == input)) return B_OK;
+		if ((status & RQM) != 0 && (((status & DIO) != 0) == input)) return B_OK;
 		cpu_pause();
 	}
 	return B_TIMED_OUT;
@@ -76,7 +74,7 @@ static status_t in(uint8* value)
 
 static void select_drive(int drive, bool motor)
 {
-	uint8 value = DOR_RESET | DOR_DMA | (uint8)drive;
+	uint8 value = DOR_RESET | DOR_IRQ_ENABLE | (uint8)drive;
 	if (motor) value |= drive == 0 ? M0 : M1;
 	sISA->write_io_8(DOR, value);
 }
@@ -91,11 +89,9 @@ static status_t sense(uint8* st0, uint8* cylinder)
 
 static status_t reset_fdc()
 {
-	/* The FDC is operated in PIO mode; the DMA-enable bit in DOR is kept
-	 * clear. The SPECIFY command's second byte selects non-DMA operation. */
 	sISA->write_io_8(DOR, 0);
 	snooze(20);
-	sISA->write_io_8(DOR, DOR_RESET);
+	sISA->write_io_8(DOR, DOR_RESET | DOR_IRQ_ENABLE);
 	snooze(2);
 	uint8 st0, cyl;
 	for (int i = 0; i < 4; i++) {
@@ -105,7 +101,8 @@ static status_t reset_fdc()
 	status_t status = out(CMD_SPECIFY);
 	if (status != B_OK) return status;
 	if ((status = out(0xdf)) != B_OK) return status;
-	return out(0x02);
+	/* Bit 0 of the second SPECIFY byte is NDMA. */
+	return out(0x03);
 }
 
 static status_t recal(Device* d)
@@ -117,7 +114,7 @@ static status_t recal(Device* d)
 	snooze(30);
 	uint8 st0, cyl;
 	if ((status = sense(&st0, &cyl)) != B_OK) return status;
-	if (!(st0 & 0x20) || cyl != 0) return B_IO_ERROR;
+	if ((st0 & 0x20) == 0 || cyl != 0) return B_IO_ERROR;
 	d->cylinder = 0;
 	return B_OK;
 }
@@ -133,7 +130,7 @@ static status_t seek(Device* d, uint8 cyl, uint8 head)
 	snooze(15);
 	uint8 st0, result;
 	if ((status = sense(&st0, &result)) != B_OK) return status;
-	if (!(st0 & 0x20) || result != cyl) return B_IO_ERROR;
+	if ((st0 & 0x20) == 0 || result != cyl) return B_IO_ERROR;
 	d->cylinder = cyl;
 	return B_OK;
 }
@@ -162,14 +159,11 @@ static status_t transfer(Device* d, uint8 cyl, uint8 head, uint8 sector,
 #endif
 
 #if defined(__m68k__)
-/* Amiga Paula has a track-oriented DMA/MFM controller rather than an NEC-765
- * FIFO. The architecture backend owns custom-chip register access and raw
- * track decoding. It is deliberately separate from the PC implementation. */
+/* Paula is track-oriented and does not implement an NEC-765 FIFO. The actual
+ * custom-chip DMA/MFM engine belongs in the Amiga architecture layer. */
 struct AmigaDevice { uint32 unit; uint32 cylinder; bool writeProtected; };
 static AmigaDevice sAmiga[4];
 static status_t amiga_init() { return B_OK; }
-static status_t amiga_read_track(AmigaDevice*, uint32, void*, size_t*) { return B_DEV_NOT_READY; }
-static status_t amiga_write_track(AmigaDevice*, uint32, const void*, size_t) { return B_DEV_NOT_READY; }
 #endif
 
 static const Geometry& geometry(const Device* d) { return d->type == TYPE_1200 ? k1200 : k1440; }
@@ -177,12 +171,12 @@ static const Geometry& geometry(const Device* d) { return d->type == TYPE_1200 ?
 static status_t open_dev(const char* name, uint32, void** cookie)
 {
 #if defined(__i386__) || defined(__x86_64__)
-	if (strncmp(name, "disk/floppy/", 12) != 0) return B_BAD_VALUE;
+	if (name == NULL || cookie == NULL || strncmp(name, "disk/floppy/", 12) != 0) return B_BAD_VALUE;
 	int drive = name[12] - '0';
 	if (drive < 0 || drive > 1) return B_BAD_VALUE;
 	Device* d = &sPC[drive];
-	d->type = strstr(name, "/1.2m/") ? TYPE_1200 : TYPE_1440;
-	MutexLocker locker(&d->lock);
+	d->type = strstr(name, "/1.2m/") != NULL ? TYPE_1200 : TYPE_1440;
+	RecursiveLocker locker(&d->lock);
 	select_drive(drive, true);
 	status_t status = recal(d);
 	if (status != B_OK) return status;
@@ -195,6 +189,7 @@ static status_t open_dev(const char* name, uint32, void** cookie)
 	return B_NOT_SUPPORTED;
 #endif
 }
+
 static status_t close_dev(void*) { return B_OK; }
 static status_t free_dev(void*) { return B_OK; }
 
@@ -207,7 +202,7 @@ static status_t read_dev(void* cookie, off_t pos, void* buffer, size_t* count)
 	if (pos < 0 || pos >= size) return B_BAD_VALUE;
 	size_t wanted = *count; if (pos + wanted > size) wanted = size - pos;
 	if ((pos % SECTOR_SIZE) || (wanted % SECTOR_SIZE)) return B_BAD_VALUE;
-	MutexLocker locker(&d->lock);
+	RecursiveLocker locker(&d->lock);
 	for (size_t done = 0; done < wanted; done += SECTOR_SIZE) {
 		off_t lba = (pos + done) / SECTOR_SIZE;
 		uint8 sector = lba % g.spt + 1;
@@ -216,7 +211,8 @@ static status_t read_dev(void* cookie, off_t pos, void* buffer, size_t* count)
 		status_t status = transfer(d, cyl, head, sector, (uint8*)buffer + done, false);
 		if (status != B_OK) { *count = done; return status; }
 	}
-	*count = wanted; return B_OK;
+	*count = wanted;
+	return B_OK;
 #else
 	return B_NOT_SUPPORTED;
 #endif
@@ -231,7 +227,7 @@ static status_t write_dev(void* cookie, off_t pos, const void* buffer, size_t* c
 	if (pos < 0 || pos >= size) return B_BAD_VALUE;
 	size_t wanted = *count; if (pos + wanted > size) wanted = size - pos;
 	if ((pos % SECTOR_SIZE) || (wanted % SECTOR_SIZE)) return B_BAD_VALUE;
-	MutexLocker locker(&d->lock);
+	RecursiveLocker locker(&d->lock);
 	for (size_t done = 0; done < wanted; done += SECTOR_SIZE) {
 		off_t lba = (pos + done) / SECTOR_SIZE;
 		uint8 sector = lba % g.spt + 1;
@@ -240,7 +236,8 @@ static status_t write_dev(void* cookie, off_t pos, const void* buffer, size_t* c
 		status_t status = transfer(d, cyl, head, sector, (void*)((const uint8*)buffer + done), true);
 		if (status != B_OK) { *count = done; return status; }
 	}
-	*count = wanted; return B_OK;
+	*count = wanted;
+	return B_OK;
 #else
 	return B_NOT_SUPPORTED;
 #endif
@@ -254,13 +251,18 @@ static status_t control_dev(void* cookie, uint32 op, void* arg, size_t len)
 	off_t size = (off_t)g.spt * g.heads * g.cylinders * g.sectorSize;
 	if (op == B_GET_DEVICE_SIZE) {
 		if (!arg || len < sizeof(off_t)) return B_BAD_VALUE;
-		*(off_t*)arg = size; return B_OK;
+		*(off_t*)arg = size;
+		return B_OK;
 	}
 	if (op == B_GET_GEOMETRY || op == B_GET_BIOS_GEOMETRY) {
 		if (!arg || len < sizeof(device_geometry)) return B_BAD_VALUE;
-		device_geometry* out = (device_geometry*)arg; memset(out, 0, sizeof(*out));
-		out->bytes_per_sector = g.sectorSize; out->sectors_per_track = g.spt;
-		out->cylinder_count = g.cylinders; out->head_count = g.heads; return B_OK;
+		device_geometry* out = (device_geometry*)arg;
+		memset(out, 0, sizeof(*out));
+		out->bytes_per_sector = g.sectorSize;
+		out->sectors_per_track = g.spt;
+		out->cylinder_count = g.cylinders;
+		out->head_count = g.heads;
+		return B_OK;
 	}
 #endif
 	return B_BAD_VALUE;
@@ -279,12 +281,18 @@ static status_t init_driver()
 	if (status != B_OK) return status;
 	status = reset_fdc();
 	if (status != B_OK) { put_module("bus_managers/isa/v1"); sISA = NULL; return status; }
-	for (int i = 0; i < 2; i++) { sPC[i].drive = i; sPC[i].type = TYPE_1440; sPC[i].cylinder = 0; recursive_lock_init(&sPC[i].lock, "floppy lock"); }
+	for (int i = 0; i < 2; i++) {
+		sPC[i].drive = i; sPC[i].type = TYPE_1440; sPC[i].cylinder = 0;
+		recursive_lock_init(&sPC[i].lock, "floppy lock");
+	}
 #elif defined(__m68k__)
 	return amiga_init();
+#else
+	return B_NOT_SUPPORTED;
 #endif
 	return B_OK;
 }
+
 static void uninit_driver()
 {
 #if defined(__i386__) || defined(__x86_64__)
@@ -293,8 +301,12 @@ static void uninit_driver()
 	sISA = NULL;
 #endif
 }
-static const char** publish_devices() { return kDevices; }
-static device_hooks* find_device(const char* name) { return strstr(name, "disk/floppy/") == name ? &sHooks : NULL; }
 
-static module_info sModule = { "drivers/disk/floppy/legacy/v3", 0, NULL };
+static const char** publish_devices() { return kDevices; }
+static device_hooks* find_device(const char* name)
+{
+	return name != NULL && strstr(name, "disk/floppy/") == name ? &sHooks : NULL;
+}
+
+static module_info sModule = { "drivers/disk/floppy/legacy/v4", 0, NULL };
 _EXPORT module_info* modules[] = { &sModule, NULL };

@@ -19,9 +19,9 @@ Published raw nodes are:
 
 The PC backend uses PIO through the ISA FDC interface. It programs the controller data rate, performs motor spin-up, synchronizes NEC-765 recalibrate/seek/read/write completion with IRQ6, uses kernel-safe user-buffer copies, checks write-protect state, and retries failed sector operations with controller reset/recalibration.
 
-`B_GET_DEVICE_SIZE`, geometry queries, and `B_GET_MEDIA_STATUS` are exposed through the legacy device ioctl interface. A disk-change indication is reported as `B_DEV_MEDIA_CHANGED`; callers clear that condition by querying media status again.
+`B_GET_DEVICE_SIZE` and the standard geometry ioctls are implemented. Media-change reporting remains a follow-up because the legacy floppy interface needs per-open media-state tracking rather than simply exposing the controller's instantaneous DIR bit.
 
-The driver intentionally keeps transfers sector-aligned because the NEC-765 backend currently performs one 512-byte command at a time. DMA, multisector commands, and advanced format probing are not required for the supported raw formats and remain future optimizations.
+The driver intentionally keeps transfers sector-aligned because the NEC-765 backend currently performs one 512-byte command at a time. DMA, multisector commands, advanced format probing, and background motor timers remain future optimizations.
 
 ## Amiga
 

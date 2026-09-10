@@ -17,12 +17,20 @@ Published raw nodes are:
 * `disk/floppy/0/360k/raw`
 * `disk/floppy/1/360k/raw`
 
-The PC backend uses PIO through the ISA FDC interface. It programs the controller data rate, performs motor spin-up, uses kernel-safe user-buffer copies, and retries failed sector operations with controller reset/recalibration.
+The PC backend uses PIO through the ISA FDC interface. It programs the controller data rate, performs motor spin-up, synchronizes NEC-765 recalibrate/seek/read/write completion with IRQ6, uses kernel-safe user-buffer copies, checks write-protect state, and retries failed sector operations with controller reset/recalibration.
 
-The current backend still uses bounded polling for the NEC-765 completion/result phase. A future hardware pass should replace the mechanical-operation sleeps with IRQ6/semaphore synchronization and add explicit media-change and write-protect handling.
+`B_GET_DEVICE_SIZE`, geometry queries, and `B_GET_MEDIA_STATUS` are exposed through the legacy device ioctl interface. A disk-change indication is reported as `B_DEV_MEDIA_CHANGED`; callers clear that condition by querying media status again.
+
+The driver intentionally keeps transfers sector-aligned because the NEC-765 backend currently performs one 512-byte command at a time. DMA, multisector commands, and advanced format probing are not required for the supported raw formats and remain future optimizations.
 
 ## Amiga
 
-Amiga floppy controllers are not NEC-765 devices. Paula uses a track-oriented DMA/MFM mechanism. The m68k build therefore has a separate backend boundary for Paula register access, track decoding, motor/select control, disk-change/write-protect sensing, and write-track encoding/precompensation.
+Amiga floppy controllers are not NEC-765 devices. Paula uses track-oriented DMA/MFM, with drive control and media sensing normally provided through the CIA/custom-chip hardware. Haiku still contains an Amiga m68k boot platform and an Amiga platform enum, but the kernel m68k platform dispatcher currently disables the Amiga kernel platform implementation. The floppy driver therefore does not pretend that the PC ISA backend can run on Amiga hardware.
 
-The current Haiku m68k tree does not expose an Amiga custom-chip/Paula hardware abstraction or an Amiga board implementation that this driver can safely bind to. Consequently the m68k path remains disabled rather than inventing register mappings that could corrupt unrelated hardware. Standard Amiga DD media is 880 KiB (80 tracks, 2 sides, 11 sectors/track); 1.76 MiB HD media must only be enabled on hardware that actually provides HD-capable mechanics and signaling.
+The m68k path remains an explicit backend boundary until the Haiku kernel Amiga platform supplies stable custom-chip address mapping, Paula DMA/interrupt ownership, CIA drive-control access, and a kernel-safe DMA allocator. Once those interfaces exist, the intended backend is:
+
+* Amiga DD: 80 cylinders/tracks, 2 sides, 11 sectors/track, 512 bytes/sector (880 KiB).
+* Optional Amiga HD: 80 cylinders/tracks, 2 sides, 22 sectors/track (1.76 MiB), only on hardware with HD-capable mechanics and signaling.
+* Track-level MFM decode/encode, DMA completion interrupt handling, write-protect and disk-change sensing, and write precompensation.
+
+No invented Paula register mapping is used in the current driver. This keeps the x86 PC implementation safe while making the missing Amiga kernel-platform dependency explicit.

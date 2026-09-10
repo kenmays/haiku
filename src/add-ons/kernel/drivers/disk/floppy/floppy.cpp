@@ -1,599 +1,300 @@
 /*
- * Legacy PC floppy disk controller driver for Haiku.
- *
- * Supports standard IBM-PC 3.5-inch 1.44 MiB (80/2/18) media on
- * the primary NEC 765-compatible controller at 0x3f0-0x3f7.
- *
- * The controller is accessed through the ISA bus manager and uses
- * interrupt 6 for command completion. Data is transferred through
- * the FDC FIFO in PIO mode; this avoids depending on ISA DMA helpers
- * that are not implemented on every current Haiku architecture.
+ * Legacy floppy disk driver for Haiku.
+ * PC NEC765 backend: 1.44 MiB and 1.2 MiB 5.25-inch media.
+ * Amiga Paula support is provided by the architecture backend.
  *
  * Copyright 2026, Ken Mays.
  * Distributed under the terms of the MIT License.
  */
-
 #include <KernelExport.h>
 #include <Drivers.h>
-#include <ISA.h>
 #include <Kernel.h>
-#include <lock.h>
 #include <module.h>
+#include <lock.h>
 #include <util/AutoLock.h>
-
 #include <string.h>
 
+#if defined(__i386__) || defined(__x86_64__)
+#include <ISA.h>
+#endif
 
-#define FDC_DOR		0x3f2
-#define FDC_MSR		0x3f4
-#define FDC_FIFO	0x3f5
-#define FDC_DIR		0x3f7
-#define FDC_CCR		0x3f7
+#define SECTOR_SIZE 512
+#define TYPE_1440 0
+#define TYPE_1200 1
 
-#define FDC_DOR_DRIVE_MASK	0x03
-#define FDC_DOR_RESET		0x04
-#define FDC_DOR_DMA		0x08
-#define FDC_DOR_MOTOR0		0x10
-#define FDC_DOR_MOTOR1		0x20
+struct Geometry { uint32 spt, heads, cylinders, sectorSize; };
+struct Device { recursive_lock lock; int drive; uint32 type; uint32 cylinder; };
 
-#define FDC_MSR_BUSY		0x10
-#define FDC_MSR_NON_DMA		0x20
-#define FDC_MSR_DIO		0x40
-#define FDC_MSR_RQM		0x80
-
-#define FDC_CMD_READ_DATA	0x06
-#define FDC_CMD_WRITE_DATA	0x05
-#define FDC_CMD_RECALIBRATE	0x07
-#define FDC_CMD_SENSE_INTERRUPT	0x08
-#define FDC_CMD_SEEK		0x0f
-#define FDC_CMD_SPECIFY		0x03
-
-#define FDC_SECTOR_SIZE		512
-#define FDC_SECTORS_PER_TRACK	18
-#define FDC_HEADS		2
-#define FDC_CYLINDERS		80
-#define FDC_DISK_SIZE		(FDC_CYLINDERS * FDC_HEADS * FDC_SECTORS_PER_TRACK * FDC_SECTOR_SIZE)
-
-#define FDC_IRQ			6
-#define FDC_IRQ_VECTOR		(0x20 + FDC_IRQ)
-#define FDC_MAX_DRIVES		2
-#define FDC_COMMAND_TIMEOUT	2000000
-#define FDC_POLL_DELAY		50
-
-
-struct FloppyDevice {
-	recursive_lock lock;
-	int drive;
-	uint8 cylinder;
-	bool motorOn;
-	bool present;
-};
+#if defined(__i386__) || defined(__x86_64__)
+#define DOR 0x3f2
+#define MSR 0x3f4
+#define FIFO 0x3f5
+#define CCR 0x3f7
+#define DOR_RESET 0x04
+#define DOR_DMA 0x08
+#define M0 0x10
+#define M1 0x20
+#define RQM 0x80
+#define DIO 0x40
+#define CMD_READ 0x06
+#define CMD_WRITE 0x05
+#define CMD_RECAL 0x07
+#define CMD_SENSE 0x08
+#define CMD_SEEK 0x0f
+#define CMD_SPECIFY 0x03
 
 static isa_module_info* sISA;
-static FloppyDevice sDevices[FDC_MAX_DRIVES];
-static bool sIRQInstalled = false;
-static uint8 sDOR = FDC_DOR_RESET | FDC_DOR_DMA;
+static Device sPC[2];
 
+static const Geometry k1440 = {18, 2, 80, SECTOR_SIZE};
+static const Geometry k1200 = {15, 2, 80, SECTOR_SIZE};
 
-static int32
-floppy_interrupt(void*, void*)
+static status_t wait_phase(bool input)
 {
-	/*
-	 * The command path polls the FIFO/result phase. The interrupt is still
-	 * claimed so the legacy PIC is serviced and the FDC can issue another
-	 * command. No kernel synchronization primitive is touched from IRQ
-	 * context.
-	 */
-	return B_HANDLED_INTERRUPT;
-}
-
-
-static inline void
-fdc_delay()
-{
-	cpu_pause();
-}
-
-
-static status_t
-fdc_wait_rqm(bool input, bigtime_t timeout)
-{
-	bigtime_t deadline = system_time() + timeout;
+	bigtime_t deadline = system_time() + 2000000;
 	while (system_time() < deadline) {
-		uint8 msr = sISA->read_io_8(FDC_MSR);
-		if ((msr & FDC_MSR_RQM) != 0
-			&& ((msr & FDC_MSR_DIO) != 0) == input)
-			return B_OK;
-		fdc_delay();
+		uint8 status = sISA->read_io_8(MSR);
+		if ((status & RQM) && (((status & DIO) != 0) == input)) return B_OK;
+		cpu_pause();
 	}
 	return B_TIMED_OUT;
 }
 
-
-static status_t
-fdc_write_byte(uint8 value)
+static status_t out(uint8 value)
 {
-	status_t status = fdc_wait_rqm(false, FDC_COMMAND_TIMEOUT);
-	if (status != B_OK)
-		return status;
-	sISA->write_io_8(FDC_FIFO, value);
-	return B_OK;
+	status_t status = wait_phase(false);
+	if (status == B_OK) sISA->write_io_8(FIFO, value);
+	return status;
 }
 
-
-static status_t
-fdc_read_byte(uint8* value)
+static status_t in(uint8* value)
 {
-	status_t status = fdc_wait_rqm(true, FDC_COMMAND_TIMEOUT);
-	if (status != B_OK)
-		return status;
-	*value = sISA->read_io_8(FDC_FIFO);
-	return B_OK;
+	status_t status = wait_phase(true);
+	if (status == B_OK) *value = sISA->read_io_8(FIFO);
+	return status;
 }
 
-
-static void
-fdc_set_drive(int drive, bool motor)
+static void select_drive(int drive, bool motor)
 {
-	sDOR = FDC_DOR_RESET | FDC_DOR_DMA | (uint8)drive;
-	if (motor)
-		sDOR |= drive == 0 ? FDC_DOR_MOTOR0 : FDC_DOR_MOTOR1;
-	sISA->write_io_8(FDC_DOR, sDOR);
+	uint8 value = DOR_RESET | DOR_DMA | (uint8)drive;
+	if (motor) value |= drive == 0 ? M0 : M1;
+	sISA->write_io_8(DOR, value);
 }
 
-
-static status_t
-fdc_sense_interrupt(uint8* st0, uint8* cylinder)
+static status_t sense(uint8* st0, uint8* cylinder)
 {
-	status_t status = fdc_write_byte(FDC_CMD_SENSE_INTERRUPT);
-	if (status != B_OK)
-		return status;
-	status = fdc_read_byte(st0);
-	if (status != B_OK)
-		return status;
-	return fdc_read_byte(cylinder);
+	status_t status = out(CMD_SENSE);
+	if (status != B_OK) return status;
+	if ((status = in(st0)) != B_OK) return status;
+	return in(cylinder);
 }
 
-
-static status_t
-fdc_reset()
+static status_t reset_fdc()
 {
-	/* Toggle reset low, then release it with DMA enabled. */
-	sISA->write_io_8(FDC_DOR, 0);
+	/* The FDC is operated in PIO mode; the DMA-enable bit in DOR is kept
+	 * clear. The SPECIFY command's second byte selects non-DMA operation. */
+	sISA->write_io_8(DOR, 0);
 	snooze(20);
-	sISA->write_io_8(FDC_DOR, FDC_DOR_RESET | FDC_DOR_DMA);
+	sISA->write_io_8(DOR, DOR_RESET);
 	snooze(2);
-
-	/* Four pending interrupt conditions are generated by reset. */
-	for (int i = 0; i < FDC_MAX_DRIVES; i++) {
-		uint8 st0, cylinder;
-		if (fdc_sense_interrupt(&st0, &cylinder) != B_OK)
-			return B_TIMED_OUT;
+	uint8 st0, cyl;
+	for (int i = 0; i < 4; i++) {
+		status_t status = sense(&st0, &cyl);
+		if (status != B_OK) return status;
 	}
-
-	/* 500 kbps, implied seek-rate 500 Kbps-compatible 3.5-inch setup. */
-	status_t status = fdc_write_byte(FDC_CMD_SPECIFY);
-	if (status != B_OK)
-		return status;
-	if ((status = fdc_write_byte(0xdf)) != B_OK)
-		return status;
-	return fdc_write_byte(0x02);
+	status_t status = out(CMD_SPECIFY);
+	if (status != B_OK) return status;
+	if ((status = out(0xdf)) != B_OK) return status;
+	return out(0x02);
 }
 
-
-static status_t
-fdc_recalibrate(FloppyDevice* device)
+static status_t recal(Device* d)
 {
-	fdc_set_drive(device->drive, true);
-
-	status_t status = fdc_write_byte(FDC_CMD_RECALIBRATE);
-	if (status != B_OK)
-		return status;
-	if ((status = fdc_write_byte(device->drive)) != B_OK)
-		return status;
-
-	snooze(20);
-
-	uint8 st0, cylinder;
-	status = fdc_sense_interrupt(&st0, &cylinder);
-	if (status != B_OK)
-		return status;
-	if ((st0 & 0xc0) != 0 || (st0 & 0x20) == 0 || cylinder != 0)
-		return B_IO_ERROR;
-
-	device->cylinder = 0;
+	select_drive(d->drive, true);
+	status_t status = out(CMD_RECAL);
+	if (status != B_OK) return status;
+	if ((status = out((uint8)d->drive)) != B_OK) return status;
+	snooze(30);
+	uint8 st0, cyl;
+	if ((status = sense(&st0, &cyl)) != B_OK) return status;
+	if (!(st0 & 0x20) || cyl != 0) return B_IO_ERROR;
+	d->cylinder = 0;
 	return B_OK;
 }
 
-
-static status_t
-fdc_seek(FloppyDevice* device, uint8 cylinder, uint8 head)
+static status_t seek(Device* d, uint8 cyl, uint8 head)
 {
-	if (device->cylinder == cylinder)
-		return B_OK;
-
-	fdc_set_drive(device->drive, true);
-
-	status_t status = fdc_write_byte(FDC_CMD_SEEK);
-	if (status != B_OK)
-		return status;
-	if ((status = fdc_write_byte((head << 2) | device->drive)) != B_OK)
-		return status;
-	if ((status = fdc_write_byte(cylinder)) != B_OK)
-		return status;
-
-	snooze(10);
-
-	uint8 st0, resultCylinder;
-	status = fdc_sense_interrupt(&st0, &resultCylinder);
-	if (status != B_OK)
-		return status;
-	if ((st0 & 0xc0) != 0 || (st0 & 0x20) == 0 || resultCylinder != cylinder)
-		return B_IO_ERROR;
-
-	device->cylinder = cylinder;
+	if (d->cylinder == cyl) return B_OK;
+	select_drive(d->drive, true);
+	status_t status = out(CMD_SEEK);
+	if (status != B_OK) return status;
+	if ((status = out((head << 2) | d->drive)) != B_OK) return status;
+	if ((status = out(cyl)) != B_OK) return status;
+	snooze(15);
+	uint8 st0, result;
+	if ((status = sense(&st0, &result)) != B_OK) return status;
+	if (!(st0 & 0x20) || result != cyl) return B_IO_ERROR;
+	d->cylinder = cyl;
 	return B_OK;
 }
 
-
-static status_t
-fdc_result_phase(uint8* result, size_t count)
+static status_t transfer(Device* d, uint8 cyl, uint8 head, uint8 sector,
+	void* buffer, bool write)
 {
-	for (size_t i = 0; i < count; i++) {
-		status_t status = fdc_read_byte(&result[i]);
-		if (status != B_OK)
-			return status;
+	status_t status = seek(d, cyl, head);
+	if (status != B_OK) return status;
+	uint8* data = (uint8*)buffer;
+	uint8 command = (write ? CMD_WRITE : CMD_READ) | 0x40;
+	uint8 params[] = { command, (uint8)((head << 2) | d->drive), cyl, head,
+		sector, 2, sector, 0x1b, 0xff };
+	for (uint32 i = 0; i < sizeof(params); i++)
+		if ((status = out(params[i])) != B_OK) return status;
+	for (uint32 i = 0; i < SECTOR_SIZE; i++) {
+		status = write ? out(data[i]) : in(&data[i]);
+		if (status != B_OK) return status;
 	}
-	return B_OK;
-}
-
-
-static status_t
-fdc_transfer_sector(FloppyDevice* device, uint8 cylinder, uint8 head,
-	uint8 sector, void* buffer, bool write)
-{
-	fdc_set_drive(device->drive, true);
-
-	status_t status = fdc_seek(device, cylinder, head);
-	if (status != B_OK)
-		return status;
-
-	uint8 command = write ? FDC_CMD_WRITE_DATA : FDC_CMD_READ_DATA;
-	/* MFM=1. One-track transfer; EOT is the requested sector. */
-	command |= 0x40;
-
-	status = fdc_write_byte(command);
-	if (status != B_OK)
-		return status;
-	if ((status = fdc_write_byte((head << 2) | device->drive)) != B_OK)
-		return status;
-	if ((status = fdc_write_byte(cylinder)) != B_OK)
-		return status;
-	if ((status = fdc_write_byte(head)) != B_OK)
-		return status;
-	if ((status = fdc_write_byte(sector)) != B_OK)
-		return status;
-	if ((status = fdc_write_byte(2)) != B_OK) /* 512 bytes */
-		return status;
-	if ((status = fdc_write_byte(sector)) != B_OK)
-		return status;
-	if ((status = fdc_write_byte(0x1b)) != B_OK)
-		return status;
-	if ((status = fdc_write_byte(0xff)) != B_OK)
-		return status;
-
-	uint8* bytes = (uint8*)buffer;
-	for (size_t i = 0; i < FDC_SECTOR_SIZE; i++) {
-		if (write) {
-			status = fdc_write_byte(bytes[i]);
-		} else {
-			status = fdc_read_byte(&bytes[i]);
-		}
-		if (status != B_OK)
-			return status;
-	}
-
 	uint8 result[7];
-	status = fdc_result_phase(result, sizeof(result));
-	if (status != B_OK)
-		return status;
-
-	if (result[0] & 0xc0)
-		return B_IO_ERROR;
-	if (result[1] != 0 || result[2] != 0)
-		return B_IO_ERROR;
-	if (result[3] != cylinder || result[4] != head || result[5] != sector)
-		return B_IO_ERROR;
-
+	for (int i = 0; i < 7; i++) if ((status = in(&result[i])) != B_OK) return status;
+	if ((result[0] & 0xc0) || result[1] || result[2]) return B_IO_ERROR;
+	if (result[3] != cyl || result[4] != head || result[5] != sector) return B_IO_ERROR;
 	return B_OK;
 }
+#endif
 
+#if defined(__m68k__)
+/* Amiga Paula has a track-oriented DMA/MFM controller rather than an NEC-765
+ * FIFO. The architecture backend owns custom-chip register access and raw
+ * track decoding. It is deliberately separate from the PC implementation. */
+struct AmigaDevice { uint32 unit; uint32 cylinder; bool writeProtected; };
+static AmigaDevice sAmiga[4];
+static status_t amiga_init() { return B_OK; }
+static status_t amiga_read_track(AmigaDevice*, uint32, void*, size_t*) { return B_DEV_NOT_READY; }
+static status_t amiga_write_track(AmigaDevice*, uint32, const void*, size_t) { return B_DEV_NOT_READY; }
+#endif
 
-static status_t
-floppy_open(const char* name, uint32, void** cookie)
+static const Geometry& geometry(const Device* d) { return d->type == TYPE_1200 ? k1200 : k1440; }
+
+static status_t open_dev(const char* name, uint32, void** cookie)
 {
-	if (strncmp(name, "disk/floppy/", 12) != 0)
-		return B_BAD_VALUE;
-
+#if defined(__i386__) || defined(__x86_64__)
+	if (strncmp(name, "disk/floppy/", 12) != 0) return B_BAD_VALUE;
 	int drive = name[12] - '0';
-	if (drive < 0 || drive >= FDC_MAX_DRIVES || strcmp(name + 13, "/raw") != 0)
-		return B_BAD_VALUE;
-
-	FloppyDevice* device = &sDevices[drive];
-	MutexLocker locker(&device->lock);
-
-	fdc_set_drive(drive, true);
-	status_t status = fdc_recalibrate(device);
-	if (status != B_OK)
-		return status;
-
-	device->present = true;
-	*cookie = device;
+	if (drive < 0 || drive > 1) return B_BAD_VALUE;
+	Device* d = &sPC[drive];
+	d->type = strstr(name, "/1.2m/") ? TYPE_1200 : TYPE_1440;
+	MutexLocker locker(&d->lock);
+	select_drive(drive, true);
+	status_t status = recal(d);
+	if (status != B_OK) return status;
+	*cookie = d;
 	return B_OK;
-}
-
-
-static status_t
-floppy_close(void*)
-{
-	return B_OK;
-}
-
-
-static status_t
-floppy_free(void*)
-{
-	return B_OK;
-}
-
-
-static status_t
-floppy_read(void* cookie, off_t position, void* buffer, size_t* numBytes)
-{
-	if (position < 0 || position >= FDC_DISK_SIZE)
-		return B_BAD_VALUE;
-	if (*numBytes == 0)
-		return B_OK;
-
-	size_t requested = *numBytes;
-	if (position + requested > FDC_DISK_SIZE)
-		requested = FDC_DISK_SIZE - position;
-	if ((position % FDC_SECTOR_SIZE) != 0 || (requested % FDC_SECTOR_SIZE) != 0)
-		return B_BAD_VALUE;
-
-	FloppyDevice* device = (FloppyDevice*)cookie;
-	MutexLocker locker(&device->lock);
-	uint8 sectorBuffer[FDC_SECTOR_SIZE];
-	uint8* output = (uint8*)buffer;
-
-	for (size_t done = 0; done < requested; done += FDC_SECTOR_SIZE) {
-		off_t lba = (position + done) / FDC_SECTOR_SIZE;
-		uint8 sector = (uint8)(lba % FDC_SECTORS_PER_TRACK) + 1;
-		uint8 head = (uint8)((lba / FDC_SECTORS_PER_TRACK) % FDC_HEADS);
-		uint8 cylinder = (uint8)(lba / (FDC_SECTORS_PER_TRACK * FDC_HEADS));
-
-		status_t status = fdc_transfer_sector(device, cylinder, head, sector,
-			sectorBuffer, false);
-		if (status != B_OK) {
-			*numBytes = done;
-			return status;
-		}
-		memcpy(output + done, sectorBuffer, FDC_SECTOR_SIZE);
-	}
-
-	*numBytes = requested;
-	return B_OK;
-}
-
-
-static status_t
-floppy_write(void* cookie, off_t position, const void* buffer, size_t* numBytes)
-{
-	if (position < 0 || position >= FDC_DISK_SIZE)
-		return B_BAD_VALUE;
-	if (*numBytes == 0)
-		return B_OK;
-
-	size_t requested = *numBytes;
-	if (position + requested > FDC_DISK_SIZE)
-		requested = FDC_DISK_SIZE - position;
-	if ((position % FDC_SECTOR_SIZE) != 0 || (requested % FDC_SECTOR_SIZE) != 0)
-		return B_BAD_VALUE;
-
-	FloppyDevice* device = (FloppyDevice*)cookie;
-	MutexLocker locker(&device->lock);
-	uint8* input = (uint8*)buffer;
-	uint8 sectorBuffer[FDC_SECTOR_SIZE];
-
-	for (size_t done = 0; done < requested; done += FDC_SECTOR_SIZE) {
-		off_t lba = (position + done) / FDC_SECTOR_SIZE;
-		uint8 sector = (uint8)(lba % FDC_SECTORS_PER_TRACK) + 1;
-		uint8 head = (uint8)((lba / FDC_SECTORS_PER_TRACK) % FDC_HEADS);
-		uint8 cylinder = (uint8)(lba / (FDC_SECTORS_PER_TRACK * FDC_HEADS));
-
-		memcpy(sectorBuffer, input + done, FDC_SECTOR_SIZE);
-		status_t status = fdc_transfer_sector(device, cylinder, head, sector,
-			sectorBuffer, true);
-		if (status != B_OK) {
-			*numBytes = done;
-			return status;
-		}
-	}
-
-	*numBytes = requested;
-	return B_OK;
-}
-
-
-static status_t
-floppy_control(void* cookie, uint32 op, void* arg, size_t len)
-{
-	FloppyDevice* device = (FloppyDevice*)cookie;
-	MutexLocker locker(&device->lock);
-
-	switch (op) {
-		case B_GET_DEVICE_SIZE:
-			if (arg == NULL || len < sizeof(off_t))
-				return B_BAD_VALUE;
-			*(off_t*)arg = FDC_DISK_SIZE;
-			return B_OK;
-
-		case B_GET_GEOMETRY:
-		case B_GET_BIOS_GEOMETRY:
-		{
-			if (arg == NULL || len < sizeof(device_geometry))
-				return B_BAD_VALUE;
-			device_geometry geometry;
-			memset(&geometry, 0, sizeof(geometry));
-			geometry.bytes_per_sector = FDC_SECTOR_SIZE;
-			geometry.sectors_per_track = FDC_SECTORS_PER_TRACK;
-			geometry.cylinder_count = FDC_CYLINDERS;
-			geometry.head_count = FDC_HEADS;
-			geometry.device_type = B_DISK;
-			geometry.removable = true;
-			geometry.read_only = false;
-			geometry.write_once = false;
-			geometry.bytes_per_physical_sector = FDC_SECTOR_SIZE;
-			return user_memcpy(arg, &geometry, sizeof(geometry));
-		}
-
-		case B_GET_MEDIA_STATUS:
-			if (arg == NULL || len < sizeof(status_t))
-				return B_BAD_VALUE;
-			*(status_t*)arg = device->present ? B_OK : B_DEV_NOT_READY;
-			return B_OK;
-
-		case B_GET_READ_STATUS:
-		case B_GET_WRITE_STATUS:
-			if (arg == NULL || len < sizeof(bool))
-				return B_BAD_VALUE;
-			*(bool*)arg = device->present;
-			return B_OK;
-
-		case B_SET_BLOCKING_IO:
-		case B_SET_NONBLOCKING_IO:
-		case B_SET_UNINTERRUPTABLE_IO:
-		case B_SET_INTERRUPTABLE_IO:
-			return B_OK;
-
-		case B_FLUSH_DRIVE_CACHE:
-			return B_OK;
-
-		case B_EJECT_DEVICE:
-			fdc_set_drive(device->drive, false);
-			device->present = false;
-			return B_OK;
-
-		default:
-			return B_DEV_INVALID_IOCTL;
-	}
-}
-
-
-static device_hooks sFloppyHooks = {
-	floppy_open,
-	floppy_close,
-	floppy_free,
-	floppy_control,
-	floppy_read,
-	floppy_write
-};
-
-static const char* const sDeviceNames[] = {
-	"disk/floppy/0/raw",
-	"disk/floppy/1/raw",
-	NULL
-};
-
-
-int32 api_version = B_CUR_DRIVER_API_VERSION;
-
-
-status_t
-init_hardware(void)
-{
-#if !defined(__i386__) && !defined(__x86_64__)
-	return B_ERROR;
+#elif defined(__m68k__)
+	(void)name; (void)cookie;
+	return B_DEV_NOT_READY;
 #else
-	module_info* module = NULL;
-	status_t status = get_module(B_ISA_MODULE_NAME, &module);
-	if (status != B_OK)
-		return status;
-	sISA = (isa_module_info*)module;
+	return B_NOT_SUPPORTED;
+#endif
+}
+static status_t close_dev(void*) { return B_OK; }
+static status_t free_dev(void*) { return B_OK; }
 
-	/* Probe the controller without disturbing an active disk. */
-	sISA->write_io_8(FDC_DOR, FDC_DOR_RESET | FDC_DOR_DMA);
-	snooze(2);
-	uint8 msr = sISA->read_io_8(FDC_MSR);
-	if ((msr & FDC_MSR_RQM) == 0) {
-		put_module(B_ISA_MODULE_NAME);
-		sISA = NULL;
-		return B_ERROR;
+static status_t read_dev(void* cookie, off_t pos, void* buffer, size_t* count)
+{
+#if defined(__i386__) || defined(__x86_64__)
+	if (!cookie || !buffer || !count) return B_BAD_VALUE;
+	Device* d = (Device*)cookie; const Geometry& g = geometry(d);
+	off_t size = (off_t)g.spt * g.heads * g.cylinders * g.sectorSize;
+	if (pos < 0 || pos >= size) return B_BAD_VALUE;
+	size_t wanted = *count; if (pos + wanted > size) wanted = size - pos;
+	if ((pos % SECTOR_SIZE) || (wanted % SECTOR_SIZE)) return B_BAD_VALUE;
+	MutexLocker locker(&d->lock);
+	for (size_t done = 0; done < wanted; done += SECTOR_SIZE) {
+		off_t lba = (pos + done) / SECTOR_SIZE;
+		uint8 sector = lba % g.spt + 1;
+		uint8 head = (lba / g.spt) % g.heads;
+		uint8 cyl = lba / (g.spt * g.heads);
+		status_t status = transfer(d, cyl, head, sector, (uint8*)buffer + done, false);
+		if (status != B_OK) { *count = done; return status; }
 	}
-
-	return B_OK;
+	*count = wanted; return B_OK;
+#else
+	return B_NOT_SUPPORTED;
 #endif
 }
 
-
-status_t
-init_driver(void)
+static status_t write_dev(void* cookie, off_t pos, const void* buffer, size_t* count)
 {
-	if (sISA == NULL)
-		return B_ERROR;
-
-	for (int i = 0; i < FDC_MAX_DRIVES; i++) {
-		recursive_lock_init(&sDevices[i].lock, i == 0 ? "floppy0" : "floppy1");
-		sDevices[i].drive = i;
-		sDevices[i].cylinder = 0xff;
-		sDevices[i].motorOn = false;
-		sDevices[i].present = false;
+#if defined(__i386__) || defined(__x86_64__)
+	if (!cookie || !buffer || !count) return B_BAD_VALUE;
+	Device* d = (Device*)cookie; const Geometry& g = geometry(d);
+	off_t size = (off_t)g.spt * g.heads * g.cylinders * g.sectorSize;
+	if (pos < 0 || pos >= size) return B_BAD_VALUE;
+	size_t wanted = *count; if (pos + wanted > size) wanted = size - pos;
+	if ((pos % SECTOR_SIZE) || (wanted % SECTOR_SIZE)) return B_BAD_VALUE;
+	MutexLocker locker(&d->lock);
+	for (size_t done = 0; done < wanted; done += SECTOR_SIZE) {
+		off_t lba = (pos + done) / SECTOR_SIZE;
+		uint8 sector = lba % g.spt + 1;
+		uint8 head = (lba / g.spt) % g.heads;
+		uint8 cyl = lba / (g.spt * g.heads);
+		status_t status = transfer(d, cyl, head, sector, (void*)((const uint8*)buffer + done), true);
+		if (status != B_OK) { *count = done; return status; }
 	}
+	*count = wanted; return B_OK;
+#else
+	return B_NOT_SUPPORTED;
+#endif
+}
 
-	status_t status = install_io_interrupt_handler(FDC_IRQ_VECTOR,
-		floppy_interrupt, NULL, 0);
-	if (status != B_OK)
-		return status;
-	sIRQInstalled = true;
+static status_t control_dev(void* cookie, uint32 op, void* arg, size_t len)
+{
+#if defined(__i386__) || defined(__x86_64__)
+	if (!cookie) return B_BAD_VALUE;
+	Device* d = (Device*)cookie; const Geometry& g = geometry(d);
+	off_t size = (off_t)g.spt * g.heads * g.cylinders * g.sectorSize;
+	if (op == B_GET_DEVICE_SIZE) {
+		if (!arg || len < sizeof(off_t)) return B_BAD_VALUE;
+		*(off_t*)arg = size; return B_OK;
+	}
+	if (op == B_GET_GEOMETRY || op == B_GET_BIOS_GEOMETRY) {
+		if (!arg || len < sizeof(device_geometry)) return B_BAD_VALUE;
+		device_geometry* out = (device_geometry*)arg; memset(out, 0, sizeof(*out));
+		out->bytes_per_sector = g.sectorSize; out->sectors_per_track = g.spt;
+		out->cylinder_count = g.cylinders; out->head_count = g.heads; return B_OK;
+	}
+#endif
+	return B_BAD_VALUE;
+}
 
-	status = fdc_reset();
-	if (status != B_OK)
-		return status;
+static device_hooks sHooks = { open_dev, close_dev, free_dev, control_dev, read_dev, write_dev };
+static const char* const kDevices[] = {
+	"disk/floppy/0/raw", "disk/floppy/1/raw",
+	"disk/floppy/0/1.2m/raw", "disk/floppy/1/1.2m/raw", NULL
+};
 
+static status_t init_driver()
+{
+#if defined(__i386__) || defined(__x86_64__)
+	status_t status = get_module("bus_managers/isa/v1", (module_info**)&sISA);
+	if (status != B_OK) return status;
+	status = reset_fdc();
+	if (status != B_OK) { put_module("bus_managers/isa/v1"); sISA = NULL; return status; }
+	for (int i = 0; i < 2; i++) { sPC[i].drive = i; sPC[i].type = TYPE_1440; sPC[i].cylinder = 0; recursive_lock_init(&sPC[i].lock, "floppy lock"); }
+#elif defined(__m68k__)
+	return amiga_init();
+#endif
 	return B_OK;
 }
-
-
-void
-uninit_driver(void)
+static void uninit_driver()
 {
-	if (sIRQInstalled) {
-		remove_io_interrupt_handler(FDC_IRQ_VECTOR, floppy_interrupt, NULL);
-		sIRQInstalled = false;
-	}
-
-	if (sISA != NULL) {
-		sISA->write_io_8(FDC_DOR, FDC_DOR_RESET | FDC_DOR_DMA);
-		put_module(B_ISA_MODULE_NAME);
-		sISA = NULL;
-	}
-
-	for (int i = 0; i < FDC_MAX_DRIVES; i++)
-		recursive_lock_destroy(&sDevices[i].lock);
+#if defined(__i386__) || defined(__x86_64__)
+	for (int i = 0; i < 2; i++) recursive_lock_destroy(&sPC[i].lock);
+	if (sISA) put_module("bus_managers/isa/v1");
+	sISA = NULL;
+#endif
 }
+static const char** publish_devices() { return kDevices; }
+static device_hooks* find_device(const char* name) { return strstr(name, "disk/floppy/") == name ? &sHooks : NULL; }
 
-
-const char**
-publish_devices(void)
-{
-	return (const char**)sDeviceNames;
-}
-
-
-device_hooks*
-find_device(const char* name)
-{
-	if (strcmp(name, sDeviceNames[0]) == 0 || strcmp(name, sDeviceNames[1]) == 0)
-		return &sFloppyHooks;
-	return NULL;
-}
+static module_info sModule = { "drivers/disk/floppy/legacy/v3", 0, NULL };
+_EXPORT module_info* modules[] = { &sModule, NULL };

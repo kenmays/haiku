@@ -23,6 +23,7 @@
 #define TYPE_1200 1
 #define TYPE_360 2
 #define FDC_RETRIES 3
+#define FDC_TIMEOUT_US 2000000
 #define MOTOR_SPINUP_US 500000
 #define MOTOR_IDLE_US 2000000
 
@@ -47,21 +48,23 @@ struct Device {
 #define DOR 0x3f2
 #define MSR 0x3f4
 #define FIFO 0x3f5
-#define CCR 0x3f7
 #define DIR 0x3f7
+#define CCR 0x3f7
 #define DOR_RESET 0x04
 #define DOR_IRQ_ENABLE 0x08
 #define M0 0x10
 #define M1 0x20
 #define RQM 0x80
 #define DIO 0x40
+#define DIR_WRITE_PROTECT 0x40
+#define DIR_DISK_CHANGED 0x80
 #define CMD_READ 0x06
 #define CMD_WRITE 0x05
 #define CMD_RECAL 0x07
 #define CMD_SENSE 0x08
 #define CMD_SEEK 0x0f
 #define CMD_SPECIFY 0x03
-#define CMD_VERSION 0x10
+#define CMD_CONFIGURE 0x13
 
 static isa_module_info* sISA;
 static Device sPC[2];
@@ -71,7 +74,7 @@ static const Geometry k360 = {9, 2, 40, SECTOR_SIZE, 250};
 
 static status_t wait_phase(bool input)
 {
-	bigtime_t deadline = system_time() + 2000000;
+	bigtime_t deadline = system_time() + FDC_TIMEOUT_US;
 	while (system_time() < deadline) {
 		uint8 status = sISA->read_io_8(MSR);
 		if ((status & RQM) != 0 && (((status & DIO) != 0) == input))
@@ -107,7 +110,7 @@ static void select_drive(int drive, bool motor)
 
 static void set_data_rate(const Geometry& g)
 {
-	/* 0 = 500 kbps, 1 = 300 kbps, 2 = 250 kbps, 3 = 1 Mbps. */
+	/* CCR: 0 = 500 kbps, 1 = 300 kbps, 2 = 250 kbps, 3 = 1 Mbps. */
 	uint8 value = g.dataRate == 250 ? 2 : 0;
 	sISA->write_io_8(CCR, value);
 }
@@ -124,12 +127,24 @@ static status_t spin_motor(Device* d, const Geometry& g)
 	return B_OK;
 }
 
-static void maybe_stop_motor(Device* d)
+static void stop_motor(Device* d)
 {
-	if (d->motorOn && system_time() >= d->motorDeadline) {
+	if (d->motorOn) {
 		select_drive(d->drive, false);
 		d->motorOn = false;
+		d->motorDeadline = 0;
 	}
+}
+
+static void refresh_motor(Device* d)
+{
+	if (d->motorOn && system_time() >= d->motorDeadline)
+		stop_motor(d);
+}
+
+static uint8 read_dir()
+{
+	return sISA->read_io_8(DIR);
 }
 
 static status_t sense(uint8* st0, uint8* cylinder)
@@ -145,9 +160,8 @@ static status_t sense(uint8* st0, uint8* cylinder)
 static status_t reset_fdc()
 {
 	sISA->write_io_8(DOR, 0);
-	snooze(20);
+	snooze(20000);
 	sISA->write_io_8(DOR, DOR_RESET | DOR_IRQ_ENABLE);
-	snooze(2000);
 
 	uint8 st0, cyl;
 	for (int i = 0; i < 4; i++) {
@@ -176,9 +190,8 @@ static status_t recal(Device* d, const Geometry& g)
 	if ((status = out((uint8)d->drive)) != B_OK)
 		return status;
 
-	/* Recalibrate completes asynchronously. In PIO mode we wait long enough
-	 * for the mechanical seek, then consume the interrupt result. */
-	snooze(500000);
+	/* wait_phase() below blocks until the controller has left command phase;
+	 * no fixed mechanical delay is required before SENSE INTERRUPT. */
 	uint8 st0, cyl;
 	if ((status = sense(&st0, &cyl)) != B_OK)
 		return status;
@@ -202,7 +215,7 @@ static status_t seek(Device* d, const Geometry& g, uint8 cyl, uint8 head)
 		return status;
 	if ((status = out(cyl)) != B_OK)
 		return status;
-	snooze(20000);
+
 	uint8 st0, result;
 	if ((status = sense(&st0, &result)) != B_OK)
 		return status;
@@ -218,6 +231,9 @@ static status_t transfer_once(Device* d, const Geometry& g, uint8 cyl,
 	status_t status = seek(d, g, cyl, head);
 	if (status != B_OK)
 		return status;
+
+	if (write && (read_dir() & DIR_WRITE_PROTECT) != 0)
+		return B_READ_ONLY_DEVICE;
 
 	uint8 command = (write ? CMD_WRITE : CMD_READ) | 0x40;
 	uint8 params[] = { command, (uint8)((head << 2) | d->drive), cyl, head,
@@ -239,7 +255,7 @@ static status_t transfer_once(Device* d, const Geometry& g, uint8 cyl,
 			return status;
 	}
 
-	/* ST0 abnormal termination, ST1/ST2 error bits. */
+	/* ST0 abnormal termination; ST1/ST2 contain controller/media errors. */
 	if ((result[0] & 0xc0) != 0 || result[1] != 0 || result[2] != 0)
 		return B_IO_ERROR;
 	if (result[3] != cyl || result[4] != head || result[5] != sector)
@@ -255,7 +271,6 @@ static status_t transfer(Device* d, const Geometry& g, uint8 cyl, uint8 head,
 		status = transfer_once(d, g, cyl, head, sector, data, write);
 		if (status == B_OK)
 			return B_OK;
-		/* Recover the controller and position after a failed operation. */
 		status_t recovery = reset_fdc();
 		if (recovery != B_OK)
 			return recovery;
@@ -269,8 +284,9 @@ static status_t transfer(Device* d, const Geometry& g, uint8 cyl, uint8 head,
 
 #if defined(__m68k__)
 /* Paula is track-oriented and has no NEC-765 command FIFO. The Amiga
- * architecture backend must provide custom-chip DMA, MFM decoding/encoding,
- * CIA drive selection, disk-change and write-protect handling. */
+ * architecture backend is intentionally separate: it requires a board-level
+ * custom-chip mapping and DMA interrupt interface that is not currently
+ * exposed by the Haiku m68k kernel tree. */
 struct AmigaDevice {
 	uint32 unit;
 	uint32 cylinder;
@@ -322,6 +338,7 @@ static status_t open_dev(const char* name, uint32, void** cookie)
 		: type == TYPE_360 ? k360 : k1440;
 	RecursiveLocker locker(&d->lock);
 	d->type = type;
+	refresh_motor(d);
 	status_t status = recal(d, g);
 	if (status != B_OK)
 		return status;
@@ -344,9 +361,10 @@ static status_t close_dev(void* cookie)
 	if (cookie != NULL) {
 		Device* d = (Device*)cookie;
 		RecursiveLocker locker(&d->lock);
-		select_drive(d->drive, false);
-		d->motorOn = false;
+		stop_motor(d);
 	}
+#else
+	(void)cookie;
 #endif
 	return B_OK;
 }
@@ -464,13 +482,13 @@ static status_t control_dev(void* cookie, uint32 op, void* arg, size_t len)
 	if (op == B_GET_GEOMETRY || op == B_GET_BIOS_GEOMETRY) {
 		if (len < sizeof(device_geometry))
 			return B_BAD_VALUE;
-		device_geometry geometry;
-		memset(&geometry, 0, sizeof(geometry));
-		geometry.bytes_per_sector = g.sectorSize;
-		geometry.sectors_per_track = g.spt;
-		geometry.cylinder_count = g.cylinders;
-		geometry.head_count = g.heads;
-		return user_memcpy(arg, &geometry, sizeof(geometry));
+		device_geometry info;
+		memset(&info, 0, sizeof(info));
+		info.bytes_per_sector = g.sectorSize;
+		info.sectors_per_track = g.spt;
+		info.cylinder_count = g.cylinders;
+		info.head_count = g.heads;
+		return user_memcpy(arg, &info, sizeof(info));
 	}
 #else
 	(void)cookie;
@@ -524,7 +542,7 @@ static void uninit_driver()
 {
 #if defined(__i386__) || defined(__x86_64__)
 	for (int i = 0; i < 2; i++) {
-		select_drive(i, false);
+		stop_motor(&sPC[i]);
 		recursive_lock_destroy(&sPC[i].lock);
 	}
 	if (sISA != NULL)
@@ -554,5 +572,5 @@ static device_hooks* find_device(const char* name)
 #endif
 }
 
-static module_info sModule = { "drivers/disk/floppy/legacy/v5", 0, NULL };
+static module_info sModule = { "drivers/disk/floppy/legacy/v6", 0, NULL };
 _EXPORT module_info* modules[] = { &sModule, NULL };

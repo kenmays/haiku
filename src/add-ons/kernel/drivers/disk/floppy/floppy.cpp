@@ -26,6 +26,7 @@
 #define FDC_TIMEOUT_US 2000000
 #define MOTOR_SPINUP_US 500000
 #define MOTOR_IDLE_US 2000000
+#define FDC_IRQ 6
 
 struct Geometry {
 	uint32 spt;
@@ -64,13 +65,36 @@ struct Device {
 #define CMD_SENSE 0x08
 #define CMD_SEEK 0x0f
 #define CMD_SPECIFY 0x03
-#define CMD_CONFIGURE 0x13
 
 static isa_module_info* sISA;
 static Device sPC[2];
+static sem_id sIRQSem = -1;
+static bool sIRQInstalled = false;
 static const Geometry k1440 = {18, 2, 80, SECTOR_SIZE, 500};
 static const Geometry k1200 = {15, 2, 80, SECTOR_SIZE, 500};
 static const Geometry k360 = {9, 2, 40, SECTOR_SIZE, 250};
+
+static int32 fdc_interrupt(void*)
+{
+	if (sIRQSem >= 0)
+		release_sem(sIRQSem);
+	return B_HANDLED_INTERRUPT;
+}
+
+static void drain_irq_sem()
+{
+	if (sIRQSem < 0)
+		return;
+	while (acquire_sem_etc(sIRQSem, 1, B_RELATIVE_TIMEOUT, 0) == B_OK)
+		;
+}
+
+static status_t wait_irq()
+{
+	if (sIRQSem < 0)
+		return B_NO_INIT;
+	return acquire_sem_etc(sIRQSem, 1, B_RELATIVE_TIMEOUT, FDC_TIMEOUT_US);
+}
 
 static status_t wait_phase(bool input)
 {
@@ -159,9 +183,18 @@ static status_t sense(uint8* st0, uint8* cylinder)
 
 static status_t reset_fdc()
 {
+	drain_irq_sem();
 	sISA->write_io_8(DOR, 0);
 	snooze(20000);
 	sISA->write_io_8(DOR, DOR_RESET | DOR_IRQ_ENABLE);
+
+	/* A NEC765-compatible controller reports one completion interrupt for
+	 * each drive during reset. Consume all four before issuing commands. */
+	for (int i = 0; i < 4; i++) {
+		status_t status = wait_irq();
+		if (status != B_OK)
+			return status;
+	}
 
 	uint8 st0, cyl;
 	for (int i = 0; i < 4; i++) {
@@ -184,14 +217,15 @@ static status_t recal(Device* d, const Geometry& g)
 	status_t status = spin_motor(d, g);
 	if (status != B_OK)
 		return status;
+	drain_irq_sem();
 	status = out(CMD_RECAL);
 	if (status != B_OK)
 		return status;
 	if ((status = out((uint8)d->drive)) != B_OK)
 		return status;
+	if ((status = wait_irq()) != B_OK)
+		return status;
 
-	/* wait_phase() below blocks until the controller has left command phase;
-	 * no fixed mechanical delay is required before SENSE INTERRUPT. */
 	uint8 st0, cyl;
 	if ((status = sense(&st0, &cyl)) != B_OK)
 		return status;
@@ -208,12 +242,15 @@ static status_t seek(Device* d, const Geometry& g, uint8 cyl, uint8 head)
 	status_t status = spin_motor(d, g);
 	if (status != B_OK)
 		return status;
+	drain_irq_sem();
 	status = out(CMD_SEEK);
 	if (status != B_OK)
 		return status;
 	if ((status = out((head << 2) | d->drive)) != B_OK)
 		return status;
 	if ((status = out(cyl)) != B_OK)
+		return status;
+	if ((status = wait_irq()) != B_OK)
 		return status;
 
 	uint8 st0, result;
@@ -235,6 +272,7 @@ static status_t transfer_once(Device* d, const Geometry& g, uint8 cyl,
 	if (write && (read_dir() & DIR_WRITE_PROTECT) != 0)
 		return B_READ_ONLY_DEVICE;
 
+	drain_irq_sem();
 	uint8 command = (write ? CMD_WRITE : CMD_READ) | 0x40;
 	uint8 params[] = { command, (uint8)((head << 2) | d->drive), cyl, head,
 		sector, 2, sector, 0x1b, 0xff };
@@ -248,6 +286,9 @@ static status_t transfer_once(Device* d, const Geometry& g, uint8 cyl,
 		if (status != B_OK)
 			return status;
 	}
+
+	if ((status = wait_irq()) != B_OK)
+		return status;
 
 	uint8 result[7];
 	for (int i = 0; i < 7; i++) {
@@ -516,8 +557,30 @@ static status_t init_driver()
 	status_t status = get_module("bus_managers/isa/v1", (module_info**)&sISA);
 	if (status != B_OK)
 		return status;
+
+	sIRQSem = create_sem(0, "floppy irq");
+	if (sIRQSem < 0) {
+		put_module("bus_managers/isa/v1");
+		sISA = NULL;
+		return sIRQSem;
+	}
+
+	status = install_io_interrupt_handler(FDC_IRQ, &fdc_interrupt, NULL, 0);
+	if (status != B_OK) {
+		delete_sem(sIRQSem);
+		sIRQSem = -1;
+		put_module("bus_managers/isa/v1");
+		sISA = NULL;
+		return status;
+	}
+	sIRQInstalled = true;
+
 	status = reset_fdc();
 	if (status != B_OK) {
+		remove_io_interrupt_handler(FDC_IRQ, &fdc_interrupt, NULL);
+		sIRQInstalled = false;
+		delete_sem(sIRQSem);
+		sIRQSem = -1;
 		put_module("bus_managers/isa/v1");
 		sISA = NULL;
 		return status;
@@ -544,6 +607,14 @@ static void uninit_driver()
 	for (int i = 0; i < 2; i++) {
 		stop_motor(&sPC[i]);
 		recursive_lock_destroy(&sPC[i].lock);
+	}
+	if (sIRQInstalled) {
+		remove_io_interrupt_handler(FDC_IRQ, &fdc_interrupt, NULL);
+		sIRQInstalled = false;
+	}
+	if (sIRQSem >= 0) {
+		delete_sem(sIRQSem);
+		sIRQSem = -1;
 	}
 	if (sISA != NULL)
 		put_module("bus_managers/isa/v1");
@@ -572,5 +643,5 @@ static device_hooks* find_device(const char* name)
 #endif
 }
 
-static module_info sModule = { "drivers/disk/floppy/legacy/v6", 0, NULL };
+static module_info sModule = { "drivers/disk/floppy/legacy/v7", 0, NULL };
 _EXPORT module_info* modules[] = { &sModule, NULL };

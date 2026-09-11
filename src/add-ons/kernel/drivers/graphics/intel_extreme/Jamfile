@@ -10,6 +10,7 @@ KernelAddon intel_extreme :
 	bios.cpp
 	driver.cpp
 	device.cpp
+	device_info.cpp
 	intel_extreme.cpp
 	power.cpp
 

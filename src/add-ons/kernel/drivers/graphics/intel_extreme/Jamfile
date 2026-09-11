@@ -12,6 +12,7 @@ KernelAddon intel_extreme :
 	device.cpp
 	device_info.cpp
 	intel_extreme.cpp
+	intel_modern.cpp
 	power.cpp
 
 	kernel_cpp.cpp
@@ -19,5 +20,5 @@ KernelAddon intel_extreme :
 ;
 
 SEARCH on [ FGristFiles
-		kernel_cpp.cpp 
+		kernel_cpp.cpp
 	] = [ FDirName $(HAIKU_TOP) src system kernel util ] ;

@@ -1,0 +1,54 @@
+/*
+ * Intel Extreme modernization support.
+ *
+ * Copyright 2026, Haiku, Inc. All Rights Reserved.
+ * Distributed under the terms of the MIT License.
+ */
+#include "intel_modern.h"
+
+static const intel_modern_device kDevices[] = {
+	{0x0102, INTEL_GEN_6, 2, 2, 1, INTEL_MODERN_HAS_GTT | INTEL_MODERN_HAS_PCH | INTEL_MODERN_HAS_MSI | INTEL_MODERN_HAS_VBLANK, "Sandy Bridge GT1"},
+	{0x0112, INTEL_GEN_6, 2, 2, 2, INTEL_MODERN_HAS_GTT | INTEL_MODERN_HAS_PCH | INTEL_MODERN_HAS_MSI | INTEL_MODERN_HAS_VBLANK, "Sandy Bridge GT2"},
+	{0x0152, INTEL_GEN_7, 2, 2, 2, INTEL_MODERN_HAS_GTT | INTEL_MODERN_HAS_PCH | INTEL_MODERN_HAS_MSI | INTEL_MODERN_HAS_VBLANK, "Ivy Bridge GT1"},
+	{0x0162, INTEL_GEN_7, 2, 2, 2, INTEL_MODERN_HAS_GTT | INTEL_MODERN_HAS_PCH | INTEL_MODERN_HAS_MSI | INTEL_MODERN_HAS_VBLANK, "Ivy Bridge GT2"},
+	{0x0412, INTEL_GEN_7_5, 3, 3, 3, INTEL_MODERN_HAS_GTT | INTEL_MODERN_HAS_PCH | INTEL_MODERN_HAS_MSI | INTEL_MODERN_HAS_VBLANK | INTEL_MODERN_HAS_DP, "Haswell GT2"},
+	{0x1616, INTEL_GEN_8, 3, 3, 3, INTEL_MODERN_HAS_GTT | INTEL_MODERN_HAS_PCH | INTEL_MODERN_HAS_MSI | INTEL_MODERN_HAS_VBLANK | INTEL_MODERN_HAS_DP, "Broadwell GT2"},
+	{0x1912, INTEL_GEN_9, 3, 3, 3, INTEL_MODERN_HAS_GTT | INTEL_MODERN_HAS_PCH | INTEL_MODERN_HAS_MSI | INTEL_MODERN_HAS_VBLANK | INTEL_MODERN_HAS_DP | INTEL_MODERN_HAS_EDP, "Skylake GT2"},
+	{0x5912, INTEL_GEN_9, 3, 3, 3, INTEL_MODERN_HAS_GTT | INTEL_MODERN_HAS_PCH | INTEL_MODERN_HAS_MSI | INTEL_MODERN_HAS_VBLANK | INTEL_MODERN_HAS_DP | INTEL_MODERN_HAS_EDP, "Kaby Lake GT2"},
+	{0x3e92, INTEL_GEN_9, 3, 3, 3, INTEL_MODERN_HAS_GTT | INTEL_MODERN_HAS_PCH | INTEL_MODERN_HAS_MSI | INTEL_MODERN_HAS_VBLANK | INTEL_MODERN_HAS_DP | INTEL_MODERN_HAS_EDP, "Coffee Lake GT2"},
+	{0x8a52, INTEL_GEN_11, 3, 3, 4, INTEL_MODERN_HAS_GTT | INTEL_MODERN_HAS_MSI | INTEL_MODERN_HAS_VBLANK | INTEL_MODERN_HAS_DP | INTEL_MODERN_HAS_EDP | INTEL_MODERN_EXPERIMENTAL, "Ice Lake GT2"},
+	{0x9a49, INTEL_GEN_11, 3, 3, 4, INTEL_MODERN_HAS_GTT | INTEL_MODERN_HAS_MSI | INTEL_MODERN_HAS_VBLANK | INTEL_MODERN_HAS_DP | INTEL_MODERN_HAS_EDP | INTEL_MODERN_EXPERIMENTAL, "Tiger Lake"},
+	{0x46a6, INTEL_GEN_12, 4, 4, 4, INTEL_MODERN_HAS_GTT | INTEL_MODERN_HAS_MSI | INTEL_MODERN_HAS_VBLANK | INTEL_MODERN_HAS_DP | INTEL_MODERN_HAS_EDP | INTEL_MODERN_EXPERIMENTAL, "Alder Lake-P GT2"},
+	{0x46d1, INTEL_GEN_12, 4, 4, 4, INTEL_MODERN_HAS_GTT | INTEL_MODERN_HAS_MSI | INTEL_MODERN_HAS_VBLANK | INTEL_MODERN_HAS_DP | INTEL_MODERN_HAS_EDP | INTEL_MODERN_EXPERIMENTAL, "Alder Lake-N"},
+};
+
+const intel_modern_device*
+intel_modern_lookup(uint16 deviceID)
+{
+	for (size_t i = 0; i < sizeof(kDevices) / sizeof(kDevices[0]); i++) {
+		if (kDevices[i].device_id == deviceID)
+			return &kDevices[i];
+	}
+	return NULL;
+}
+
+const char*
+intel_modern_generation_name(uint8 generation)
+{
+	switch (generation) {
+		case INTEL_GEN_6: return "Gen6";
+		case INTEL_GEN_7: return "Gen7";
+		case INTEL_GEN_7_5: return "Gen7.5";
+		case INTEL_GEN_8: return "Gen8";
+		case INTEL_GEN_9: return "Gen9";
+		case INTEL_GEN_11: return "Gen11";
+		case INTEL_GEN_12: return "Gen12";
+		default: return "Legacy";
+	}
+}
+
+bool
+intel_modern_has_capability(const intel_modern_device& device, uint32 flag)
+{
+	return (device.flags & flag) != 0;
+}

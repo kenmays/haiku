@@ -15,6 +15,7 @@
 #include <kernel/lock.h>
 
 #include "intel_extreme_private.h"
+#include "intel_modern.h"
 
 
 extern char* gDeviceNames[];

@@ -14,6 +14,7 @@
 #include <PCI.h>
 
 #include "intel_extreme.h"
+#include "intel_modern.h"
 #include "lock.h"
 
 
@@ -41,6 +42,9 @@ struct intel_info {
 	DeviceType		device_type;
 
 	enum pch_info	pch_info;
+
+	// Hardware-generation metadata used by the modernized driver paths.
+	const intel_modern_device* modern_device;
 };
 
 

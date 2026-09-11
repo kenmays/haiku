@@ -8,6 +8,7 @@
 #include <SupportDefs.h>
 
 #include "intel_extreme.h"
+#include "intel_modern.h"
 
 
 enum intel_device_capability {

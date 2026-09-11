@@ -14,6 +14,7 @@
 #include <PCI.h>
 
 #include "intel_extreme.h"
+#include "intel_modern.h"
 #include "lock.h"
 
 
@@ -39,6 +40,10 @@ struct intel_info {
 
 	const char*		device_identifier;
 	DeviceType		device_type;
+	intel_generation_info generation;
+	uint8			pipe_count;
+	uint8			port_count;
+	uint32			capabilities;
 
 	enum pch_info	pch_info;
 };
@@ -68,6 +73,13 @@ find_reg(const intel_info& info, uint32 target)
 
 	panic("find_reg didn't have any matching register\n");
 	return target;
+}
+
+
+static inline bool
+intel_has_capability(const intel_info& info, uint32 capability)
+{
+	return (info.capabilities & capability) != 0;
 }
 
 

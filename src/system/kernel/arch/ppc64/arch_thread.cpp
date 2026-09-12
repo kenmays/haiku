@@ -5,6 +5,7 @@
 #include <boot/stage2.h>
 #include <commpage_defs.h>
 #include <kernel.h>
+#include <signal.h>
 #include <thread.h>
 #include <team.h>
 #include <vm/vm_types.h>
@@ -97,58 +98,46 @@ status_t arch_setup_signal_frame(Thread* thread, struct sigaction* action,
 	struct signal_frame_data* signalFrameData)
 {
 	iframe* frame = ppc_get_user_iframe();
-	if (!frame || !thread || !action || !signalFrameData)
-		return B_BAD_VALUE;
-
+	if (!frame || !thread || !action || !signalFrameData) return B_BAD_VALUE;
 	vregs& regs = signalFrameData->context.uc_mcontext;
 	regs.pc = frame->srr0;
 	regs.r0 = frame->r0; regs.r1 = frame->r1; regs.r2 = frame->r2;
-	regs.r3 = frame->r3; regs.r4 = frame->r4; regs.r5 = frame->r5;
-	regs.r6 = frame->r6; regs.r7 = frame->r7; regs.r8 = frame->r8;
-	regs.r9 = frame->r9; regs.r10 = frame->r10; regs.r11 = frame->r11; regs.r12 = frame->r12;
+	regs.r3 = frame->r3; regs.r4 = frame->r4; regs.r5 = frame->r5; regs.r6 = frame->r6;
+	regs.r7 = frame->r7; regs.r8 = frame->r8; regs.r9 = frame->r9; regs.r10 = frame->r10;
+	regs.r11 = frame->r11; regs.r12 = frame->r12;
 	regs.f0 = frame->f0; regs.f1 = frame->f1; regs.f2 = frame->f2; regs.f3 = frame->f3;
 	regs.f4 = frame->f4; regs.f5 = frame->f5; regs.f6 = frame->f6; regs.f7 = frame->f7;
 	regs.f8 = frame->f8; regs.f9 = frame->f9; regs.f10 = frame->f10; regs.f11 = frame->f11;
 	regs.f12 = frame->f12; regs.f13 = frame->f13;
-	regs.fpscr = frame->fpscr; regs.ctr = frame->ctr; regs.xer = frame->xer;
-	regs.cr = frame->cr; regs.msr = frame->srr1; regs.lr = frame->lr;
+	regs.fpscr = frame->fpscr; regs.ctr = frame->ctr; regs.xer = frame->xer; regs.cr = frame->cr;
+	regs.msr = frame->srr1; regs.lr = frame->lr;
 	signal_get_user_stack(frame->r1, &signalFrameData->context.uc_stack);
-
 	uint8* userStack = get_signal_stack(thread, frame, action, sizeof(*signalFrameData));
 	status_t status = user_memcpy(userStack, signalFrameData, sizeof(*signalFrameData));
 	if (status < B_OK) return status;
-
-	addr_t cp = (addr_t)thread->team->commpage_address;
-	addr_t handler;
+	addr_t cp = (addr_t)thread->team->commpage_address, handler;
 	status = user_memcpy(&handler, &((addr_t*)cp)[COMMPAGE_ENTRY_PPC64_SIGNAL_HANDLER], sizeof(handler));
 	if (status < B_OK) return status;
 	handler += cp;
-
-	frame->lr = frame->srr0;
-	frame->r1 = (addr_t)userStack;
-	frame->srr0 = handler;
-	frame->r3 = (addr_t)userStack;
+	frame->lr = frame->srr0; frame->r1 = (addr_t)userStack; frame->srr0 = handler; frame->r3 = (addr_t)userStack;
 	return B_OK;
 }
 
 int64 arch_restore_signal_frame(struct signal_frame_data* signalFrameData)
 {
-	Thread* thread = thread_get_current_thread();
-	iframe* frame = ppc_get_user_iframe();
+	Thread* thread = thread_get_current_thread(); iframe* frame = ppc_get_user_iframe();
 	if (!thread || !frame || !signalFrameData) return B_BAD_VALUE;
-
 	vregs& regs = signalFrameData->context.uc_mcontext;
-	frame->srr0 = regs.pc;
-	frame->r0 = regs.r0; frame->r1 = regs.r1; frame->r2 = regs.r2;
-	frame->r3 = regs.r3; frame->r4 = regs.r4; frame->r5 = regs.r5;
-	frame->r6 = regs.r6; frame->r7 = regs.r7; frame->r8 = regs.r8;
-	frame->r9 = regs.r9; frame->r10 = regs.r10; frame->r11 = regs.r11; frame->r12 = regs.r12;
+	frame->srr0 = regs.pc; frame->r0 = regs.r0; frame->r1 = regs.r1; frame->r2 = regs.r2;
+	frame->r3 = regs.r3; frame->r4 = regs.r4; frame->r5 = regs.r5; frame->r6 = regs.r6;
+	frame->r7 = regs.r7; frame->r8 = regs.r8; frame->r9 = regs.r9; frame->r10 = regs.r10;
+	frame->r11 = regs.r11; frame->r12 = regs.r12;
 	frame->f0 = regs.f0; frame->f1 = regs.f1; frame->f2 = regs.f2; frame->f3 = regs.f3;
 	frame->f4 = regs.f4; frame->f5 = regs.f5; frame->f6 = regs.f6; frame->f7 = regs.f7;
 	frame->f8 = regs.f8; frame->f9 = regs.f9; frame->f10 = regs.f10; frame->f11 = regs.f11;
 	frame->f12 = regs.f12; frame->f13 = regs.f13;
-	frame->fpscr = regs.fpscr; frame->ctr = regs.ctr; frame->xer = regs.xer;
-	frame->cr = regs.cr; frame->srr1 = regs.msr; frame->lr = regs.lr;
+	frame->fpscr = regs.fpscr; frame->ctr = regs.ctr; frame->xer = regs.xer; frame->cr = regs.cr;
+	frame->srr1 = regs.msr; frame->lr = regs.lr;
 	return frame->r3;
 }
 
@@ -156,8 +145,6 @@ void arch_store_fork_frame(struct arch_fork_arg* arg)
 {
 	iframe* frame = ppc_get_user_iframe();
 	if (!frame) { memset(&arg->frame, 0, sizeof(arg->frame)); return; }
-	memcpy(&arg->frame, frame, sizeof(arg->frame));
-	arg->frame.r3 = 0;
+	memcpy(&arg->frame, frame, sizeof(arg->frame)); arg->frame.r3 = 0;
 }
-
 void arch_restore_fork_frame(struct arch_fork_arg* arg) { ppc64_restore_iframe(&arg->frame); }

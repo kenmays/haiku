@@ -24,7 +24,6 @@ FUNCTION(ppc64_slb_invalidate_esid): slbie %r3; sync; isync; blr
 FUNCTION(__eieio): eieio; blr
 FUNCTION(ppc_kernel_thread_root):
 	mtctr %r14; mr %r3,%r15; bctrl; b kernel_thread_exit
-/* r3=entry, r4=SP, r5/r6=args, r7=user TLS, r8=thread-exit address. */
 FUNCTION(ppc64_enter_userspace):
 	mfmsr %r9
 	ori %r10,%r9,0x8000
@@ -40,7 +39,6 @@ FUNCTION(ppc64_enter_userspace):
 	mtlr %r8
 	rfid
 	b .
-/* Restore a complete PPC64 iframe and return to its SRR0/SRR1 state. */
 FUNCTION(ppc64_restore_iframe):
 	mr %r12,%r3
 	lfd %f0,72(%r12); mtfsf 0xff,%f0
@@ -52,14 +50,10 @@ FUNCTION(ppc64_restore_iframe):
 	lfd %f20,496(%r12); lfd %f21,504(%r12); lfd %f22,512(%r12); lfd %f23,520(%r12)
 	lfd %f24,528(%r12); lfd %f25,536(%r12); lfd %f26,544(%r12); lfd %f27,552(%r12)
 	lfd %f28,560(%r12); lfd %f29,568(%r12); lfd %f30,576(%r12); lfd %f31,584(%r12)
-	ld %r0,8(%r12); mtspr 26,%r0
-	ld %r0,16(%r12); mtspr 27,%r0
-	ld %r0,24(%r12); mtspr 19,%r0
-	ld %r0,32(%r12); mtspr 18,%r0
-	ld %r0,40(%r12); mtlr %r0
-	ld %r0,48(%r12); mtcrf 0xff,%r0
-	ld %r0,56(%r12); mtxer %r0
-	ld %r0,64(%r12); mtctr %r0
+	ld %r0,8(%r12); mtspr 26,%r0; ld %r0,16(%r12); mtspr 27,%r0
+	ld %r0,24(%r12); mtspr 19,%r0; ld %r0,32(%r12); mtspr 18,%r0
+	ld %r0,40(%r12); mtlr %r0; ld %r0,48(%r12); mtcrf 0xff,%r0
+	ld %r0,56(%r12); mtxer %r0; ld %r0,64(%r12); mtctr %r0
 	ld %r31,80(%r12); ld %r30,88(%r12); ld %r29,96(%r12); ld %r28,104(%r12)
 	ld %r27,112(%r12); ld %r26,120(%r12); ld %r25,128(%r12); ld %r24,136(%r12)
 	ld %r23,144(%r12); ld %r22,152(%r12); ld %r21,160(%r12); ld %r20,168(%r12)
@@ -75,6 +69,18 @@ FUNCTION(arch_user_thread_exit):
 	sc
 	b .
 FUNCTION(ppc_context_switch):
+	/* arch_thread: sp=0, interrupt_stack=8, iframe_stack=16..55,
+	 * fpu[32]=40..295, fpscr=296. */
+	stfd %f0,40(%r3); stfd %f1,48(%r3); stfd %f2,56(%r3); stfd %f3,64(%r3)
+	stfd %f4,72(%r3); stfd %f5,80(%r3); stfd %f6,88(%r3); stfd %f7,96(%r3)
+	stfd %f8,104(%r3); stfd %f9,112(%r3); stfd %f10,120(%r3); stfd %f11,128(%r3)
+	stfd %f12,136(%r3); stfd %f13,144(%r3); stfd %f14,152(%r3); stfd %f15,160(%r3)
+	stfd %f16,168(%r3); stfd %f17,176(%r3); stfd %f18,184(%r3); stfd %f19,192(%r3)
+	stfd %f20,200(%r3); stfd %f21,208(%r3); stfd %f22,216(%r3); stfd %f23,224(%r3)
+	stfd %f24,232(%r3); stfd %f25,240(%r3); stfd %f26,248(%r3); stfd %f27,256(%r3)
+	stfd %f28,264(%r3); stfd %f29,272(%r3); stfd %f30,280(%r3); stfd %f31,288(%r3)
+	mffs %f0; stfd %f0,296(%r3)
+
 	mflr %r0; std %r0,0(%r1); mfcr %r0; std %r0,8(%r1); stdu %r1,-192(%r1)
 	std %r2,16(%r1); std %r13,24(%r1); std %r14,32(%r1); std %r15,40(%r1)
 	std %r16,48(%r1); std %r17,56(%r1); std %r18,64(%r1); std %r19,72(%r1)
@@ -87,4 +93,14 @@ FUNCTION(ppc_context_switch):
 	ld %r20,80(%r1); ld %r21,88(%r1); ld %r22,96(%r1); ld %r23,104(%r1)
 	ld %r24,112(%r1); ld %r25,120(%r1); ld %r26,128(%r1); ld %r27,136(%r1)
 	ld %r28,144(%r1); ld %r29,152(%r1); ld %r30,160(%r1); ld %r31,168(%r1)
+
+	lfd %f0,296(%r3); mtfsf 0xff,%f0
+	lfd %f0,40(%r3); lfd %f1,48(%r3); lfd %f2,56(%r3); lfd %f3,64(%r3)
+	lfd %f4,72(%r3); lfd %f5,80(%r3); lfd %f6,88(%r3); lfd %f7,96(%r3)
+	lfd %f8,104(%r3); lfd %f9,112(%r3); lfd %f10,120(%r3); lfd %f11,128(%r3)
+	lfd %f12,136(%r3); lfd %f13,144(%r3); lfd %f14,152(%r3); lfd %f15,160(%r3)
+	lfd %f16,168(%r3); lfd %f17,176(%r3); lfd %f18,184(%r3); lfd %f19,192(%r3)
+	lfd %f20,200(%r3); lfd %f21,208(%r3); lfd %f22,216(%r3); lfd %f23,224(%r3)
+	lfd %f24,232(%r3); lfd %f25,240(%r3); lfd %f26,248(%r3); lfd %f27,256(%r3)
+	lfd %f28,264(%r3); lfd %f29,272(%r3); lfd %f30,280(%r3); lfd %f31,288(%r3)
 	addi %r1,%r1,192; blr

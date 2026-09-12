@@ -5,6 +5,7 @@
 #include <arch/thread.h>
 #include <boot/kernel_args.h>
 #include <vm/VMAddressSpace.h>
+#include <string.h>
 
 status_t arch_cpu_preboot_init_percpu(kernel_args*, int)
 {
@@ -12,7 +13,6 @@ status_t arch_cpu_preboot_init_percpu(kernel_args*, int)
 	arch_thread_set_current_thread(NULL);
 	return B_OK;
 }
-
 status_t arch_cpu_init(kernel_args*) { return B_OK; }
 status_t arch_cpu_init_post_vm(kernel_args*) { return B_OK; }
 status_t arch_cpu_init_percpu(kernel_args*, int) { return B_OK; }
@@ -31,7 +31,6 @@ void arch_cpu_sync_icache(void* address, size_t length)
 	asm volatile("sync" ::: "memory");
 	isync();
 }
-
 void arch_cpu_memory_read_barrier(void) { asm volatile("lwsync" ::: "memory"); }
 void arch_cpu_memory_write_barrier(void) { asm volatile("eieio" ::: "memory"); }
 
@@ -43,7 +42,6 @@ void arch_cpu_invalidate_tlb_range(intptr_t, addr_t start, addr_t end)
 	tlbsync();
 	ppc_sync();
 }
-
 void arch_cpu_invalidate_tlb_list(intptr_t, addr_t pages[], int count)
 {
 	ppc_sync();
@@ -52,17 +50,8 @@ void arch_cpu_invalidate_tlb_list(intptr_t, addr_t pages[], int count)
 	tlbsync();
 	ppc_sync();
 }
-
-void arch_cpu_global_tlb_invalidate()
-{
-	ppc64_slb_invalidate();
-	arch_cpu_invalidate_tlb_range(0, 0, 0x100000000ULL);
-}
-
-void arch_cpu_user_tlb_invalidate(intptr_t)
-{
-	arch_cpu_global_tlb_invalidate();
-}
+void arch_cpu_global_tlb_invalidate() { ppc64_slb_invalidate(); }
+void arch_cpu_user_tlb_invalidate(intptr_t) { arch_cpu_global_tlb_invalidate(); }
 
 status_t arch_cpu_user_memcpy(void* to, const void* from, size_t size,
 	addr_t* faultHandler)
@@ -82,13 +71,14 @@ ssize_t arch_cpu_user_strlcpy(char* to, const char* from, size_t size,
 {
 	addr_t old = *faultHandler;
 	if (ppc_set_fault_handler(faultHandler, (addr_t)&&error)) goto error;
+	ssize_t length = strlen(from);
 	if (size != 0) {
-		size_t n = strnlen(from, size - 1);
+		size_t n = length < (ssize_t)size - 1 ? length : size - 1;
 		memcpy(to, from, n);
 		to[n] = 0;
 	}
 	*faultHandler = old;
-	return strlen(from);
+	return length;
 error:
 	*faultHandler = old;
 	return B_BAD_ADDRESS;

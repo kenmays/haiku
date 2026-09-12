@@ -5,13 +5,15 @@ UsePrivateKernelHeaders ;
 SubDirSysHdrs $(HAIKU_TOP) src add-ons kernel bus_managers fdt ;
 
 SEARCH_SOURCE += [ FDirName $(SUBDIR) $(DOTDOT) generic ] ;
-SEARCH_SOURCE += [ FDirName $(SUBDIR) paging ] ;
 
 KernelMergeObject kernel_arch_ppc64.o :
+	arch_commpage.cpp
 	arch_cpu.cpp
 	arch_cpu_asm.S
 	arch_debug.cpp
+	arch_exceptions.S
 	arch_int.cpp
+	arch_mmu.cpp
 	arch_platform.cpp
 	arch_real_time_clock.cpp
 	arch_smp.cpp

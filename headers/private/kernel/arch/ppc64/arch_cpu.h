@@ -13,7 +13,6 @@
 #define arch_cpu_enable_user_access()
 #define arch_cpu_disable_user_access()
 
-/* Book III-S exception frame. All scalar fields are 64-bit. */
 struct iframe {
 	uint64 vector, srr0, srr1, dar, dsisr, lr, cr, xer, ctr, fpscr;
 	uint64 r31, r30, r29, r28, r27, r26, r25, r24, r23, r22, r21, r20,
@@ -24,15 +23,19 @@ struct iframe {
 		f5, f4, f3, f2, f1, f0;
 };
 
-/* PowerPC architectural MSR bit numbering is MSB-first. */
+/* Power ISA uses logical bit positions 0..63 from the least-significant bit
+ * for software masks. PPC970 Book III-S places the classic MSR controls in
+ * the low 32 bits of the 64-bit MSR; SF is bit 63. */
 enum machine_state {
-	MSR_EXCEPTIONS_ENABLED = 1ULL << (63 - 48),
-	MSR_PRIVILEGE_LEVEL = 1ULL << (63 - 49),
-	MSR_FP_AVAILABLE = 1ULL << (63 - 50),
-	MSR_MACHINE_CHECK_ENABLED = 1ULL << (63 - 51),
-	MSR_EXCEPTION_PREFIX = 1ULL << (63 - 43),
-	MSR_INST_ADDRESS_TRANSLATION = 1ULL << (63 - 58),
-	MSR_DATA_ADDRESS_TRANSLATION = 1ULL << (63 - 59)
+	MSR_EXCEPTIONS_ENABLED = 1ULL << 15,
+	MSR_PRIVILEGE_LEVEL = 1ULL << 14,
+	MSR_FP_AVAILABLE = 1ULL << 13,
+	MSR_MACHINE_CHECK_ENABLED = 1ULL << 12,
+	MSR_EXCEPTION_PREFIX = 1ULL << 6,
+	MSR_INST_ADDRESS_TRANSLATION = 1ULL << 5,
+	MSR_DATA_ADDRESS_TRANSLATION = 1ULL << 4,
+	MSR_RECOVERABLE_EXCEPTION = 1ULL << 1,
+	MSR_64BIT = 1ULL << 63
 };
 
 #define eieio() asm volatile("eieio" ::: "memory")

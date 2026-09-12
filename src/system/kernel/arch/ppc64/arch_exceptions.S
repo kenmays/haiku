@@ -3,7 +3,6 @@
 .section .exception_handlers,"ax"
 .global __irqvec_start
 __irqvec_start:
-
 .macro VECTOR off
 	.org \off
 	mtsprg2 %r0
@@ -11,7 +10,6 @@ __irqvec_start:
 	li %r0,\off
 	b ppc64_exception_common
 .endm
-
 VECTOR 0x100
 VECTOR 0x200
 VECTOR 0x300
@@ -35,10 +33,8 @@ VECTOR 0x1400
 VECTOR 0x1500
 VECTOR 0x1600
 VECTOR 0x1700
-
 .org 0x1800
 
-/* SPRG0 points at the per-CPU exception stack context. */
 FUNCTION(ppc64_exception_common):
 	mfsprg0 %r13
 	std %r0,24(%r13)
@@ -46,28 +42,18 @@ FUNCTION(ppc64_exception_common):
 	ld %r1,16(%r13)
 	addi %r1,%r1,-640
 	mr %r4,%r1
+	std %r0,0(%r4)
 
-	/* Fixed exception state. */
-	mfspr  %r0,26
-	std %r0,8(%r4)
-	mfspr  %r0,27
-	std %r0,16(%r4)
-	mfspr  %r0,19
-	std %r0,24(%r4)
-	mfspr  %r0,18
-	std %r0,32(%r4)
-	mflr %r0
-	std %r0,40(%r4)
-	mfcr %r0
-	std %r0,48(%r4)
-	mfxer %r0
-	std %r0,56(%r4)
-	mfctr %r0
-	std %r0,64(%r4)
-	li %r0,0
-	std %r0,72(%r4)
+	mfspr %r0,26; std %r0,8(%r4)
+	mfspr %r0,27; std %r0,16(%r4)
+	mfspr %r0,19; std %r0,24(%r4)
+	mfspr %r0,18; std %r0,32(%r4)
+	mflr %r0; std %r0,40(%r4)
+	mfcr %r0; std %r0,48(%r4)
+	mfxer %r0; std %r0,56(%r4)
+	mfctr %r0; std %r0,64(%r4)
+	li %r0,0; std %r0,72(%r4)
 
-	/* GPRs. r0/r13/r1 were captured in SPRGs/per-CPU storage. */
 	std %r31,80(%r4);  std %r30,88(%r4);  std %r29,96(%r4);  std %r28,104(%r4)
 	std %r27,112(%r4); std %r26,120(%r4); std %r25,128(%r4); std %r24,136(%r4)
 	std %r23,144(%r4); std %r22,152(%r4); std %r21,160(%r4); std %r20,168(%r4)
@@ -80,12 +66,9 @@ FUNCTION(ppc64_exception_common):
 	ld %r0,32(%r13); std %r0,320(%r4)
 	mfsprg2 %r0; std %r0,328(%r4)
 
-	/* Pass (vector, iframe*) to C. */
 	ld %r3,0(%r4)
-	mr %r4,%r4
 	bl ppc64_exception_entry
 
-	/* Restore machine state and all GPRs. */
 	ld %r0,8(%r1);  mtspr 26,%r0
 	ld %r0,16(%r1); mtspr 27,%r0
 	ld %r0,40(%r1); mtlr %r0
@@ -102,6 +85,5 @@ FUNCTION(ppc64_exception_common):
 	ld %r3,304(%r1);  ld %r2,312(%r1);  ld %r1,320(%r1); ld %r0,328(%r1)
 	rfid
 	b .
-
 .global __irqvec_end
 __irqvec_end:

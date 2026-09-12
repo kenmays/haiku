@@ -8,12 +8,12 @@
  */
 #include <KernelExport.h>
 #include <ByteOrder.h>
-#include <PCI.h>
 #include <boot/kernel_args.h>
 #include <platform/openfirmware/openfirmware.h>
 #include <platform/openfirmware/devices.h>
 #include <vm/vm.h>
-#include <util/kernel_cpp.h>
+
+#include <string.h>
 
 #include "g5_mpic.h"
 
@@ -31,8 +31,6 @@ static const uint32 SRC_BASE = 0x10000;
 static const uint32 CPU_BASE = 0x20000;
 static const uint32 IPI_BASE = 0x20040;
 static const uint32 CPU_PRIORITY = 0x20080;
-static const uint32 IACK = 0x200a0;
-static const uint32 EOI = 0x200b0;
 
 static inline uint32
 read32(uint32 offset)
@@ -44,18 +42,17 @@ static inline void
 write32(uint32 offset, uint32 value)
 {
 	*(volatile uint32*)(sRegs + offset) = B_SWAP_INT32(value);
-	eieio();
+	asm volatile("eieio" ::: "memory");
 }
 
 static bool
 get_reg_address(intptr_t node, phys_addr_t& address, size_t& size)
 {
-	uint32 cellsAddress = 2;
-	uint32 cellsSize = 1;
+	uint32 cellsAddress = B_HOST_TO_BENDIAN_INT32(2);
+	uint32 cellsSize = B_HOST_TO_BENDIAN_INT32(1);
 	intptr_t parent = of_parent(node);
 	if (parent > 0) {
-		of_getprop(parent, "#address-cells", &cellsAddress,
-			sizeof(cellsAddress));
+		of_getprop(parent, "#address-cells", &cellsAddress, sizeof(cellsAddress));
 		of_getprop(parent, "#size-cells", &cellsSize, sizeof(cellsSize));
 		cellsAddress = B_BENDIAN_TO_HOST_INT32(cellsAddress);
 		cellsSize = B_BENDIAN_TO_HOST_INT32(cellsSize);
@@ -137,12 +134,13 @@ mpic_init()
 	/* Disable all sources, route them to CPU 0, and select level triggering. */
 	for (uint32 irq = 0; irq < sIRQCount; irq++) {
 		uint32 source = SRC_BASE + irq * 0x20;
-		write32(source, 0x80000000 | 8 << 16 | irq | 0x00400000 | 0x00800000);
+		write32(source, 0x80000000U | (8U << 16) | irq
+			| 0x00400000U | 0x00800000U);
 		write32(source + 0x10, 1);
 	}
 
 	uint32 config = read32(CONFIG);
-	write32(CONFIG, config | 0x20000000);
+	write32(CONFIG, config | 0x20000000U);
 	write32(CPU_PRIORITY, 0);
 	write32(SPURIOUS, 0xff);
 
@@ -167,8 +165,7 @@ mpic_acknowledge()
 {
 	if (!sRegs)
 		return -1;
-	uint32 cpu = 0;
-	uint32 value = read32(CPU_BASE + cpu * 0x1000 + 0xa0);
+	uint32 value = read32(CPU_BASE + 0xa0);
 	uint32 irq = value & 0xff;
 	return irq == 0xff ? -1 : (int32)irq;
 }
@@ -229,7 +226,6 @@ mpic_send_ipi(int32 cpu, uint8 vector)
 {
 	if (!sRegs || cpu < 0 || (uint32)cpu >= sCpuCount)
 		return;
-	/* Program IPI0 with the vector, then issue the destination command. */
 	write32(IPI_BASE, vector);
 	write32(IPI_BASE + 0x10, 1U << cpu);
 }

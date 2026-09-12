@@ -1,0 +1,14 @@
+SubDir HAIKU_TOP src system glue arch ppc64 ;
+
+local architectureObject ;
+for architectureObject in [ MultiArchSubDirSetup ppc64 ] {
+	on $(architectureObject) {
+		local architecture = $(TARGET_PACKAGING_ARCH) ;
+		UsePrivateSystemHeaders ;
+		local sources = crti.S crtn.S ;
+		MergeObject <$(architecture)>glue_arch_$(TARGET_ARCH).o : $(sources) ;
+		if $(HAIKU_BUILD_TYPE) = bootstrap {
+			BootstrapStage0PlatformObjects [ FGristFiles $(sources) ] : true ;
+		}
+	}
+}

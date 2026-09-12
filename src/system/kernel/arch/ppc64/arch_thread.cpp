@@ -27,7 +27,7 @@ struct iframe* ppc_get_user_iframe(void)
 	if (thread == NULL) return NULL;
 	for (int i = thread->arch_info.iframes.index - 1; i >= 0; --i) {
 		iframe* frame = thread->arch_info.iframes.frames[i];
-		if ((frame->srr1 & MSR_PRIVILEGE_LEVEL) == 0) return frame;
+		if ((frame->srr1 & MSR_PRIVILEGE_LEVEL) != 0) return frame;
 	}
 	return NULL;
 }
@@ -51,36 +51,29 @@ void arch_thread_init_kthread_stack(Thread* thread, void*, void* stackTop,
 }
 
 status_t arch_thread_init_tls(Thread*) { return B_OK; }
-
 void arch_thread_context_switch(Thread* from, Thread* to)
 {
 	if (to->team->address_space != NULL && from->team != to->team)
 		ppc_translation_map_change_asid(to->team->address_space->TranslationMap());
 	ppc_context_switch(&from->arch_info.sp, to->arch_info.sp);
 }
-
 void arch_thread_dump_info(void* info)
 	{ dprintf("\tsp: %p\n", ((arch_thread*)info)->sp); }
 
 status_t
-arch_thread_enter_userspace(Thread* thread, addr_t entry, void* args1,
-	void* args2)
+arch_thread_enter_userspace(Thread* thread, addr_t entry, void* args1, void* args2)
 {
 	if (thread == NULL || thread->team == NULL || thread->team->address_space == NULL)
 		return B_BAD_VALUE;
-
 	addr_t stackTop = thread->user_stack_base + thread->user_stack_size;
 	stackTop = (stackTop & ~addr_t(0xf)) - sizeof(addr_t);
-
 	addr_t commPageAddress = (addr_t)thread->team->commpage_address;
-	addr_t returnAddress = ((addr_t*)commPageAddress)[
-		COMMPAGE_ENTRY_PPC64_THREAD_EXIT] + commPageAddress;
+	addr_t returnAddress = ((addr_t*)commPageAddress)[COMMPAGE_ENTRY_PPC64_THREAD_EXIT]
+		+ commPageAddress;
 	if (user_memcpy((void*)stackTop, &returnAddress, sizeof(returnAddress)) != B_OK)
 		return B_BAD_ADDRESS;
-
 	ppc64_mmu_switch_address_space((addr_t)thread->team->address_space->TranslationMap());
-	ppc64_enter_userspace(entry, stackTop, (addr_t)args1, (addr_t)args2,
-		returnAddress);
+	ppc64_enter_userspace(entry, stackTop, (addr_t)args1, (addr_t)args2, returnAddress);
 	return B_ERROR;
 }
 

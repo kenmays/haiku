@@ -9,37 +9,55 @@ static ppc64_pteg* sHPT;
 static uint64 sHPTSize;
 static uint64 sHashMask;
 static uint64 sSDR1;
+static addr_t sCurrentAddressSpace;
 
-/* PPC970 uses 256 MiB segments and 4 KiB base pages. */
-static inline uint64 vsid(addr_t ea)
+/* 256 MiB segments and 4 KiB base pages are the PPC970 storage model. */
+static inline uint64
+segment_id(addr_t ea)
 {
 	return ((uint64)ea >> PPC64_SEGMENT_SHIFT) & PPC64_SLB_ESID_MASK;
 }
 
-static inline uint64 vpn(addr_t ea)
+static inline uint64
+address_space_vsid(addr_t ea, addr_t addressSpace)
 {
-	return (vsid(ea) << 16) | (((uint64)ea >> PPC64_PAGE_SHIFT) & 0xffff);
+	uint64 esid = segment_id(ea);
+	if (addressSpace == 0 || IS_KERNEL_ADDRESS(ea))
+		return esid;
+
+	/* The HPT VSID is a 36-bit context-qualified segment identifier. */
+	uint64 context = (uint64)addressSpace;
+	uint64 mixed = context ^ (context >> 17) ^ (context >> 37);
+	return (esid ^ mixed) & PPC64_SLB_ESID_MASK;
 }
 
-/* Book III-S 256 MiB-segment hash, with the 39-bit architectural mask. */
-static inline uint64 hash(uint64 v)
+static inline uint64
+vpn(addr_t ea, addr_t addressSpace)
 {
-	const uint64 pageMask = (1ULL << 16) - 1;
-	return ((v >> 16) ^ ((v & pageMask))) & 0x7fffffffffULL;
+	return (address_space_vsid(ea, addressSpace) << 16)
+		| (((uint64)ea >> PPC64_PAGE_SHIFT) & 0xffff);
 }
 
-static inline uint64 avpn(uint64 v)
+static inline uint64
+hash(uint64 v)
 {
-	/* AVPN omits the low 11 VPN bits and is stored at V[7:55]. */
-	return ((v >> 11) << 7) | (0ULL << PPC64_HPTE_V_SSIZE_SHIFT);
+	return ((v >> 16) ^ (v & 0xffff)) & 0x7fffffffffULL;
 }
 
-static inline ppc64_pte* group(uint64 h)
+static inline uint64
+avpn(uint64 v)
+{
+	return (v >> 11) << 7;
+}
+
+static inline ppc64_pte*
+group(uint64 h)
 {
 	return &sHPT->pte[(h & sHashMask) * PPC64_HPT_PTES_PER_GROUP];
 }
 
-static ppc64_pte* find(uint64 v, bool secondary)
+static ppc64_pte*
+find(uint64 v, bool secondary)
 {
 	uint64 h = hash(v);
 	if (secondary)
@@ -56,20 +74,19 @@ static ppc64_pte* find(uint64 v, bool secondary)
 	return NULL;
 }
 
-static status_t insert(addr_t ea, phys_addr_t pa, uint32 protection,
-	uint32 memoryType)
+static status_t
+insert(addr_t ea, phys_addr_t pa, uint32 protection, uint32 memoryType,
+	addr_t addressSpace)
 {
-	uint64 v = vpn(ea);
+	uint64 v = vpn(ea, addressSpace);
 	uint64 h = hash(v);
 	uint64 r = ((uint64)pa & PPC64_HPTE_R_RPN) | PPC64_HPTE_R_R;
 
-	/* PPC64 Haiku protection values are collapsed to the Book III-S PP bits. */
 	if (protection & B_KERNEL_WRITE_AREA)
 		r |= PPC64_HPTE_PP_RWXX;
 	else
 		r |= PPC64_HPTE_PP_RXRX;
 
-	/* memoryType == 0 is normal cacheable memory. */
 	if (memoryType != 0)
 		r |= PPC64_HPTE_R_I | PPC64_HPTE_R_G;
 
@@ -84,7 +101,6 @@ static status_t insert(addr_t ea, phys_addr_t pa, uint32 protection,
 		}
 	}
 
-	/* Secondary PTEG uses the one's-complement hash and H=1. */
 	p = group(~h);
 	for (uint32 i = 0; i < PPC64_HPT_PTES_PER_GROUP; i++) {
 		if (!(p[i].word0 & PPC64_HPTE_V_VALID)) {
@@ -99,7 +115,8 @@ static status_t insert(addr_t ea, phys_addr_t pa, uint32 protection,
 	return B_NO_MEMORY;
 }
 
-status_t ppc64_mmu_init(kernel_args* args)
+status_t
+ppc64_mmu_init(kernel_args* args)
 {
 	if (args == NULL || args->arch_args.page_table.start == 0)
 		return B_ERROR;
@@ -110,14 +127,12 @@ status_t ppc64_mmu_init(kernel_args* args)
 		return B_BAD_VALUE;
 
 	sHashMask = sHPTSize / PPC64_HPT_PTEG_SIZE - 1;
-	/* SDR1[HTABSIZE] = log2(HPT bytes) - 18. */
 	uint32 htabShift = __builtin_ctzll(sHPTSize);
-	sSDR1 = (uint64)args->arch_args.page_table.start
-		+ (htabShift - 18);
+	sSDR1 = (uint64)args->arch_args.page_table.start | (htabShift - 18);
+	sCurrentAddressSpace = 0;
 
-	/* Preserve the 256 MiB segment convention while establishing a clean SLB. */
 	ppc64_slb_invalidate();
-	ppc64_slb_insert(0x8, 0x8 | PPC64_SLB_VSID_KP);
+	ppc64_slb_insert(PPC64_SLB_KERNEL_SLOT, 0x8, 0x8 | PPC64_SLB_VSID_KP);
 
 	set_sdr1(sSDR1);
 	sync();
@@ -125,47 +140,78 @@ status_t ppc64_mmu_init(kernel_args* args)
 	return B_OK;
 }
 
-status_t ppc64_mmu_init_post_vm(kernel_args*)
+status_t
+ppc64_mmu_init_post_vm(kernel_args*)
 {
 	return B_OK;
 }
 
-void ppc64_mmu_switch_address_space(addr_t addressSpace)
+void
+ppc64_mmu_switch_address_space(addr_t addressSpace)
 {
-	(void)addressSpace;
-	/* Address-space VSID/SLB allocation is installed by the VM translation map. */
+	sCurrentAddressSpace = addressSpace;
+	ppc64_slb_invalidate();
+	ppc64_slb_insert(PPC64_SLB_KERNEL_SLOT, 0x8, 0x8 | PPC64_SLB_VSID_KP);
 }
 
-status_t ppc64_map_page(addr_t virtualAddress, phys_addr_t physicalAddress,
-	uint32 protection, uint32 memoryType)
+status_t
+ppc64_mmu_handle_segment_fault(addr_t address)
+{
+	if (sHPT == NULL)
+		return B_NOT_INITIALIZED;
+
+	uint64 esid = segment_id(address);
+	uint64 vsid = address_space_vsid(address, sCurrentAddressSpace);
+	uint32 slot = PPC64_SLB_USER_SLOT_BASE
+		+ (esid % PPC64_SLB_USER_SLOT_COUNT);
+	uint64 flags = (sCurrentAddressSpace == 0 || IS_KERNEL_ADDRESS(address))
+		? PPC64_SLB_VSID_KP : 0;
+	ppc64_slb_insert(slot, esid, vsid | flags);
+	return B_OK;
+}
+
+status_t
+ppc64_map_page_asid(addr_t virtualAddress, phys_addr_t physicalAddress,
+	uint32 protection, uint32 memoryType, addr_t addressSpace)
 {
 	if (sHPT == NULL)
 		return B_NOT_INITIALIZED;
 
 	virtualAddress &= ~(addr_t)(PPC64_PAGE_SIZE - 1);
 	physicalAddress &= ~(phys_addr_t)(PPC64_PAGE_SIZE - 1);
+	uint64 v = vpn(virtualAddress, addressSpace);
 
-	ppc64_pte* p = find(vpn(virtualAddress), false);
+	ppc64_pte* p = find(v, false);
 	if (p == NULL)
-		p = find(vpn(virtualAddress), true);
+		p = find(v, true);
 	if (p != NULL) {
 		p->word0 &= ~PPC64_HPTE_V_VALID;
 		sync();
 		arch_cpu_invalidate_tlb_range(0, virtualAddress,
 			virtualAddress + PPC64_PAGE_SIZE);
 	}
-	return insert(virtualAddress, physicalAddress, protection, memoryType);
+	return insert(virtualAddress, physicalAddress, protection, memoryType,
+		addressSpace);
 }
 
-status_t ppc64_unmap_page(addr_t virtualAddress)
+status_t
+ppc64_map_page(addr_t virtualAddress, phys_addr_t physicalAddress,
+	uint32 protection, uint32 memoryType)
+{
+	return ppc64_map_page_asid(virtualAddress, physicalAddress, protection,
+		memoryType, sCurrentAddressSpace);
+}
+
+status_t
+ppc64_unmap_page_asid(addr_t virtualAddress, addr_t addressSpace)
 {
 	if (sHPT == NULL)
 		return B_NOT_INITIALIZED;
 
 	virtualAddress &= ~(addr_t)(PPC64_PAGE_SIZE - 1);
-	ppc64_pte* p = find(vpn(virtualAddress), false);
+	ppc64_pte* p = find(vpn(virtualAddress, addressSpace), false);
 	if (p == NULL)
-		p = find(vpn(virtualAddress), true);
+		p = find(vpn(virtualAddress, addressSpace), true);
 	if (p == NULL)
 		return B_ENTRY_NOT_FOUND;
 
@@ -174,4 +220,10 @@ status_t ppc64_unmap_page(addr_t virtualAddress)
 	arch_cpu_invalidate_tlb_range(0, virtualAddress,
 		virtualAddress + PPC64_PAGE_SIZE);
 	return B_OK;
+}
+
+status_t
+ppc64_unmap_page(addr_t virtualAddress)
+{
+	return ppc64_unmap_page_asid(virtualAddress, sCurrentAddressSpace);
 }

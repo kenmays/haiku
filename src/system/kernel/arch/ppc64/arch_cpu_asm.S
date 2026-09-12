@@ -1,5 +1,6 @@
 /* PPC970 64-bit CPU primitives. */
 #define FUNCTION(x) .global x; .type x,@function; x
+#include "syscall_numbers.h"
 .text
 FUNCTION(get_sdr1): mfspr %r3,25; blr
 FUNCTION(set_sdr1): mtspr 25,%r3; sync; blr
@@ -13,8 +14,6 @@ FUNCTION(ppc64_slb_invalidate): slbia; sync; isync; blr
 FUNCTION(ppc64_slb_insert):
 	/* r3 = SLB slot, r4 = 256 MiB ESID, r5 = VSID. */
 	andi. %r3,%r3,63
-	sldi %r3,%r3,0
-	srdi %r4,%r4,0
 	sldi %r4,%r4,28
 	oris %r3,%r3,0x0800,0
 	or %r3,%r3,%r4
@@ -27,6 +26,29 @@ FUNCTION(ppc64_slb_invalidate_esid): slbie %r3; sync; isync; blr
 FUNCTION(__eieio): eieio; blr
 FUNCTION(ppc_kernel_thread_root):
 	mtctr %r14; mr %r3,%r15; bctrl; b kernel_thread_exit
+
+/* Enter a PPC64 user thread.
+ * r3=entry, r4=user SP, r5=arg1, r6=arg2, r7=return address. */
+FUNCTION(ppc64_enter_userspace):
+	mfmsr %r8
+	ori %r9,%r8,0x8000
+	ori %r9,%r9,0x2000
+	ori %r9,%r9,0x0030
+	ori %r9,%r9,0x4000
+	mtsrr0 %r3
+	mtsrr1 %r9
+	mr %r1,%r4
+	mr %r3,%r5
+	mr %r4,%r6
+	mtlr %r7
+	rfid
+	b .
+
+FUNCTION(arch_user_thread_exit):
+	li %r0,SYSCALL_EXIT_THREAD
+	sc
+	b .
+
 FUNCTION(ppc_context_switch):
 	mflr %r0; std %r0,0(%r1); mfcr %r0; std %r0,8(%r1); stdu %r1,-192(%r1)
 	std %r2,16(%r1); std %r13,24(%r1); std %r14,32(%r1); std %r15,40(%r1)

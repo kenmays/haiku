@@ -60,6 +60,9 @@ void ppc64_mmu_switch_address_space(addr_t addressSpace);
 status_t ppc64_mmu_handle_segment_fault(addr_t address);
 status_t ppc64_map_page(addr_t virtualAddress, phys_addr_t physicalAddress,
 	uint32 protection, uint32 memoryType);
+status_t ppc64_map_page_asid(addr_t virtualAddress, phys_addr_t physicalAddress,
+	uint32 protection, uint32 memoryType, addr_t addressSpace);
 status_t ppc64_unmap_page(addr_t virtualAddress);
+status_t ppc64_unmap_page_asid(addr_t virtualAddress, addr_t addressSpace);
 
 #endif

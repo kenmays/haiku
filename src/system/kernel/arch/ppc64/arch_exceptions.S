@@ -1,6 +1,5 @@
 /* PPC970 Book III-S exception vectors. */
 #define FUNCTION(x) .global x; .type x,@function; x
-
 .section .exception_handlers,"ax"
 .global __irqvec_start
 __irqvec_start:
@@ -39,8 +38,7 @@ VECTOR 0x1700
 
 .org 0x1800
 
-/* SPRG0 -> per-CPU exception context; scratch[0..2] are vector, old r1,
- * and old r4. SPRG2/3 hold old r0/r13 for the duration of the handler. */
+/* SPRG0 -> per-CPU exception context. SPRG2/3 hold old r0/r13. */
 FUNCTION(ppc64_exception_common):
 	mfsprg0	%r13
 	std	%r0, 24(%r13)
@@ -154,10 +152,8 @@ FUNCTION(ppc64_exception_common):
 	ld	%r4, 296(%r1)
 	ld	%r3, 304(%r1)
 	ld	%r2, 312(%r1)
-	ld	%r0, 320(%r1)
-	mr	%r12, %r0
-	ld	%r0, 328(%r1)
-	mr	%r1, %r12
+	ld	%r1, 320(%r1)
+	mfsprg2	%r0
 	rfid
 	b	.
 

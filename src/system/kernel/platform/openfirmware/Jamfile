@@ -3,7 +3,10 @@ SubDir HAIKU_TOP src system kernel platform openfirmware ;
 SubDirCcFlags $(TARGET_KERNEL_PIC_CCFLAGS) ;
 SubDirC++Flags $(TARGET_KERNEL_PIC_CCFLAGS) ;
 
+# PPC64 Power Mac G5 keeps the generic Open Firmware platform object, but
+# adds the U3/U3H/K2 discovery layer used by the PPC64 architecture.
 KernelMergeObject kernel_platform_openfirmware.o :
 	openfirmware.cpp
 	openfirmware_devices.cpp
+	[ FDirName $(HAIKU_TOP) src system kernel platform apple_g5 ] :
 ;

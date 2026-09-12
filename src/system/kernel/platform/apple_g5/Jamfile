@@ -5,4 +5,5 @@ SubDirC++Flags $(TARGET_KERNEL_PIC_CCFLAGS) ;
 
 KernelMergeObject kernel_platform_apple_g5.o :
 	g5_platform.cpp
+	g5_mpic.cpp
 ;

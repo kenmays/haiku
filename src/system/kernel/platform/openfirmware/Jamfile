@@ -4,10 +4,11 @@ SubDirCcFlags $(TARGET_KERNEL_PIC_CCFLAGS) ;
 SubDirC++Flags $(TARGET_KERNEL_PIC_CCFLAGS) ;
 
 # PPC64 Power Mac G5 keeps the generic Open Firmware platform object and
-# adds the U3/U3H/K2 platform and MPIC support directly to the kernel merge.
+# adds the U3/U3H/K2 platform support directly to the kernel merge.
 KernelMergeObject kernel_platform_openfirmware.o :
 	openfirmware.cpp
 	openfirmware_devices.cpp
 	../apple_g5/g5_platform.cpp
 	../apple_g5/g5_mpic.cpp
+	../apple_g5/g5_dart.cpp
 ;

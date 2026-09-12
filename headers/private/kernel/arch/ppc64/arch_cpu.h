@@ -5,7 +5,7 @@
 #ifndef _KERNEL_ARCH_PPC64_CPU_H
 #define _KERNEL_ARCH_PPC64_CPU_H
 
-#include <arch/ppc/arch_thread_types.h>
+#include <arch/ppc64/arch_thread_types.h>
 #include <kernel.h>
 
 #define CPU_MAX_CACHE_LEVEL 8
@@ -23,9 +23,6 @@ struct iframe {
 		f5, f4, f3, f2, f1, f0;
 };
 
-/* Power ISA uses logical bit positions 0..63 from the least-significant bit
- * for software masks. PPC970 Book III-S places the classic MSR controls in
- * the low 32 bits of the 64-bit MSR; SF is bit 63. */
 enum machine_state {
 	MSR_EXCEPTIONS_ENABLED = 1ULL << 15,
 	MSR_PRIVILEGE_LEVEL = 1ULL << 14,
@@ -45,7 +42,6 @@ enum machine_state {
 #define slbia() asm volatile("slbia" ::: "memory")
 #define tlbia() asm volatile("tlbia" ::: "memory")
 #define tlbie(addr) asm volatile("tlbie %0" :: "r" (addr) : "memory")
-
 #define SRH_very_low() asm volatile("or 31,31,31")
 #define SRH_low() asm volatile("or 1,1,1")
 #define SRH_medium_low() asm volatile("or 6,6,6")

@@ -40,6 +40,36 @@ FUNCTION(ppc64_enter_userspace):
 	mtlr %r8
 	rfid
 	b .
+/* Restore a complete PPC64 iframe and return to its SRR0/SRR1 state. */
+FUNCTION(ppc64_restore_iframe):
+	mr %r12,%r3
+	lfd %f0,72(%r12); mtfsf 0xff,%f0
+	lfd %f0,336(%r12); lfd %f1,344(%r12); lfd %f2,352(%r12); lfd %f3,360(%r12)
+	lfd %f4,368(%r12); lfd %f5,376(%r12); lfd %f6,384(%r12); lfd %f7,392(%r12)
+	lfd %f8,400(%r12); lfd %f9,408(%r12); lfd %f10,416(%r12); lfd %f11,424(%r12)
+	lfd %f12,432(%r12); lfd %f13,440(%r12); lfd %f14,448(%r12); lfd %f15,456(%r12)
+	lfd %f16,464(%r12); lfd %f17,472(%r12); lfd %f18,480(%r12); lfd %f19,488(%r12)
+	lfd %f20,496(%r12); lfd %f21,504(%r12); lfd %f22,512(%r12); lfd %f23,520(%r12)
+	lfd %f24,528(%r12); lfd %f25,536(%r12); lfd %f26,544(%r12); lfd %f27,552(%r12)
+	lfd %f28,560(%r12); lfd %f29,568(%r12); lfd %f30,576(%r12); lfd %f31,584(%r12)
+	ld %r0,8(%r12); mtspr 26,%r0
+	ld %r0,16(%r12); mtspr 27,%r0
+	ld %r0,24(%r12); mtspr 19,%r0
+	ld %r0,32(%r12); mtspr 18,%r0
+	ld %r0,40(%r12); mtlr %r0
+	ld %r0,48(%r12); mtcrf 0xff,%r0
+	ld %r0,56(%r12); mtxer %r0
+	ld %r0,64(%r12); mtctr %r0
+	ld %r31,80(%r12); ld %r30,88(%r12); ld %r29,96(%r12); ld %r28,104(%r12)
+	ld %r27,112(%r12); ld %r26,120(%r12); ld %r25,128(%r12); ld %r24,136(%r12)
+	ld %r23,144(%r12); ld %r22,152(%r12); ld %r21,160(%r12); ld %r20,168(%r12)
+	ld %r19,176(%r12); ld %r18,184(%r12); ld %r17,192(%r12); ld %r16,200(%r12)
+	ld %r15,208(%r12); ld %r14,216(%r12); ld %r13,224(%r12); ld %r11,240(%r12)
+	ld %r10,248(%r12); ld %r9,256(%r12); ld %r8,264(%r12); ld %r7,272(%r12)
+	ld %r6,280(%r12); ld %r5,288(%r12); ld %r4,296(%r12); ld %r3,304(%r12)
+	ld %r2,312(%r12); ld %r1,320(%r12); ld %r0,328(%r12); ld %r12,232(%r12)
+	rfid
+	b .
 FUNCTION(arch_user_thread_exit):
 	li %r0,SYSCALL_EXIT_THREAD
 	sc

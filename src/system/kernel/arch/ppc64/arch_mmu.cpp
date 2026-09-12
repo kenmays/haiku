@@ -14,22 +14,15 @@ static inline uint64 vsid(addr_t ea)
 {
 	return ((uint64)ea >> PPC64_SEGMENT_SHIFT) & PPC64_SLB_ESID_MASK;
 }
-
 static inline uint64 vpn(addr_t ea)
 {
 	return (vsid(ea) << 16) | (((uint64)ea >> PPC64_PAGE_SHIFT) & 0xffff);
 }
-
 static inline uint64 hash(uint64 v)
 {
 	return ((v >> 16) ^ (v & 0xffff)) & 0x7fffffffffULL;
 }
-
-static inline uint64 avpn(uint64 v)
-{
-	return (v >> 11) << 7;
-}
-
+static inline uint64 avpn(uint64 v) { return (v >> 11) << 7; }
 static inline ppc64_pte* group(uint64 h)
 {
 	return &sHPT->pte[(h & sHashMask) * PPC64_HPT_PTES_PER_GROUP];
@@ -62,8 +55,6 @@ static status_t insert(addr_t ea, phys_addr_t pa, uint32 protection,
 		r |= PPC64_HPTE_PP_RWXX;
 	else
 		r |= PPC64_HPTE_PP_RXRX;
-
-	/* PPC970 normal RAM is coherent/write-back (M=1). */
 	if (memoryType == 0)
 		r |= PPC64_HPTE_R_M;
 	else
@@ -106,20 +97,15 @@ status_t ppc64_mmu_init(kernel_args* args)
 	sSDR1 = (uint64)args->arch_args.page_table.start
 		+ (__builtin_ctzll(sHPTSize) - 18);
 	ppc64_slb_invalidate();
+	/* Kernel linker image is in the 0x80000000 segment on the initial port. */
+	ppc64_slb_insert(0x8, 0x8 | 0x400);
 	set_sdr1(sSDR1);
 	sync();
 	return B_OK;
 }
 
-status_t ppc64_mmu_init_post_vm(kernel_args*)
-{
-	return B_OK;
-}
-
-void ppc64_mmu_switch_address_space(addr_t addressSpace)
-{
-	(void)addressSpace;
-}
+status_t ppc64_mmu_init_post_vm(kernel_args*) { return B_OK; }
+void ppc64_mmu_switch_address_space(addr_t addressSpace) { (void)addressSpace; }
 
 status_t ppc64_map_page(addr_t virtualAddress, phys_addr_t physicalAddress,
 	uint32 protection, uint32 memoryType)
@@ -134,7 +120,8 @@ status_t ppc64_map_page(addr_t virtualAddress, phys_addr_t physicalAddress,
 	if (p != NULL) {
 		p->word0 &= ~PPC64_HPTE_V_VALID;
 		sync();
-		ppc64_tlb_invalidate_page(virtualAddress);
+		arch_cpu_invalidate_tlb_range(0, virtualAddress,
+			virtualAddress + PPC64_PAGE_SIZE);
 	}
 	return insert(virtualAddress, physicalAddress, protection, memoryType);
 }
@@ -151,6 +138,7 @@ status_t ppc64_unmap_page(addr_t virtualAddress)
 		return B_ENTRY_NOT_FOUND;
 	p->word0 &= ~PPC64_HPTE_V_VALID;
 	sync();
-	ppc64_tlb_invalidate_page(virtualAddress);
+	arch_cpu_invalidate_tlb_range(0, virtualAddress,
+		virtualAddress + PPC64_PAGE_SIZE);
 	return B_OK;
 }

@@ -25,6 +25,8 @@ struct arch_thread {
 	void* sp;
 	void* interrupt_stack;
 	struct iframe_stack iframes;
+	uint64 fpu[32];
+	uint64 fpscr;
 };
 
 struct arch_team { char dummy; };

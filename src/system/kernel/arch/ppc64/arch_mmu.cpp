@@ -25,13 +25,9 @@ address_space_vsid(addr_t ea, addr_t addressSpace)
 	return (esid ^ mixed) & PPC64_SLB_ESID_MASK;
 }
 
-static inline uint64
-vpn(addr_t ea, addr_t addressSpace)
-{
-	return (address_space_vsid(ea, addressSpace) << 16)
-		| (((uint64)ea >> PPC64_PAGE_SHIFT) & 0xffff);
-}
-
+static inline uint64 vpn(addr_t ea, addr_t addressSpace)
+	{ return (address_space_vsid(ea, addressSpace) << 16)
+		| (((uint64)ea >> PPC64_PAGE_SHIFT) & 0xffff); }
 static inline uint64 hash(uint64 v)
 	{ return ((v >> 16) ^ (v & 0xffff)) & 0x7fffffffffULL; }
 static inline uint64 avpn(uint64 v) { return (v >> 11) << 7; }
@@ -56,6 +52,25 @@ find(uint64 v, bool secondary)
 	return NULL;
 }
 
+static ppc64_pte*
+find_free_or_victim(ppc64_pte* p)
+{
+	for (uint32 i = 0; i < PPC64_HPT_PTES_PER_GROUP; i++) {
+		if (!(p[i].word0 & PPC64_HPTE_V_VALID))
+			return &p[i];
+	}
+	/* PPC970 has no hardware replacement policy for the software-managed HPT.
+	 * Evict the last non-bolted entry in this PTEG. */
+	for (int i = PPC64_HPT_PTES_PER_GROUP - 1; i >= 0; i--) {
+		if (!(p[i].word0 & PPC64_HPTE_V_BOLTED)) {
+			p[i].word0 &= ~PPC64_HPTE_V_VALID;
+			sync();
+			return &p[i];
+		}
+	}
+	return NULL;
+}
+
 static status_t
 insert(addr_t ea, phys_addr_t pa, uint32 protection, uint32 memoryType,
 	addr_t addressSpace)
@@ -76,27 +91,23 @@ insert(addr_t ea, phys_addr_t pa, uint32 protection, uint32 memoryType,
 	if (memoryType != 0)
 		r |= PPC64_HPTE_R_I | PPC64_HPTE_R_G;
 
-	ppc64_pte* p = group(h);
-	for (uint32 i = 0; i < PPC64_HPT_PTES_PER_GROUP; i++) {
-		if (!(p[i].word0 & PPC64_HPTE_V_VALID)) {
-			p[i].word1 = r;
-			sync();
-			p[i].word0 = avpn(v) | PPC64_HPTE_V_VALID;
-			eieio();
-			return B_OK;
-		}
+	ppc64_pte* p = find_free_or_victim(group(h));
+	if (p != NULL) {
+		p->word1 = r;
+		sync();
+		p->word0 = avpn(v) | PPC64_HPTE_V_VALID;
+		eieio();
+		return B_OK;
 	}
 
-	p = group(~h);
-	for (uint32 i = 0; i < PPC64_HPT_PTES_PER_GROUP; i++) {
-		if (!(p[i].word0 & PPC64_HPTE_V_VALID)) {
-			p[i].word1 = r;
-			sync();
-			p[i].word0 = avpn(v) | PPC64_HPTE_V_H
-				| PPC64_HPTE_V_SECONDARY | PPC64_HPTE_V_VALID;
-			eieio();
-			return B_OK;
-		}
+	p = find_free_or_victim(group(~h));
+	if (p != NULL) {
+		p->word1 = r;
+		sync();
+		p->word0 = avpn(v) | PPC64_HPTE_V_H
+			| PPC64_HPTE_V_SECONDARY | PPC64_HPTE_V_VALID;
+		eieio();
+		return B_OK;
 	}
 	return B_NO_MEMORY;
 }

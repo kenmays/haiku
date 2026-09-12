@@ -8,7 +8,7 @@
 #include <string.h>
 extern "C" status_t apple_g5_platform_init(kernel_args* args);
 extern "C" status_t apple_g5_platform_init_post_vm(kernel_args* args);
-status_t arch_cpu_preboot_init_percpu(kernel_args*,int){set_msr(get_msr()|MSR_FP_AVAILABLE|MSR_64BIT);arch_thread_set_current_thread(NULL);return B_OK;}
+status_t arch_cpu_preboot_init_percpu(kernel_args*,int){uint64 msr=get_msr();msr|=MSR_FP_AVAILABLE|MSR_64BIT|MSR_MACHINE_CHECK_ENABLED|MSR_RECOVERABLE_EXCEPTION|MSR_INST_ADDRESS_TRANSLATION|MSR_DATA_ADDRESS_TRANSLATION;msr&=~MSR_PRIVILEGE_LEVEL;set_msr(msr);arch_thread_set_current_thread(NULL);return B_OK;}
 status_t arch_cpu_init(kernel_args*args){return apple_g5_platform_init(args);}
 status_t arch_cpu_init_post_vm(kernel_args*args){return apple_g5_platform_init_post_vm(args);}
 status_t arch_cpu_init_percpu(kernel_args*,int){return B_OK;}

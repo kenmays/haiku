@@ -64,5 +64,9 @@ status_t ppc64_map_page_asid(addr_t virtualAddress, phys_addr_t physicalAddress,
 	uint32 protection, uint32 memoryType, addr_t addressSpace);
 status_t ppc64_unmap_page(addr_t virtualAddress);
 status_t ppc64_unmap_page_asid(addr_t virtualAddress, addr_t addressSpace);
+status_t ppc64_query_page_asid(addr_t virtualAddress, phys_addr_t* physicalAddress,
+	uint32* protection, addr_t addressSpace);
+status_t ppc64_clear_page_flags_asid(addr_t virtualAddress, uint32 flags,
+	bool* modified, addr_t addressSpace);
 
 #endif

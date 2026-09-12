@@ -2,13 +2,14 @@
 #include <KernelExport.h>
 #include <interrupts.h>
 #include <arch/int.h>
+#include <arch/thread.h>
 #include <boot/kernel_args.h>
 #include <debug.h>
 #include <timer.h>
 #include <thread.h>
 #include <vm/vm.h>
 
-extern "C" void ppc64_exception_entry(uint64 vector, iframe* frame);
+iframe_stack gBootFrameStack;
 
 void arch_int_enable_io_interrupt(int32) {}
 void arch_int_disable_io_interrupt(int32) {}
@@ -24,29 +25,32 @@ extern "C" void ppc64_exception_entry(uint64 vector, iframe* frame)
 {
 	frame->vector = vector;
 	Thread* thread = thread_get_current_thread();
-	if (thread != NULL)
-		ppc_push_iframe(&thread->arch_info.iframes, frame);
+	iframe_stack* stack = thread != NULL ? &thread->arch_info.iframes : &gBootFrameStack;
+	ppc_push_iframe(stack, frame);
 
 	switch (vector) {
 		case 0x500:
-			/* External interrupt routing is installed by the Apple MPIC driver. */
 			break;
 		case 0x900:
 			timer_interrupt();
 			break;
 		case 0x300:
 		case 0x400:
+		{
+			addr_t newIP = 0;
 			vm_page_fault(frame->dar, frame->srr0,
 				(frame->dsisr & (1ULL << 25)) != 0, false,
-				(frame->srr1 & MSR_PRIVILEGE_LEVEL) != 0, NULL);
+				(frame->srr1 & MSR_PRIVILEGE_LEVEL) != 0, &newIP);
+			if (newIP != 0)
+				frame->srr0 = newIP;
 			break;
+		}
 		default:
 			print_iframe(frame);
 			panic("ppc64: unhandled exception vector 0x%lx", vector);
 	}
 
-	if (thread != NULL)
-		ppc_pop_iframe(&thread->arch_info.iframes);
+	ppc_pop_iframe(stack);
 }
 
 status_t arch_int_init(kernel_args*) { return B_OK; }

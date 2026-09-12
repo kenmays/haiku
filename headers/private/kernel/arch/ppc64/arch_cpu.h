@@ -61,7 +61,7 @@ extern void set_msr(uint64 value);
 extern uint32 get_pvr(void);
 extern uint64 get_time_base(void);
 extern void ppc64_slb_invalidate(void);
-extern void ppc64_slb_insert(uint64 esid, uint64 vsid);
+extern void ppc64_slb_insert(uint64 slot, uint64 esid, uint64 vsid);
 extern void ppc64_slb_invalidate_esid(uint64 esid);
 extern void ppc_context_switch(void **_oldStackPointer, void *newStackPointer);
 extern bool ppc_set_fault_handler(addr_t *handlerLocation, addr_t handler)

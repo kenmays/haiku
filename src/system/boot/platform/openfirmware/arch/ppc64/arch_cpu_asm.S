@@ -10,18 +10,17 @@ FUNCTION(ppc64_boot_get_msr):
 	mfmsr	%r3
 	blr
 
-/* Return the current MSR with instruction/data translation disabled.
- * PPC970 Book III-S MSR uses architectural MSB-first bit numbering;
- * assembler bit 58 is IR and bit 59 is DR. */
+/* Disable IR and DR while preserving every other MSR bit.  On PPC64 the
+ * assembler's bit numbering for logical/rotate instructions is MSB-first;
+ * using rldicr with a mask generated from -1 would be unnecessarily subtle,
+ * so construct the two-bit clear mask explicitly and invert it. */
 FUNCTION(ppc64_boot_disable_translation):
 	mfmsr	%r3
 	li	%r4, 0
-	ori	%r4, %r4, 0
-	/* rldimi clears IR/DR in the value copied from r3 below. */
-	rldicl	%r4, %r3, 0, 64
-	rldimi	%r4, %r3, 0, 5
-	/* Clear architectural IR and DR bits (MSR bit positions 58/59). */
-	rldicl	%r4, %r4, 0, 6
-	mtmsrd	%r4
+	ori	%r4, %r4, 0x0c00
+	sldi	%r4, %r4, 48
+	nor	%r4, %r4, %r4
+	and	%r3, %r3, %r4
+	mtmsrd	%r3
 	isync
 	blr

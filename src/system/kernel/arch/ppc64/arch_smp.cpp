@@ -12,7 +12,7 @@ static const uint8 kIpiVector=0x20;
 ppc_cpu_exception_context* ppc_get_cpu_exception_context(int cpu){return cpu>=0&&cpu<SMP_MAX_CPUS?&sExceptionContexts[cpu]:NULL;}
 void ppc_set_current_cpu_exception_context(ppc_cpu_exception_context*c){asm volatile("mtsprg0 %0"::"r"(c));}
 status_t arch_smp_init(kernel_args*){return AppleG5::mpic_init();}
-status_t arch_smp_per_cpu_init(kernel_args*,int32 cpu){ppc_cpu_exception_context*c=ppc_get_cpu_exception_context(cpu);if(!c)return B_BAD_VALUE;c->exception_context=c;ppc_set_current_cpu_exception_context(c);return AppleG5::mpic_init_per_cpu(cpu);}
+status_t arch_smp_per_cpu_init(kernel_args*args,int32 cpu){ppc_cpu_exception_context*c=ppc_get_cpu_exception_context(cpu);if(!c)return B_BAD_VALUE;c->exception_context=c;c->kernel_stack=args->cpu_kstack[cpu].start+args->cpu_kstack[cpu].size;ppc_set_current_cpu_exception_context(c);return AppleG5::mpic_init_per_cpu(cpu);}
 void arch_smp_send_ici(int32 cpu){
 #if KDEBUG
 if(are_interrupts_enabled())panic("arch_smp_send_ici: interrupts enabled");

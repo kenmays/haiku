@@ -12,7 +12,6 @@ FUNCTION(get_time_base):
 	sldi %r4,%r4,32; or %r3,%r3,%r4; blr
 FUNCTION(ppc64_slb_invalidate): slbia; sync; isync; blr
 FUNCTION(ppc64_slb_insert):
-	/* r3 = SLB slot, r4 = ESID, r5 = VSID. */
 	andi. %r3,%r3,63
 	oris %r3,%r3,0x0800
 	or %r3,%r3,%r4
@@ -25,18 +24,20 @@ FUNCTION(ppc64_slb_invalidate_esid): slbie %r3; sync; isync; blr
 FUNCTION(__eieio): eieio; blr
 FUNCTION(ppc_kernel_thread_root):
 	mtctr %r14; mr %r3,%r15; bctrl; b kernel_thread_exit
+/* r3=entry, r4=SP, r5/r6=args, r7=user TLS, r8=thread-exit address. */
 FUNCTION(ppc64_enter_userspace):
-	mfmsr %r8
-	ori %r9,%r8,0x8000
-	ori %r9,%r9,0x2000
-	ori %r9,%r9,0x0030
-	ori %r9,%r9,0x4000
+	mfmsr %r9
+	ori %r10,%r9,0x8000
+	ori %r10,%r10,0x2000
+	ori %r10,%r10,0x0030
+	ori %r10,%r10,0x4000
 	mtsrr0 %r3
-	mtsrr1 %r9
+	mtsrr1 %r10
 	mr %r1,%r4
 	mr %r3,%r5
 	mr %r4,%r6
-	mtlr %r7
+	mr %r13,%r7
+	mtlr %r8
 	rfid
 	b .
 FUNCTION(arch_user_thread_exit):

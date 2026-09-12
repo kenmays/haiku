@@ -13,6 +13,7 @@
 #define PPC64_HPT_PTEG_SIZE 128
 #define PPC64_HPT_MIN_SIZE (256 * 1024)
 #define PPC64_HPT_MAX_SIZE (64 * 1024 * 1024)
+#define PPC64_EXCEPTION_AREA_SIZE 0x2000
 
 static size_t sHPTSize;
 static void* sHPTAddress;
@@ -80,7 +81,6 @@ static status_t find_physical_memory_ranges(size_t& total)
 
 static status_t allocate_hpt(size_t totalMemory)
 {
-	/* One PTEG (8 HPTEs) per two 4 KiB pages, capped at 64 MiB. */
 	size_t wanted = totalMemory / 64;
 	if (wanted < PPC64_HPT_MIN_SIZE)
 		wanted = PPC64_HPT_MIN_SIZE;
@@ -91,7 +91,6 @@ static status_t allocate_hpt(size_t totalMemory)
 	if (sHPTSize > PPC64_HPT_MAX_SIZE)
 		sHPTSize = PPC64_HPT_MAX_SIZE;
 
-	/* SDR1 requires the table to be aligned to its complete size. */
 	sHPTAddress = of_claim(NULL, sHPTSize, sHPTSize);
 	if (sHPTAddress == NULL || sHPTAddress == (void*)OF_FAILED)
 		return B_NO_MEMORY;
@@ -140,7 +139,9 @@ extern "C" status_t arch_mmu_init(void)
 	if (error != B_OK)
 		return error;
 
+	/* The PPC970 takes all real-mode exception vectors from physical 0.
+	 * Reserve enough space for every vector through 0x1700. */
 	gKernelArgs.arch_args.exception_handlers.start = 0;
-	gKernelArgs.arch_args.exception_handlers.size = B_PAGE_SIZE;
+	gKernelArgs.arch_args.exception_handlers.size = PPC64_EXCEPTION_AREA_SIZE;
 	return B_OK;
 }

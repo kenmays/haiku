@@ -4,6 +4,7 @@
 #include <arch/int.h>
 #include <arch/thread.h>
 #include <arch/smp.h>
+#include <arch_mmu.h>
 #include <boot/kernel_args.h>
 #include <debug.h>
 #include <kscheduler.h>
@@ -50,6 +51,14 @@ ppc64_exception_entry(uint64 vector, iframe* frame)
 	ppc_push_iframe(stack, frame);
 
 	switch (vector) {
+		case 0x380:
+		case 0x480:
+			if (ppc64_mmu_handle_segment_fault(vector == 0x380
+				? frame->dar : frame->srr0) != B_OK) {
+				print_iframe(frame);
+				panic("ppc64: SLB refill failed");
+			}
+			break;
 		case 0x500: {
 			int32 irq;
 			while ((irq = AppleG5::mpic_acknowledge()) >= 0) {

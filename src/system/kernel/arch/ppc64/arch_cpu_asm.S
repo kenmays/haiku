@@ -11,14 +11,16 @@ FUNCTION(get_time_base):
 	sldi %r4,%r4,32; or %r3,%r3,%r4; blr
 FUNCTION(ppc64_slb_invalidate): slbia; sync; isync; blr
 FUNCTION(ppc64_slb_insert):
-	/* r3 = 256 MiB ESID, r4 = VSID number. */
-	srdi %r3,%r3,28
-	sldi %r3,%r3,28
-	lis %r5,0x0800
-	or %r3,%r3,%r5
-	sldi %r4,%r4,12
-	ori %r4,%r4,0x0400
-	slbmte %r4,%r3
+	/* r3 = SLB slot, r4 = 256 MiB ESID, r5 = VSID. */
+	andi. %r3,%r3,63
+	sldi %r3,%r3,0
+	srdi %r4,%r4,0
+	sldi %r4,%r4,28
+	oris %r3,%r3,0x0800,0
+	or %r3,%r3,%r4
+	sldi %r5,%r5,12
+	ori %r5,%r5,0x0400
+	slbmte %r5,%r3
 	isync
 	blr
 FUNCTION(ppc64_slb_invalidate_esid): slbie %r3; sync; isync; blr

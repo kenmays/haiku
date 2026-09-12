@@ -7,7 +7,7 @@ __irqvec_start:
 	.org \off
 	mtsprg2 %r0
 	mtsprg3 %r13
-	li %r0,\off
+	li %r12,\off
 	b ppc64_exception_common
 .endm
 VECTOR 0x100
@@ -39,7 +39,7 @@ VECTOR 0x1700
 
 FUNCTION(ppc64_exception_common):
 	/* SPRG0 points at the per-CPU exception context. SPRG2/3 hold the
-	 * interrupted r0/r13 because r0/r13 are needed immediately below. */
+	 * interrupted r0/r13. r12 carries the vector from the fixed stub. */
 	mfsprg0 %r13
 	mfsprg2 %r0
 	std %r0,24(%r13)
@@ -48,20 +48,7 @@ FUNCTION(ppc64_exception_common):
 	addi %r1,%r1,-640
 	mr %r4,%r1
 
-	/* r0 still contains the interrupted r0 only temporarily; the vector
-	 * was installed by the vector stub and is recovered from the link
-	 * address of the vector stub below through the saved LR-free value in
-	 * scratch. Store the vector using the branch target offset encoded by
-	 * the stub in r0 before replacing it with the saved r0. */
-	li %r0,0
-	/* The common entry is reached from fixed vector stubs; determine the
-	 * vector from SRR0 only as a fallback is not possible, so each stub's
-	 * branch target is patched by the linker. The current layout uses the
-	 * return slot at 0(%r4) as a scratch value set by the stub through r12. */
-	/* Reconstruct vector from the exception context scratch populated by
-	 * the vector trampoline: the trampoline leaves it in r12. */
 	std %r12,0(%r4)
-
 	mfspr %r0,26; std %r0,8(%r4)
 	mfspr %r0,27; std %r0,16(%r4)
 	mfspr %r0,19; std %r0,24(%r4)
@@ -85,7 +72,6 @@ FUNCTION(ppc64_exception_common):
 	mfsprg2 %r0; std %r0,328(%r4)
 
 	ld %r3,0(%r4)
-	mr %r5,%r4
 	bl ppc64_exception_entry
 
 	ld %r0,8(%r1);  mtspr 26,%r0

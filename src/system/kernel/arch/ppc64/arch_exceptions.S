@@ -7,7 +7,7 @@ __irqvec_start:
 	.org \off
 	mtsprg2 %r0
 	mtsprg3 %r13
-	li %r12,\off
+	li %r0,\off
 	b ppc64_exception_common
 .endm
 VECTOR 0x100
@@ -39,16 +39,14 @@ VECTOR 0x1700
 
 FUNCTION(ppc64_exception_common):
 	/* SPRG0 points at the per-CPU exception context. SPRG2/3 hold the
-	 * interrupted r0/r13. r12 carries the vector from the fixed stub. */
+	 * interrupted r0/r13. The vector stub leaves its vector in r0. */
 	mfsprg0 %r13
-	mfsprg2 %r0
-	std %r0,24(%r13)
 	std %r1,32(%r13)
 	ld %r1,16(%r13)
 	addi %r1,%r1,-640
 	mr %r4,%r1
 
-	std %r12,0(%r4)
+	std %r0,0(%r4)
 	mfspr %r0,26; std %r0,8(%r4)
 	mfspr %r0,27; std %r0,16(%r4)
 	mfspr %r0,19; std %r0,24(%r4)

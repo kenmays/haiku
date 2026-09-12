@@ -16,17 +16,8 @@
 
 iframe_stack gBootFrameStack;
 
-void
-arch_int_enable_io_interrupt(int32 irq)
-{
-	AppleG5::mpic_enable(irq);
-}
-
-void
-arch_int_disable_io_interrupt(int32 irq)
-{
-	AppleG5::mpic_disable(irq);
-}
+void arch_int_enable_io_interrupt(int32 irq) { AppleG5::mpic_enable(irq); }
+void arch_int_disable_io_interrupt(int32 irq) { AppleG5::mpic_disable(irq); }
 
 void
 arch_int_configure_io_interrupt(int32 irq, interrupt_trigger_mode mode,
@@ -62,7 +53,10 @@ ppc64_exception_entry(uint64 vector, iframe* frame)
 		case 0x500: {
 			int32 irq;
 			while ((irq = AppleG5::mpic_acknowledge()) >= 0) {
-				io_interrupt_handler(irq, true);
+				if (irq == 0x20)
+					smp_intercpu_interrupt_handler(smp_get_current_cpu());
+				else
+					io_interrupt_handler(irq, true);
 				AppleG5::mpic_eoi();
 			}
 			break;
@@ -111,26 +105,7 @@ ppc64_exception_entry(uint64 vector, iframe* frame)
 	ppc_pop_iframe(stack);
 }
 
-status_t
-arch_int_init(kernel_args*)
-{
-	return B_OK;
-}
-
-status_t
-arch_int_init_post_vm(kernel_args*)
-{
-	return B_OK;
-}
-
-status_t
-arch_int_init_io(kernel_args*)
-{
-	return AppleG5::mpic_init();
-}
-
-status_t
-arch_int_init_post_device_manager(kernel_args*)
-{
-	return B_OK;
-}
+status_t arch_int_init(kernel_args*) { return B_OK; }
+status_t arch_int_init_post_vm(kernel_args*) { return B_OK; }
+status_t arch_int_init_io(kernel_args*) { return AppleG5::mpic_init(); }
+status_t arch_int_init_post_device_manager(kernel_args*) { return B_OK; }

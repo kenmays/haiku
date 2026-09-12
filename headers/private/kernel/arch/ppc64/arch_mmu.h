@@ -3,6 +3,7 @@
 #define _KERNEL_ARCH_PPC64_MMU_H
 
 #include <SupportDefs.h>
+#include <boot/kernel_args.h>
 #include <arch/cpu.h>
 
 #define PPC64_PAGE_SHIFT 12
@@ -13,14 +14,8 @@
 #define PPC64_SLB_INDEX_BITS 6
 #define PPC64_HPT_PTES_PER_GROUP 8
 
-struct ppc64_pte {
-	uint64 word0;
-	uint64 word1;
-};
-
-struct ppc64_pteg {
-	ppc64_pte pte[PPC64_HPT_PTES_PER_GROUP];
-};
+struct ppc64_pte { uint64 word0; uint64 word1; };
+struct ppc64_pteg { ppc64_pte pte[PPC64_HPT_PTES_PER_GROUP]; };
 
 status_t ppc64_mmu_init(kernel_args* args);
 status_t ppc64_mmu_init_post_vm(kernel_args* args);

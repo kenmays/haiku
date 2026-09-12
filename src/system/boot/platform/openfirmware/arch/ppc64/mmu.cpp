@@ -1,10 +1,4 @@
-/* PPC64 Open Firmware MMU bootstrap.
- *
- * PPC970 enters through an existing Open Firmware translation environment.
- * This first implementation deliberately preserves that environment instead
- * of trying to convert the 32-bit PPC hash-table code to Book III-S in the
- * boot loader. The kernel takes ownership of the hash MMU after handoff.
- */
+/* PPC64 Open Firmware MMU bootstrap for PowerPC 970-class Power Macs. */
 #include <OS.h>
 #include <platform_arch.h>
 #include <boot/addr_range.h>
@@ -14,8 +8,22 @@
 #include <boot/stdio.h>
 #include <platform/openfirmware/openfirmware.h>
 #include <kernel.h>
-
 #include <string.h>
+
+#define PPC64_HPT_PTEG_SIZE 128
+#define PPC64_HPT_MIN_SIZE (256 * 1024)
+#define PPC64_HPT_MAX_SIZE (64 * 1024 * 1024)
+
+static size_t sHPTSize;
+static void* sHPTAddress;
+
+static size_t round_power_of_two(size_t value)
+{
+	size_t result = PPC64_HPT_MIN_SIZE;
+	while (result < value && result < PPC64_HPT_MAX_SIZE)
+		result <<= 1;
+	return result;
+}
 
 static status_t find_physical_memory_ranges(size_t& total)
 {
@@ -42,7 +50,8 @@ static status_t find_physical_memory_ranges(size_t& total)
 			return B_ERROR;
 		int count = bytes / sizeof(regions[0]);
 		for (int i = 0; i < count; i++) {
-			if (regions[i].size == 0) continue;
+			if (regions[i].size == 0)
+				continue;
 			if (insert_physical_memory_range((addr_t)regions[i].base,
 				regions[i].size) != B_OK)
 				return B_ERROR;
@@ -59,7 +68,8 @@ static status_t find_physical_memory_ranges(size_t& total)
 		return B_ERROR;
 	int count = bytes / sizeof(regions[0]);
 	for (int i = 0; i < count; i++) {
-		if (regions[i].size == 0) continue;
+		if (regions[i].size == 0)
+			continue;
 		if (insert_physical_memory_range((addr_t)regions[i].base,
 			regions[i].size) != B_OK)
 			return B_ERROR;
@@ -68,26 +78,53 @@ static status_t find_physical_memory_ranges(size_t& total)
 	return B_OK;
 }
 
+static status_t allocate_hpt(size_t totalMemory)
+{
+	/* One PTEG (8 HPTEs) per two 4 KiB pages, capped at 64 MiB. */
+	size_t wanted = totalMemory / 64;
+	if (wanted < PPC64_HPT_MIN_SIZE)
+		wanted = PPC64_HPT_MIN_SIZE;
+	if (wanted > PPC64_HPT_MAX_SIZE)
+		wanted = PPC64_HPT_MAX_SIZE;
+
+	sHPTSize = round_power_of_two(wanted);
+	if (sHPTSize > PPC64_HPT_MAX_SIZE)
+		sHPTSize = PPC64_HPT_MAX_SIZE;
+
+	/* SDR1 requires the table to be aligned to its complete size. */
+	sHPTAddress = of_claim(NULL, sHPTSize, sHPTSize);
+	if (sHPTAddress == NULL || sHPTAddress == (void*)OF_FAILED)
+		return B_NO_MEMORY;
+
+	memset(sHPTAddress, 0, sHPTSize);
+	insert_physical_allocated_range((addr_t)sHPTAddress, sHPTSize);
+	insert_virtual_allocated_range((addr_t)sHPTAddress, sHPTSize);
+
+	gKernelArgs.arch_args.page_table.start = (addr_t)sHPTAddress;
+	gKernelArgs.arch_args.page_table.size = sHPTSize;
+
+	dprintf("PPC64: HPT at %p, size %" B_PRIuSIZE " bytes (%" B_PRIuSIZE
+		" PTEGs)\n", sHPTAddress, sHPTSize,
+		sHPTSize / PPC64_HPT_PTEG_SIZE);
+	return B_OK;
+}
+
 extern "C" void* arch_mmu_allocate(void* virtualAddress, size_t size,
 	uint8 protection, bool exactAddress)
 {
 	(void)protection;
+	(void)exactAddress;
 	size = ROUNDUP(size, B_PAGE_SIZE);
-	if (size == 0) return NULL;
-
-	/* Keep early allocations in the existing OF address space. */
+	if (size == 0)
+		return NULL;
 	if (virtualAddress != NULL)
 		return virtualAddress;
-
 	void* address = of_claim(NULL, size, B_PAGE_SIZE);
-	if (address == (void*)OF_FAILED || address == NULL)
-		return NULL;
-	return address;
+	return address == (void*)OF_FAILED ? NULL : address;
 }
 
 extern "C" status_t arch_mmu_free(void*, size_t)
 {
-	/* Firmware owns the initial mappings until the kernel MMU takes over. */
 	return B_OK;
 }
 
@@ -99,9 +136,10 @@ extern "C" status_t arch_mmu_init(void)
 		return error;
 
 	dprintf("PPC64 OF memory: %" B_PRIuSIZE " MB\n", total / (1024 * 1024));
+	error = allocate_hpt(total);
+	if (error != B_OK)
+		return error;
 
-	/* Preserve the firmware translation environment. The kernel receives the
-	 * firmware SDR1/SLB state and replaces it during VM initialization. */
 	gKernelArgs.arch_args.exception_handlers.start = 0;
 	gKernelArgs.arch_args.exception_handlers.size = B_PAGE_SIZE;
 	return B_OK;

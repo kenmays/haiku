@@ -10,6 +10,7 @@ void arch_timer_set_hardware_timer(bigtime_t timeout)
 {
 	if (timeout < 1000)
 		timeout = 1000;
+
 	uint64 ticks = (uint64)timeout * sTimebaseFrequency / 1000000ULL;
 	if (ticks > 0x7fffffffULL)
 		ticks = 0x7fffffffULL;

@@ -15,7 +15,11 @@
 
 #include <platform/apple_g5/g5_mpic.h>
 
+#include <string.h>
+
 iframe_stack gBootFrameStack;
+extern "C" uint8 __irqvec_start;
+extern "C" uint8 __irqvec_end;
 
 void arch_int_enable_io_interrupt(int32 irq) { AppleG5::mpic_enable(irq); }
 void arch_int_disable_io_interrupt(int32 irq) { AppleG5::mpic_disable(irq); }
@@ -28,11 +32,8 @@ arch_int_configure_io_interrupt(int32 irq, interrupt_trigger_mode mode,
 		polarity == B_HIGH_ACTIVE_POLARITY || polarity == B_RISING_EDGE_POLARITY);
 }
 
-int32
-arch_int_assign_to_cpu(int32 irq, int32 cpu)
-{
-	return AppleG5::mpic_assign_to_cpu(irq, cpu);
-}
+int32 arch_int_assign_to_cpu(int32 irq, int32 cpu)
+	{ return AppleG5::mpic_assign_to_cpu(irq, cpu); }
 
 static void
 print_iframe(iframe* frame)
@@ -115,6 +116,27 @@ ppc64_exception_entry(uint64 vector, iframe* frame)
 }
 
 status_t arch_int_init(kernel_args*) { return B_OK; }
-status_t arch_int_init_post_vm(kernel_args*) { return B_OK; }
+
+status_t
+arch_int_init_post_vm(kernel_args* args)
+{
+	if (args == NULL || args->arch_args.exception_handlers.size < B_PAGE_SIZE)
+		return B_BAD_VALUE;
+
+	void* handlers = (void*)(addr_t)args->arch_args.exception_handlers.start;
+	area_id area = create_area("ppc64_exception_vectors", &handlers,
+		B_EXACT_ADDRESS, args->arch_args.exception_handlers.size,
+		B_ALREADY_WIRED, B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA);
+	if (area < B_OK)
+		return area;
+
+	size_t vectorSize = (size_t)(&__irqvec_end - &__irqvec_start);
+	if (vectorSize > args->arch_args.exception_handlers.size)
+		return B_BAD_VALUE;
+	memcpy(handlers, &__irqvec_start, vectorSize);
+	arch_cpu_sync_icache(handlers, vectorSize);
+	return B_OK;
+}
+
 status_t arch_int_init_io(kernel_args*) { return AppleG5::mpic_init(); }
 status_t arch_int_init_post_device_manager(kernel_args*) { return B_OK; }

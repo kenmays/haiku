@@ -1,6 +1,4 @@
-/* PPC970 Book III-S exception vectors.
- * The vector page is copied to physical address 0 by arch_int_init_post_vm.
- * Exceptions enter in real mode; SPRG0 points at the per-CPU context. */
+/* PPC970 Book III-S exception vectors. */
 #define FUNCTION(x) .global x; .type x,@function; x
 
 .section .exception_handlers,"ax"
@@ -9,6 +7,8 @@ __irqvec_start:
 
 .macro VECTOR off
 	.org \off
+	mtsprg2	%r0
+	mtsprg3	%r13
 	li	%r0, \off
 	b	ppc64_exception_common
 .endm
@@ -39,18 +39,28 @@ VECTOR 0x1700
 
 .org 0x1800
 
-/* Context offsets from arch_int.h: kernel_stack=16, scratch[0]=24,
- * scratch[1]=32. The iframe layout follows arch_cpu.h. */
+/* SPRG0 -> per-CPU exception context; scratch[0..2] are vector, old r1,
+ * and old r4. SPRG2/3 hold old r0/r13 for the duration of the handler. */
 FUNCTION(ppc64_exception_common):
-	mtsprg1	%r13
 	mfsprg0	%r13
 	std	%r0, 24(%r13)
 	std	%r1, 32(%r13)
+	std	%r4, 40(%r13)
 	ld	%r1, 16(%r13)
 	addi	%r1, %r1, -384
 	mr	%r4, %r1
 
+	mfsprg2	%r0
 	std	%r0, 328(%r4)
+	mfsprg3	%r0
+	std	%r0, 224(%r4)
+	ld	%r0, 32(%r13)
+	std	%r0, 320(%r4)
+	ld	%r0, 40(%r13)
+	std	%r0, 296(%r4)
+	ld	%r0, 24(%r13)
+	std	%r0, 0(%r4)
+
 	mfspr	%r0, 26
 	std	%r0, 8(%r4)
 	mfspr	%r0, 27
@@ -88,8 +98,6 @@ FUNCTION(ppc64_exception_common):
 	std	%r16, 200(%r4)
 	std	%r15, 208(%r4)
 	std	%r14, 216(%r4)
-	mfsprg1	%r0
-	std	%r0, 224(%r4)
 	std	%r12, 232(%r4)
 	std	%r11, 240(%r4)
 	std	%r10, 248(%r4)
@@ -98,20 +106,16 @@ FUNCTION(ppc64_exception_common):
 	std	%r7, 272(%r4)
 	std	%r6, 280(%r4)
 	std	%r5, 288(%r4)
-	std	%r4, 296(%r4)
-	/* r3 currently holds the link/entry argument from the exception path. */
 	std	%r3, 304(%r4)
 	std	%r2, 312(%r4)
-	ld	%r0, 32(%r13)
-	std	%r0, 320(%r4)
-	ld	%r0, 24(%r13)
-	std	%r0, 328(%r4)
 
-	/* Vector was placed in r0 by the vector stub and preserved in scratch. */
-	ld	%r3, 24(%r13)
-	mr	%r4, %r1
+	ld	%r3, 0(%r4)
 	bl	ppc64_exception_entry
 
+	ld	%r0, 8(%r1)
+	mtspr	26, %r0
+	ld	%r0, 16(%r1)
+	mtspr	27, %r0
 	ld	%r0, 40(%r1)
 	mtlr	%r0
 	ld	%r0, 48(%r1)
@@ -150,20 +154,10 @@ FUNCTION(ppc64_exception_common):
 	ld	%r4, 296(%r1)
 	ld	%r3, 304(%r1)
 	ld	%r2, 312(%r1)
-	ld	%r1, 320(%r1)
+	ld	%r0, 320(%r1)
+	mr	%r12, %r0
 	ld	%r0, 328(%r1)
-	mtspr	26, %r0
-	ld	%r0, 16(%r1)
-	mtspr	27, %r0
-	ld	%r0, 8(%r1)
-	mtspr	26, %r0
-	ld	%r0, 16(%r1)
-	mtspr	27, %r0
-	/* Restore SRR0/SRR1 and return from the exception. */
-	mtspr	26, %r0
-	ld	%r0, 16(%r1)
-	mtspr	27, %r0
-	ld	%r1, 320(%r1)
+	mr	%r1, %r12
 	rfid
 	b	.
 

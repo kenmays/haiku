@@ -38,8 +38,6 @@ VECTOR 0x1700
 .org 0x1800
 
 FUNCTION(ppc64_exception_common):
-	/* SPRG0 points at the per-CPU exception context. SPRG2/3 hold the
-	 * interrupted r0/r13. The vector stub leaves its vector in r0. */
 	mfsprg0 %r13
 	std %r1,32(%r13)
 	ld %r1,16(%r13)
@@ -56,8 +54,13 @@ FUNCTION(ppc64_exception_common):
 	mfxer %r0; std %r0,56(%r4)
 	mfctr %r0; std %r0,64(%r4)
 
-	/* Preserve FPSCR and all 32 floating-point registers. Save f0 before
-	 * using it for mffs. The iframe already reserves these fields. */
+	/* The exception handler may be entered with MSR[FP] clear. Enable the
+	 * FPU while in the kernel; SRR1 is restored by rfid on exit. */
+	mfmsr %r0
+	ori %r0,%r0,0x2000
+	mtmsrd %r0
+	isync
+
 	stfd %f0,336(%r4)
 	stfd %f1,344(%r4);  stfd %f2,352(%r4);  stfd %f3,360(%r4)
 	stfd %f4,368(%r4);  stfd %f5,376(%r4);  stfd %f6,384(%r4)
@@ -89,7 +92,6 @@ FUNCTION(ppc64_exception_common):
 	ld %r3,0(%r4)
 	bl ppc64_exception_entry
 
-	/* Restore floating-point state before returning through rfid. */
 	lfd %f0,72(%r1); mtfsf 0xff,%f0
 	lfd %f0,336(%r1); lfd %f1,344(%r1); lfd %f2,352(%r1); lfd %f3,360(%r1)
 	lfd %f4,368(%r1); lfd %f5,376(%r1); lfd %f6,384(%r1); lfd %f7,392(%r1)

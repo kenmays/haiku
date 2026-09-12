@@ -1,6 +1,4 @@
-/*
- * PPC64 Open Firmware CPU discovery for Power Mac G5.
- */
+/* PPC64 Open Firmware CPU discovery for Power Mac G5. */
 #include <boot/platform/openfirmware/platform_arch.h>
 #include <stdio.h>
 #include <KernelExport.h>
@@ -59,9 +57,9 @@ boot_arch_cpu_init(void)
 	printf("ppc64: found %d CPU(s), PVR 0x%08lx\n", cpuCount,
 		(unsigned long)ppc64_boot_get_pvr());
 
-	/* Keep the initial stacks below 4 GiB until the PPC64 kernel MMU has
-	 * installed the final linear mapping. */
-	addr_t stack = (addr_t)arch_mmu_allocate((void*)0x80000000ULL,
+	/* Open Firmware supplies a valid identity-mapped allocation for the
+	 * initial kernel stacks. Do not merely return an unclaimed fixed VA. */
+	addr_t stack = (addr_t)arch_mmu_allocate(NULL,
 		cpuCount * (KERNEL_STACK_SIZE
 			+ KERNEL_STACK_GUARD_PAGES * B_PAGE_SIZE),
 		B_READ_AREA | B_WRITE_AREA, false);

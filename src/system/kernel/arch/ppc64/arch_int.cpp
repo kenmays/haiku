@@ -47,6 +47,10 @@ extern "C" void ppc64_exception_entry(uint64 vector, iframe* f)
 		case 0x380: case 0x480:
 			if (ppc64_mmu_handle_segment_fault(vector == 0x380 ? f->dar : f->srr0) != B_OK) { print_iframe(f); panic("ppc64: SLB refill failed"); } break;
 		case 0x500: { int32 irq; while ((irq = AppleG5::mpic_acknowledge()) >= 0) { if (irq == 0x20) smp_intercpu_interrupt_handler(smp_get_current_cpu()); else io_interrupt_handler(irq, true); AppleG5::mpic_eoi(); } break; }
+		case 0x800:
+			/* Enable scalar floating point for the faulting context and retry. */
+			f->srr1 |= MSR_FP_AVAILABLE;
+			break;
 		case 0x900: timer_interrupt(); break;
 		case 0xc00: handle_syscall(f); break;
 		case 0x300: case 0x400: {

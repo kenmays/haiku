@@ -32,12 +32,16 @@ static chipset_type chipset_from_model(const char* model)
 	return CHIPSET_UNKNOWN;
 }
 
-bool detect(machine_info& info)
+bool detect(machine_info& info, kernel_args* args)
 {
 	info.chipset = CHIPSET_UNKNOWN;
 	info.cpu = CPU_UNKNOWN;
-	info.cpuCount = gKernelArgs.num_cpus;
-	info.memorySize = total_physical_memory();
+	info.cpuCount = args != NULL ? args->num_cpus : 1;
+	info.memorySize = 0;
+	if (args != NULL) {
+		for (uint32 i = 0; i < args->num_physical_memory_ranges; i++)
+			info.memorySize += args->physical_memory_range[i].size;
+	}
 #if defined(__powerpc64__)
 	info.cpu = cpu_from_pvr(get_pvr());
 	char model[128] = {};
@@ -49,10 +53,10 @@ bool detect(machine_info& info)
 #endif
 }
 
-status_t init(kernel_args*)
+status_t init(kernel_args* args)
 {
 	machine_info info;
-	if (!detect(info))
+	if (!detect(info, args))
 		return B_BAD_VALUE;
 	dprintf("Apple G5: CPU=%d chipset=%d CPUs=%" B_PRIu32
 		" memory=%" B_PRIu64 " MB\n", info.cpu, info.chipset,
@@ -60,10 +64,7 @@ status_t init(kernel_args*)
 	return B_OK;
 }
 
-status_t init_post_vm(kernel_args*)
-{
-	return B_OK;
-}
+status_t init_post_vm(kernel_args*) { return B_OK; }
 
 } // namespace AppleG5
 

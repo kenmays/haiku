@@ -1,7 +1,7 @@
 /* Apple Power Mac G5 platform discovery and bootstrap. */
 #include "g5_platform.h"
 #include <arch_cpu.h>
-#include <boot/platform/openfirmware/openfirmware.h>
+#include <platform/openfirmware/openfirmware.h>
 #include <debug.h>
 #include <string.h>
 
@@ -55,9 +55,6 @@ status_t init(kernel_args*)
 
 status_t init_post_vm(kernel_args*)
 {
-	/* U3/K2 interrupt, PCI and DART resources are device-tree driven and are
-	 * initialized by their bus-manager drivers. No model-specific MMIO base is
-	 * assumed here. */
 	return B_OK;
 }
 
@@ -67,7 +64,6 @@ extern "C" status_t apple_g5_platform_init(kernel_args* args)
 {
 	return AppleG5::init(args);
 }
-
 extern "C" status_t apple_g5_platform_init_post_vm(kernel_args* args)
 {
 	return AppleG5::init_post_vm(args);

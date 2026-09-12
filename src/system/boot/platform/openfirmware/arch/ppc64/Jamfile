@@ -1,0 +1,21 @@
+SubDir HAIKU_TOP src system boot platform openfirmware arch ppc64 ;
+
+SubDirHdrs $(HAIKU_TOP) src system boot platform openfirmware ;
+UsePrivateSystemHeaders ;
+UsePrivateHeaders kernel [ FDirName kernel arch $(TARGET_KERNEL_ARCH_DIR) ]
+	[ FDirName kernel boot platform $(HAIKU_KERNEL_PLATFORM) ]
+	[ FDirName kernel boot platform $(HAIKU_BOOT_PLATFORM) ] ;
+
+SubDirC++Flags -fno-rtti ;
+
+local platform ;
+for platform in [ MultiBootSubDirSetup openfirmware ] {
+	on $(platform) {
+		BootMergeObject boot_platform_openfirmware_ppc64.o :
+			arch_cpu_asm.S
+			arch_start_kernel.S
+			cpu.cpp
+			start.cpp
+		;
+	}
+}

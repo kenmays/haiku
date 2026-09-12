@@ -56,8 +56,7 @@ static status_t write_regs(void* cookie, ata_task_file* tf, ata_reg_mask mask)
 	k2_channel* c = (k2_channel*)cookie;
 	if (c == NULL || c->lost) return B_ERROR;
 	pci_device_module_info* p = c->pci;
-	static const uint32 off[7] = { K2_ERROR, K2_NSECT, K2_LBAL, K2_LBAM,
-		K2_LBAH, K2_DEVICE, K2_STATUS_COMMAND };
+	static const uint32 off[7] = { K2_ERROR, K2_NSECT, K2_LBAL, K2_LBAM, K2_LBAH, K2_DEVICE, K2_STATUS_COMMAND };
 	for (int i = 0; i < 7; i++) {
 		if (mask & (1U << (i + 7))) p->write_io_8(c->device, c->base + off[i], tf->raw.r[i + 7]);
 		if (mask & (1U << i)) p->write_io_8(c->device, c->base + off[i], tf->raw.r[i]);
@@ -70,10 +69,8 @@ static status_t read_regs(void* cookie, ata_task_file* tf, ata_reg_mask mask)
 	k2_channel* c = (k2_channel*)cookie;
 	if (c == NULL || c->lost) return B_ERROR;
 	pci_device_module_info* p = c->pci;
-	static const uint32 off[7] = { K2_ERROR, K2_NSECT, K2_LBAL, K2_LBAM,
-		K2_LBAH, K2_DEVICE, K2_STATUS_COMMAND };
-	for (int i = 0; i < 7; i++)
-		if (mask & (1U << i)) tf->raw.r[i] = p->read_io_8(c->device, c->base + off[i]);
+	static const uint32 off[7] = { K2_ERROR, K2_NSECT, K2_LBAL, K2_LBAM, K2_LBAH, K2_DEVICE, K2_STATUS_COMMAND };
+	for (int i = 0; i < 7; i++) if (mask & (1U << i)) tf->raw.r[i] = p->read_io_8(c->device, c->base + off[i]);
 	return B_OK;
 }
 
@@ -119,8 +116,7 @@ static int32 interrupt_handler(void* arg)
 	k2_channel* c = (k2_channel*)arg;
 	if (c == NULL || c->lost || c->ataChannel == NULL) return B_UNHANDLED_INTERRUPT;
 	uint8 status = c->pci->read_io_8(c->device, c->base + K2_STATUS_COMMAND);
-	if ((status & 0x01) == 0 && (status & 0x40) == 0 && (status & 0x80) == 0)
-		return B_UNHANDLED_INTERRUPT;
+	if ((status & 0x01) == 0 && (status & 0x40) == 0 && (status & 0x80) == 0) return B_UNHANDLED_INTERRUPT;
 	return sATA->interrupt_handler(c->ataChannel, status);
 }
 
@@ -138,14 +134,15 @@ static status_t channel_init(device_node* node, void** cookie)
 	DeviceNodePutter<&sDeviceManager> channelParent(sDeviceManager->get_parent_node(node));
 	if (channelParent.Get() == NULL) { free(c); return B_ERROR; }
 	DeviceNodePutter<&sDeviceManager> pciNode(sDeviceManager->get_parent_node(channelParent.Get()));
-	if (pciNode.Get() == NULL || sDeviceManager->get_driver(pciNode.Get(),
-		(driver_module_info**)&c->pci, (void**)&c->device) != B_OK) { free(c); return B_ERROR; }
+	if (pciNode.Get() == NULL || sDeviceManager->get_driver(pciNode.Get(), (driver_module_info**)&c->pci, (void**)&c->device) != B_OK) {
+		free(c); return B_ERROR;
+	}
 	c->index = index;
 	c->irq = irq;
 	phys_addr_t physical = (phys_addr_t)mmio + index * K2_PORT_STRIDE;
 	void* mapped = NULL;
-	c->area = map_physical_memory("k2-sata-port", physical, 0x100,
-		B_ANY_KERNEL_ADDRESS, B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA, &mapped);
+	c->area = map_physical_memory("k2-sata-port", physical, 0x100, B_ANY_KERNEL_ADDRESS,
+		B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA, &mapped);
 	if (c->area < 0) { free(c); return c->area; }
 	c->base = (addr_t)mapped;
 	status_t status = install_io_interrupt_handler(c->irq, interrupt_handler, c, 0);
@@ -162,10 +159,9 @@ static void channel_uninit(void* cookie)
 	if (c->area >= 0) delete_area(c->area);
 	free(c);
 }
-
 static void channel_removed(void* cookie) { if (cookie) ((k2_channel*)cookie)->lost = true; }
 static void set_channel(void* cookie, ata_channel channel) { if (cookie) ((k2_channel*)cookie)->ataChannel = channel; }
-static status_t controller_init(device_node*, void**) { return B_OK; }
+static status_t controller_init(device_node*, void** cookie) { *cookie = NULL; return B_OK; }
 static void controller_uninit(void*) {}
 static void controller_removed(void*) {}
 
@@ -179,8 +175,7 @@ static float supports_device(device_node* parent)
 		|| sDeviceManager->get_attr_uint16(parent, B_DEVICE_ID, &device, false) != B_OK) return -1;
 	if (vendor != K2_VENDOR) return 0;
 	switch (device) {
-		case K2_0240: case K2_0241: case K2_0242: case K2_024a: case K2_024b:
-		case K2_0410: case K2_0411: return 0.9f;
+		case K2_0240: case K2_0241: case K2_0242: case K2_024a: case K2_024b: case K2_0410: case K2_0411: return 0.9f;
 	}
 	return 0;
 }
@@ -199,19 +194,17 @@ static status_t probe_controller(device_node* parent)
 	command |= PCI_command_memory | PCI_command_master;
 	command &= ~PCI_command_int_disable;
 	pci->write_pci_config(device, PCI_command, 2, command);
-
 	uint32 ports = dev == K2_0241 ? 8 : 4;
 	device_attr controllerAttrs[] = {
 		{ B_DEVICE_PRETTY_NAME, B_STRING_TYPE, {.string = K2_PRETTY_NAME} },
-		{ B_DEVICE_FIXED_CHILD, B_STRING_TYPE, {.string = ATA_BUS_TYPE_NAME} },
-		{ ATA_CONTROLLER_MAX_DEVICES_ITEM, B_UINT8_TYPE, {.ui8 = 1} },
+		{ B_DEVICE_FIXED_CHILD, B_STRING_TYPE, {.string = ATA_FOR_CONTROLLER_MODULE_NAME} },
+		{ ATA_CONTROLLER_MAX_DEVICES_ITEM, B_UINT8_TYPE, {.ui8 = (uint8)ports} },
 		{ ATA_CONTROLLER_CAN_DMA_ITEM, B_UINT8_TYPE, {.ui8 = 0} },
 		{ ATA_CONTROLLER_CONTROLLER_NAME_ITEM, B_STRING_TYPE, {.string = K2_PRETTY_NAME} },
 		{}
 	};
 	device_node* controller;
-	status_t status = sDeviceManager->register_node(parent, K2_CONTROLLER_MODULE_NAME,
-		controllerAttrs, NULL, &controller);
+	status_t status = sDeviceManager->register_node(parent, K2_CONTROLLER_MODULE_NAME, controllerAttrs, NULL, &controller);
 	if (status != B_OK) return status;
 	for (uint32 i = 0; i < ports; i++) {
 		char name[32];
@@ -236,15 +229,11 @@ static status_t probe_controller(device_node* parent)
 
 static ata_controller_interface sChannel = {
 	{{K2_CHANNEL_MODULE_NAME, 0, NULL}, NULL, NULL, channel_init, channel_uninit, NULL, NULL, channel_removed},
-	set_channel, write_regs, read_regs, altstatus, write_control, write_pio, read_pio,
-	no_dma, no_start, no_finish
+	set_channel, write_regs, read_regs, altstatus, write_control, write_pio, read_pio, no_dma, no_start, no_finish
 };
-
 static driver_module_info sController = {
-	{K2_CONTROLLER_MODULE_NAME, 0, NULL}, supports_device, probe_controller,
-	controller_init, controller_uninit, NULL, NULL, controller_removed
+	{K2_CONTROLLER_MODULE_NAME, 0, NULL}, supports_device, probe_controller, controller_init, controller_uninit, NULL, NULL, controller_removed
 };
-
 module_dependency module_dependencies[] = {
 	{ATA_FOR_CONTROLLER_MODULE_NAME, (module_info**)&sATA},
 	{B_DEVICE_MANAGER_MODULE_NAME, (module_info**)&sDeviceManager},

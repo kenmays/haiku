@@ -1,0 +1,9 @@
+SubDir HAIKU_TOP src add-ons kernel busses pci powermac_g5 ;
+
+UsePrivateKernelHeaders ;
+SubDirHdrs $(HAIKU_TOP) src system kernel arch generic ;
+
+KernelAddon <pci>powermac_g5 :
+	PowerMacG5PCIController.cpp
+	kernel_interface.cpp
+;

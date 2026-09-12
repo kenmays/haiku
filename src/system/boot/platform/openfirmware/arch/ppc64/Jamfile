@@ -15,6 +15,7 @@ for platform in [ MultiBootSubDirSetup openfirmware ] {
 			arch_cpu_asm.S
 			arch_start_kernel.S
 			cpu.cpp
+			mmu.cpp
 			start.cpp
 		;
 	}

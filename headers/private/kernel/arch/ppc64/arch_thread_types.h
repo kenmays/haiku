@@ -1,7 +1,4 @@
-/*
- * PowerPC 64-bit architecture thread types.
- * Distributed under the terms of the MIT License.
- */
+/* PowerPC 64-bit architecture thread types. */
 #ifndef KERNEL_ARCH_PPC64_THREAD_TYPES_H
 #define KERNEL_ARCH_PPC64_THREAD_TYPES_H
 
@@ -20,6 +17,6 @@ struct arch_thread {
 };
 
 struct arch_team { char dummy; };
-struct arch_fork_arg { char dummy; };
+struct arch_fork_arg { struct iframe frame; };
 
 #endif

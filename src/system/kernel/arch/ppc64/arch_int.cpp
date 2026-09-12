@@ -6,6 +6,7 @@
 #include <arch/smp.h>
 #include <arch_mmu.h>
 #include <boot/kernel_args.h>
+#include <cpu.h>
 #include <debug.h>
 #include <kscheduler.h>
 #include <ksyscalls.h>
@@ -47,18 +48,20 @@ extern "C" void ppc64_exception_entry(uint64 vector, iframe* f)
 		case 0x380: case 0x480:
 			if (ppc64_mmu_handle_segment_fault(vector == 0x380 ? f->dar : f->srr0) != B_OK) { print_iframe(f); panic("ppc64: SLB refill failed"); } break;
 		case 0x500: { int32 irq; while ((irq = AppleG5::mpic_acknowledge()) >= 0) { if (irq == 0x20) smp_intercpu_interrupt_handler(smp_get_current_cpu()); else io_interrupt_handler(irq, true); AppleG5::mpic_eoi(); } break; }
-		case 0x800:
-			/* Enable scalar floating point for the faulting context and retry. */
-			f->srr1 |= MSR_FP_AVAILABLE;
-			break;
+		case 0x800: f->srr1 |= MSR_FP_AVAILABLE; break;
 		case 0x900: timer_interrupt(); break;
 		case 0xc00: handle_syscall(f); break;
 		case 0x300: case 0x400: {
+			cpu_ent* cpu = &gCPU[smp_get_current_cpu()];
+			if (cpu->fault_handler != 0) { f->srr0 = cpu->fault_handler; break; }
 			addr_t faultAddress = vector == 0x300 ? f->dar : f->srr0; addr_t ip = 0;
 			vm_page_fault(faultAddress, f->srr0, vector == 0x300 && (f->dsisr & (1ULL << 25)) != 0, false, (f->srr1 & MSR_PRIVILEGE_LEVEL) != 0, &ip);
 			if (ip) f->srr0 = ip; break;
 		}
 		case 0x200: print_iframe(f); panic("ppc64: machine check exception"); break;
+		case 0x600: panic("ppc64: alignment exception"); break;
+		case 0x700: panic("ppc64: program exception"); break;
+		case 0xf20: f->srr1 |= MSR_FP_AVAILABLE; panic("ppc64: AltiVec unavailable"); break;
 		default: print_iframe(f); panic("ppc64: unhandled exception vector 0x%lx", vector);
 	}
 	if (t != NULL) {

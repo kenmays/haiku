@@ -1,7 +1,4 @@
-/*
- * PowerPC 64-bit architecture definitions for IBM PPC970-class CPUs.
- * Distributed under the terms of the MIT License.
- */
+/* PowerPC 64-bit architecture definitions for IBM PPC970-class CPUs. */
 #ifndef _KERNEL_ARCH_PPC64_CPU_H
 #define _KERNEL_ARCH_PPC64_CPU_H
 
@@ -12,16 +9,6 @@
 #define CACHE_LINE_SIZE 128
 #define arch_cpu_enable_user_access()
 #define arch_cpu_disable_user_access()
-
-struct iframe {
-	uint64 vector, srr0, srr1, dar, dsisr, lr, cr, xer, ctr, fpscr;
-	uint64 r31, r30, r29, r28, r27, r26, r25, r24, r23, r22, r21, r20,
-		r19, r18, r17, r16, r15, r14, r13, r12, r11, r10, r9, r8, r7, r6,
-		r5, r4, r3, r2, r1, r0;
-	double f31, f30, f29, f28, f27, f26, f25, f24, f23, f22, f21, f20,
-		f19, f18, f17, f16, f15, f14, f13, f12, f11, f10, f9, f8, f7, f6,
-		f5, f4, f3, f2, f1, f0;
-};
 
 enum machine_state {
 	MSR_EXCEPTIONS_ENABLED = 1ULL << 15,

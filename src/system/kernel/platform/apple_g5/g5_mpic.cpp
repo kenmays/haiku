@@ -23,14 +23,18 @@ static volatile uint8* sRegs;
 static area_id sArea = -1;
 static uint32 sCpuCount = 1;
 static uint32 sIRQCount = 0;
+static int32 sCurrentCpu;
 
 static const uint32 FEATURE = 0x1000;
 static const uint32 CONFIG = 0x1020;
 static const uint32 SPURIOUS = 0x10e0;
+static const uint32 IPI_VECTOR = 0x10a0;
 static const uint32 SRC_BASE = 0x10000;
 static const uint32 CPU_BASE = 0x20000;
-static const uint32 IPI_BASE = 0x20040;
-static const uint32 CPU_PRIORITY = 0x20080;
+static const uint32 IPI_DISPATCH = 0x40;
+static const uint32 CPU_PRIORITY = 0x80;
+static const uint32 IACK = 0xa0;
+static const uint32 EOI = 0xb0;
 
 static inline uint32
 read32(uint32 offset)
@@ -130,8 +134,8 @@ mpic_init()
 	sIRQCount = ((feature >> 16) & 0x7ff) + 1;
 	if (sCpuCount > 4)
 		sCpuCount = 4;
+	sCurrentCpu = 0;
 
-	/* Disable all sources, route them to CPU 0, and select level triggering. */
 	for (uint32 irq = 0; irq < sIRQCount; irq++) {
 		uint32 source = SRC_BASE + irq * 0x20;
 		write32(source, 0x80000000U | (8U << 16) | irq
@@ -141,7 +145,8 @@ mpic_init()
 
 	uint32 config = read32(CONFIG);
 	write32(CONFIG, config | 0x20000000U);
-	write32(CPU_PRIORITY, 0);
+	write32(IPI_VECTOR, (8U << 16) | 0x20);
+	write32(CPU_BASE + CPU_PRIORITY, 0);
 	write32(SPURIOUS, 0xff);
 
 	dprintf("apple_g5: MPIC at %p, %u CPUs, %u IRQs\n", sRegs,
@@ -156,7 +161,8 @@ mpic_init_per_cpu(int32 cpu)
 		return B_NOT_INITIALIZED;
 	if (cpu < 0 || (uint32)cpu >= sCpuCount)
 		return B_BAD_VALUE;
-	write32(CPU_BASE + cpu * 0x1000 + 0x80, 0);
+	sCurrentCpu = cpu;
+	write32(CPU_BASE + cpu * 0x1000 + CPU_PRIORITY, 0);
 	return B_OK;
 }
 
@@ -165,7 +171,7 @@ mpic_acknowledge()
 {
 	if (!sRegs)
 		return -1;
-	uint32 value = read32(CPU_BASE + 0xa0);
+	uint32 value = read32(CPU_BASE + sCurrentCpu * 0x1000 + IACK);
 	uint32 irq = value & 0xff;
 	return irq == 0xff ? -1 : (int32)irq;
 }
@@ -174,7 +180,7 @@ void
 mpic_eoi()
 {
 	if (sRegs)
-		write32(CPU_BASE + 0xb0, 0);
+		write32(CPU_BASE + sCurrentCpu * 0x1000 + EOI, 0);
 }
 
 void
@@ -183,8 +189,7 @@ mpic_enable(int32 irq)
 	if (!sRegs || irq < 0 || (uint32)irq >= sIRQCount)
 		return;
 	uint32 offset = SRC_BASE + irq * 0x20;
-	uint32 value = read32(offset);
-	write32(offset, value & ~0x80000000U);
+	write32(offset, read32(offset) & ~0x80000000U);
 }
 
 void
@@ -226,20 +231,13 @@ mpic_send_ipi(int32 cpu, uint8 vector)
 {
 	if (!sRegs || cpu < 0 || (uint32)cpu >= sCpuCount)
 		return;
-	write32(IPI_BASE, vector);
-	write32(IPI_BASE + 0x10, 1U << cpu);
+	/* The IPI vector register is global; the per-CPU dispatch register
+	 * supplies the destination mask. */
+	write32(IPI_VECTOR, (8U << 16) | vector);
+	write32(CPU_BASE + sCurrentCpu * 0x1000 + IPI_DISPATCH, 1U << cpu);
 }
 
-uint32
-mpic_cpu_count()
-{
-	return sCpuCount;
-}
-
-bool
-mpic_is_initialized()
-{
-	return sRegs != NULL;
-}
+uint32 mpic_cpu_count() { return sCpuCount; }
+bool mpic_is_initialized() { return sRegs != NULL; }
 
 }

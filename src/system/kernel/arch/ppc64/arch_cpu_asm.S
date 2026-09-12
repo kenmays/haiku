@@ -28,7 +28,6 @@ FUNCTION(get_time_base):
 	sldi	%r4, %r4, 32
 	or	%r3, %r3, %r4
 	blr
-
 FUNCTION(ppc64_slb_invalidate):
 	slbia
 	sync
@@ -47,7 +46,15 @@ FUNCTION(__eieio):
 	eieio
 	blr
 
-/* 64-bit callee-saved context switch. r3 = old sp slot, r4 = new sp. */
+/* Initial kernel-thread entry. The stack frame prepared by C supplies the
+ * entry routine in r14 and its argument in r15; r13 is the return hook. */
+FUNCTION(ppc_kernel_thread_root):
+	mtctr	%r14
+	mr	%r3,%r15
+	bctrl
+	b	kernel_thread_exit
+
+/* Callee-saved 64-bit context switch. r3 = old-sp pointer, r4 = new sp. */
 FUNCTION(ppc_context_switch):
 	mflr	%r0
 	std	%r0, 0(%r1)
@@ -75,31 +82,30 @@ FUNCTION(ppc_context_switch):
 	std	%r30, 160(%r1)
 	std	%r31, 168(%r1)
 	std	%r1, 0(%r3)
-
-	mr	%r1, %r4
-	ld	%r0, 0(%r1)
+	mr	%r1,%r4
+	ld	%r0,0(%r1)
 	mtlr	%r0
-	ld	%r0, 8(%r1)
-	mtcrf	0xff, %r0
-	ld	%r2, 16(%r1)
-	ld	%r13, 24(%r1)
-	ld	%r14, 32(%r1)
-	ld	%r15, 40(%r1)
-	ld	%r16, 48(%r1)
-	ld	%r17, 56(%r1)
-	ld	%r18, 64(%r1)
-	ld	%r19, 72(%r1)
-	ld	%r20, 80(%r1)
-	ld	%r21, 88(%r1)
-	ld	%r22, 96(%r1)
-	ld	%r23, 104(%r1)
-	ld	%r24, 112(%r1)
-	ld	%r25, 120(%r1)
-	ld	%r26, 128(%r1)
-	ld	%r27, 136(%r1)
-	ld	%r28, 144(%r1)
-	ld	%r29, 152(%r1)
-	ld	%r30, 160(%r1)
-	ld	%r31, 168(%r1)
-	addi	%r1, %r1, 192
+	ld	%r0,8(%r1)
+	mtcrf	0xff,%r0
+	ld	%r2,16(%r1)
+	ld	%r13,24(%r1)
+	ld	%r14,32(%r1)
+	ld	%r15,40(%r1)
+	ld	%r16,48(%r1)
+	ld	%r17,56(%r1)
+	ld	%r18,64(%r1)
+	ld	%r19,72(%r1)
+	ld	%r20,80(%r1)
+	ld	%r21,88(%r1)
+	ld	%r22,96(%r1)
+	ld	%r23,104(%r1)
+	ld	%r24,112(%r1)
+	ld	%r25,120(%r1)
+	ld	%r26,128(%r1)
+	ld	%r27,136(%r1)
+	ld	%r28,144(%r1)
+	ld	%r29,152(%r1)
+	ld	%r30,160(%r1)
+	ld	%r31,168(%r1)
+	addi	%r1,%r1,192
 	blr

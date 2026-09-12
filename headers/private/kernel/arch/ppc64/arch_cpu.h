@@ -57,7 +57,7 @@ extern "C" {
 extern uint64 get_sdr1(void);
 extern void set_sdr1(uint64 value);
 extern uint64 get_msr(void);
-extern uint64 set_msr(uint64 value);
+extern void set_msr(uint64 value);
 extern uint32 get_pvr(void);
 extern uint64 get_time_base(void);
 extern void ppc64_slb_invalidate(void);

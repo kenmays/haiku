@@ -34,6 +34,13 @@ FUNCTION(ppc64_slb_invalidate):
 	isync
 	blr
 FUNCTION(ppc64_slb_insert):
+	/* r3 = ESID, r4 = VSID. Install 256 MiB kernel segment in slot 0. */
+	li	%r5, 0x0fff
+	sldi	%r5, %r5, 28
+	and	%r3, %r3, %r5
+	li	%r5, 0x08000000
+	or	%r3, %r3, %r5
+	ori	%r4, %r4, 0x0400
 	slbmte	%r4, %r3
 	isync
 	blr
@@ -46,15 +53,12 @@ FUNCTION(__eieio):
 	eieio
 	blr
 
-/* Initial kernel-thread entry. The stack frame prepared by C supplies the
- * entry routine in r14 and its argument in r15; r13 is the return hook. */
 FUNCTION(ppc_kernel_thread_root):
 	mtctr	%r14
 	mr	%r3,%r15
 	bctrl
 	b	kernel_thread_exit
 
-/* Callee-saved 64-bit context switch. r3 = old-sp pointer, r4 = new sp. */
 FUNCTION(ppc_context_switch):
 	mflr	%r0
 	std	%r0, 0(%r1)

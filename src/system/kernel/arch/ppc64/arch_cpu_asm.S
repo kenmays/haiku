@@ -69,8 +69,7 @@ FUNCTION(arch_user_thread_exit):
 	sc
 	b .
 FUNCTION(ppc_context_switch):
-	/* arch_thread: sp=0, interrupt_stack=8, iframe_stack=16..55,
-	 * fpu[32]=40..295, fpscr=296. */
+	/* r3 = old arch_thread, r4 = new SP, r5 = new arch_thread. */
 	stfd %f0,40(%r3); stfd %f1,48(%r3); stfd %f2,56(%r3); stfd %f3,64(%r3)
 	stfd %f4,72(%r3); stfd %f5,80(%r3); stfd %f6,88(%r3); stfd %f7,96(%r3)
 	stfd %f8,104(%r3); stfd %f9,112(%r3); stfd %f10,120(%r3); stfd %f11,128(%r3)
@@ -80,7 +79,6 @@ FUNCTION(ppc_context_switch):
 	stfd %f24,232(%r3); stfd %f25,240(%r3); stfd %f26,248(%r3); stfd %f27,256(%r3)
 	stfd %f28,264(%r3); stfd %f29,272(%r3); stfd %f30,280(%r3); stfd %f31,288(%r3)
 	mffs %f0; stfd %f0,296(%r3)
-
 	mflr %r0; std %r0,0(%r1); mfcr %r0; std %r0,8(%r1); stdu %r1,-192(%r1)
 	std %r2,16(%r1); std %r13,24(%r1); std %r14,32(%r1); std %r15,40(%r1)
 	std %r16,48(%r1); std %r17,56(%r1); std %r18,64(%r1); std %r19,72(%r1)
@@ -93,14 +91,13 @@ FUNCTION(ppc_context_switch):
 	ld %r20,80(%r1); ld %r21,88(%r1); ld %r22,96(%r1); ld %r23,104(%r1)
 	ld %r24,112(%r1); ld %r25,120(%r1); ld %r26,128(%r1); ld %r27,136(%r1)
 	ld %r28,144(%r1); ld %r29,152(%r1); ld %r30,160(%r1); ld %r31,168(%r1)
-
-	lfd %f0,296(%r3); mtfsf 0xff,%f0
-	lfd %f0,40(%r3); lfd %f1,48(%r3); lfd %f2,56(%r3); lfd %f3,64(%r3)
-	lfd %f4,72(%r3); lfd %f5,80(%r3); lfd %f6,88(%r3); lfd %f7,96(%r3)
-	lfd %f8,104(%r3); lfd %f9,112(%r3); lfd %f10,120(%r3); lfd %f11,128(%r3)
-	lfd %f12,136(%r3); lfd %f13,144(%r3); lfd %f14,152(%r3); lfd %f15,160(%r3)
-	lfd %f16,168(%r3); lfd %f17,176(%r3); lfd %f18,184(%r3); lfd %f19,192(%r3)
-	lfd %f20,200(%r3); lfd %f21,208(%r3); lfd %f22,216(%r3); lfd %f23,224(%r3)
-	lfd %f24,232(%r3); lfd %f25,240(%r3); lfd %f26,248(%r3); lfd %f27,256(%r3)
-	lfd %f28,264(%r3); lfd %f29,272(%r3); lfd %f30,280(%r3); lfd %f31,288(%r3)
+	lfd %f0,296(%r5); mtfsf 0xff,%f0
+	lfd %f0,40(%r5); lfd %f1,48(%r5); lfd %f2,56(%r5); lfd %f3,64(%r5)
+	lfd %f4,72(%r5); lfd %f5,80(%r5); lfd %f6,88(%r5); lfd %f7,96(%r5)
+	lfd %f8,104(%r5); lfd %f9,112(%r5); lfd %f10,120(%r5); lfd %f11,128(%r5)
+	lfd %f12,136(%r5); lfd %f13,144(%r5); lfd %f14,152(%r5); lfd %f15,160(%r5)
+	lfd %f16,168(%r5); lfd %f17,176(%r5); lfd %f18,184(%r5); lfd %f19,192(%r5)
+	lfd %f20,200(%r5); lfd %f21,208(%r5); lfd %f22,216(%r5); lfd %f23,224(%r5)
+	lfd %f24,232(%r5); lfd %f25,240(%r5); lfd %f26,248(%r5); lfd %f27,256(%r5)
+	lfd %f28,264(%r5); lfd %f29,272(%r5); lfd %f30,280(%r5); lfd %f31,288(%r5)
 	addi %r1,%r1,192; blr

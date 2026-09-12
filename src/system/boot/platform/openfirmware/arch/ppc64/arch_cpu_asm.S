@@ -10,15 +10,10 @@ FUNCTION(ppc64_boot_get_msr):
 	mfmsr	%r3
 	blr
 
-/* Disable IR and DR while preserving every other MSR bit.  On PPC64 the
- * assembler's bit numbering for logical/rotate instructions is MSB-first;
- * using rldicr with a mask generated from -1 would be unnecessarily subtle,
- * so construct the two-bit clear mask explicitly and invert it. */
+/* Disable instruction/data relocation while preserving all other MSR state. */
 FUNCTION(ppc64_boot_disable_translation):
 	mfmsr	%r3
-	li	%r4, 0
-	ori	%r4, %r4, 0x0c00
-	sldi	%r4, %r4, 48
+	li	%r4, 0x30
 	nor	%r4, %r4, %r4
 	and	%r3, %r3, %r4
 	mtmsrd	%r3

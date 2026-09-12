@@ -32,37 +32,17 @@ static chipset_type chipset_from_model(const char* model)
 	return CHIPSET_UNKNOWN;
 }
 
-static uint32 count_cpus()
-{
-	int cpus = of_finddevice("/cpus");
-	if (cpus == OF_FAILED)
-		return 1;
-
-	uint32 count = 0;
-	int child = of_getchild(cpus);
-	while (child != OF_FAILED && count < 4) {
-		char type[32] = {};
-		if (of_getprop(child, "device_type", type, sizeof(type)) != OF_FAILED
-			&& strcmp(type, "cpu") == 0)
-			count++;
-		child = of_getnext(cpus, child);
-	}
-	return count != 0 ? count : 1;
-}
-
 bool detect(machine_info& info)
 {
 	info.chipset = CHIPSET_UNKNOWN;
 	info.cpu = CPU_UNKNOWN;
-	info.cpuCount = 0;
-	info.memorySize = 0;
+	info.cpuCount = gKernelArgs.num_cpus;
+	info.memorySize = total_physical_memory();
 #if defined(__powerpc64__)
 	info.cpu = cpu_from_pvr(get_pvr());
 	char model[128] = {};
 	if (of_getprop(gChosen, "model", model, sizeof(model)) != OF_FAILED)
 		info.chipset = chipset_from_model(model);
-	info.cpuCount = count_cpus();
-	info.memorySize = total_physical_memory();
 	return info.cpu != CPU_UNKNOWN;
 #else
 	return false;

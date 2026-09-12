@@ -38,8 +38,8 @@ extern void ppc64_slb_invalidate(void);
 extern void ppc64_slb_insert(uint64 slot,uint64 esid,uint64 vsid);
 extern void ppc64_slb_invalidate_esid(uint64 esid);
 extern void ppc64_restore_iframe(struct iframe* frame) __attribute__((noreturn));
-extern void ppc_context_switch(void **_oldStackPointer,void *newStackPointer,
-	struct arch_thread* newThread);
+extern void ppc_context_switch(struct arch_thread* oldThread, void **_oldStackPointer,
+	void *newStackPointer, struct arch_thread* newThread);
 extern bool ppc_set_fault_handler(addr_t *handlerLocation,addr_t handler)
 	__attribute__((noinline));
 #ifdef __cplusplus

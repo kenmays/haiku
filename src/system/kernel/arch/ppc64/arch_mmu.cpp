@@ -59,12 +59,11 @@ find_free_or_victim(ppc64_pte* p)
 		if (!(p[i].word0 & PPC64_HPTE_V_VALID))
 			return &p[i];
 	}
-	/* PPC970 has no hardware replacement policy for the software-managed HPT.
-	 * Evict the last non-bolted entry in this PTEG. */
 	for (int i = PPC64_HPT_PTES_PER_GROUP - 1; i >= 0; i--) {
 		if (!(p[i].word0 & PPC64_HPTE_V_BOLTED)) {
 			p[i].word0 &= ~PPC64_HPTE_V_VALID;
 			sync();
+			arch_cpu_global_tlb_invalidate();
 			return &p[i];
 		}
 	}

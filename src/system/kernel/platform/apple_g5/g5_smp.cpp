@@ -12,6 +12,7 @@
 #include "g5_smp.h"
 #include <debug.h>
 #include <platform/openfirmware/openfirmware.h>
+#include <string.h>
 
 namespace {
 

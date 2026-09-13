@@ -1,11 +1,6 @@
 /*
  * Copyright 2008 Haiku.
  * Distributed under the terms of the MIT License.
- *
- * Authors:
- *		Alexander Coers		Alexander.Coers@gmx.de
- *		Fredrik Modéen		fredrik@modeen.se
- *		Axel Dörfler		axeld@pinc-software.de
  */
 
 #include "driver.h"
@@ -16,13 +11,6 @@
 #include <KernelExport.h>
 #include <PCI.h>
 
-#define TRACE_DRIVER
-#ifdef TRACE_DRIVER
-#	define TRACE(x) dprintf x
-#else
-#	define TRACE(x) ;
-#endif
-
 int32 api_version = B_CUR_DRIVER_API_VERSION;
 
 int num_names = 0;
@@ -31,30 +19,33 @@ int num_cards = 0;
 char* gDeviceNames[MAX_CARDS + 1];
 gameport_info cards[MAX_CARDS];
 
+static bool
+is_supported(uint16 device)
+{
+	return device == SBLIVE_ID || device == AUDIGY_ID
+		|| device == SBLIVE_DELL_ID;
+}
+
 static status_t
 setup_card(gameport_info* card)
 {
 	uint32 commandReg;
-	int32 base;
+	uint32 base = card->info.u.h0.base_registers[0];
 
-	base = card->info.u.h0.base_registers[0];
-	if ((base & PCI_address_io) == 0 || base == 0)
+	if ((base & PCI_address_io) == 0)
 		return B_BAD_VALUE;
+	base &= PCI_address_io;
 
-	// Preserve unrelated PCI command bits and enable only I/O decoding.
 	commandReg = (*pci->read_pci_config)(card->info.bus, card->info.device,
 		card->info.function, PCI_command, 2);
 	commandReg |= PCI_command_io;
 	(*pci->write_pci_config)(card->info.bus, card->info.device,
 		card->info.function, PCI_command, 2, commandReg);
 
-	if ((*gameport->create_device)(base & PCI_address_io, &card->joy.driver)
-			< B_OK) {
-		dprintf(DRIVER_NAME ": failed to load generic gameport module\n");
+	if ((*gameport->create_device)((int32)base, &card->joy.driver) < B_OK)
 		return B_ERROR;
-	}
 
-	sprintf(card->joy.name1, "joystick/" DRIVER_NAME "/%x", base & PCI_address_io);
+	sprintf(card->joy.name1, "joystick/" DRIVER_NAME "/%x", base);
 	gDeviceNames[num_names++] = card->joy.name1;
 	gDeviceNames[num_names] = NULL;
 	return B_OK;
@@ -71,14 +62,8 @@ init_hardware(void)
 		return ENOSYS;
 
 	while ((*pci->get_nth_pci_info)(ix++, &info) == B_OK) {
-		if (info.vendor_id != VENDOR_ID_CREATIVE)
-			continue;
-		if (info.device_id != DEVICE_ID_CREATIVE_EMU10K1
-			&& info.device_id != SBLIVE_ID
-			&& info.device_id != AUDIGY_ID
-			&& info.device_id != SBLIVE_DELL_ID)
-			continue;
-		found = true;
+		if (info.vendor_id == VENDOR_ID_CREATIVE && is_supported(info.device_id))
+			found = true;
 	}
 
 	put_module(pci_name);
@@ -99,13 +84,9 @@ init_driver(void)
 	}
 
 	while ((*pci->get_nth_pci_info)(ix++, &info) == B_OK) {
-		if (info.vendor_id != VENDOR_ID_CREATIVE)
+		if (info.vendor_id != VENDOR_ID_CREATIVE || !is_supported(info.device_id)
+			|| num_cards >= MAX_CARDS)
 			continue;
-		if (info.device_id != SBLIVE_ID && info.device_id != AUDIGY_ID
-			&& info.device_id != SBLIVE_DELL_ID)
-			continue;
-		if (num_cards >= MAX_CARDS)
-			break;
 
 		memset(&cards[num_cards], 0, sizeof(gameport_info));
 		cards[num_cards].info = info;
@@ -144,10 +125,9 @@ publish_devices()
 static int
 lookup_device_name(const char* name)
 {
-	for (int i = 0; gDeviceNames[i] != NULL; i++) {
+	for (int i = 0; gDeviceNames[i] != NULL; i++)
 		if (strcmp(gDeviceNames[i], name) == 0)
 			return i;
-	}
 	return -1;
 }
 

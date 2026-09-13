@@ -1,0 +1,6 @@
+SubDir HAIKU_TOP src tests system libroot ppc64_syscall_abi ;
+
+if $(TARGET_ARCH) = ppc64 {
+	local sources = ppc64_syscall_abi_test.cpp ;
+	KernelTest ppc64_syscall_abi : $(sources) ;
+}

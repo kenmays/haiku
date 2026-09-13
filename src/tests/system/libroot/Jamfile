@@ -2,3 +2,4 @@ SubDir HAIKU_TOP src tests system libroot ;
 
 SubInclude HAIKU_TOP src tests system libroot os ;
 SubInclude HAIKU_TOP src tests system libroot posix ;
+SubInclude HAIKU_TOP src tests system libroot ppc64_syscall_abi ;

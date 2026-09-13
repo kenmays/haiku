@@ -1,7 +1,11 @@
 SubDir HAIKU_TOP src add-ons kernel drivers ports parallel ;
 
-UsePrivateHeaders kernel ;
+UsePrivateHeaders libroot ;
+UsePrivateKernelHeaders ;
+UseHeaders [ FDirName $(HAIKU_TOP) headers os drivers ] : true ;
+
+SubDirC++Flags -fno-rtti ;
 
 KernelAddon parallel :
 	driver.cpp
-	;
+;

@@ -12,13 +12,13 @@ void Shutdown();
 status_t Map(addr_t physical, size_t size, addr_t* _dmaAddress);
 status_t Unmap(addr_t dmaAddress, size_t size);
 
-/* Explicit name for callers which are translating a physical segment. */
 inline status_t
 MapPhysical(addr_t physical, size_t size, addr_t* _dmaAddress)
 {
 	return Map(physical, size, _dmaAddress);
 }
 
+bool Enabled();
 addr_t Base();
 size_t Size();
 }

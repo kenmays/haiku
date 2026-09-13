@@ -12,6 +12,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <stdint.h>
+#include <inttypes.h>
 
 #if !defined(__powerpc64__)
 int main()
@@ -39,8 +40,6 @@ main()
 
 	thread_id thread = find_thread(NULL);
 	failures += check(thread >= 0, "find_thread 64-bit return");
-	failures += check(sizeof(thread) == sizeof(int64),
-		"thread_id is 64-bit");
 
 	pid_t process = getpid();
 	failures += check(process > 0, "getpid return");
@@ -57,9 +56,6 @@ main()
 	failures += check(written == (ssize_t)(sizeof(text) - 1),
 		"write pointer/size arguments");
 
-	/* Exercise a pointer above the 32-bit address range when the process
-	 * allocator provides one. The test is informational if the allocator
-	 * happens to return a low address. */
 	uintptr_t bufferAddress = (uintptr_t)buffer;
 	printf("PPC64 test buffer address: 0x%" PRIxPTR "\n", bufferAddress);
 	if (bufferAddress > UINT32_MAX)

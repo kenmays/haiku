@@ -9,7 +9,7 @@ static const uint64 kVAMask = (1ULL << kVAWidth) - 1;
 static bool
 range_overflows(uint64 address, uint64 size)
 {
-	return size > 0 && address > UINT64_MAX - size;
+	return size > UINT64_MAX - address;
 }
 
 static bool
@@ -84,7 +84,9 @@ RDNA4VM::Unmap(uint64 gpuVA, uint64 size)
 	if (!fInitialized)
 		return B_NO_INIT;
 	if (gpuVA == 0 || size == 0 || (gpuVA & (kPageSize - 1)) != 0
-		|| (size & (kPageSize - 1)) != 0)
+		|| (size & (kPageSize - 1)) != 0
+		|| range_overflows(gpuVA, size)
+		|| gpuVA + size > (1ULL << kVAWidth))
 		return B_BAD_VALUE;
 
 	Mapping** link = &fMappings;

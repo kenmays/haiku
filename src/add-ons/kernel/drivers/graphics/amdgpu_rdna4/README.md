@@ -31,13 +31,15 @@ registers.
 - pixel-clock query ABI: implemented conservatively
 - GFX12 VM geometry and PTE/PDE encoding: implemented as architecture helpers
 - software GPUVA mapping validation: implemented
+- software ring storage/reservation and monotonic fence staging: implemented
+- GFX12 firmware basenames for PFP/ME/MEC/RLC/TOC: implemented
 - EDID/DDC/AUX: pending DCN4 connector implementation
 - DPMS hardware programming: pending DCN4 implementation
 - display mode programming: pending DCN4 implementation
-- GFX12 command submission: pending exact firmware/register implementation
+- GFX12 command submission to hardware: pending exact firmware/register implementation
 - GPUVM hardware page-table allocation/TLB invalidation: pending
-- SDMA rings: pending
-- interrupts/fences/vblank: pending
+- SDMA hardware rings: pending
+- interrupts/hardware fences/vblank: pending
 - cursor/overlay/MST: pending
 - VCN: pending
 - SMU/power management: pending
@@ -45,11 +47,15 @@ registers.
 
 The VM, GFX, SDMA and display classes currently provide software state and
 validation boundaries rather than pretending to perform hardware operations.
-The VM layer now records the GFX12 four-level/4 KiB/48-bit address geometry
-and architectural PTE/PDE field encoding without enabling unverified MMIO.
-Command submission must not be enabled on real hardware until the exact GFX12
-register definitions, firmware images and reset sequence for the target ASIC
-revision are integrated and validated.
+The VM layer records the GFX12 four-level/4 KiB/48-bit address geometry and
+architectural PTE/PDE field encoding without enabling unverified MMIO. The
+ring layer now supplies bounded software staging storage and monotonic fence
+sequences that can be connected to the verified hardware ring/interrupt path.
+
+The firmware layer now exposes the exact GFX12 firmware basenames used by the
+hardware backend: `amdgpu/gfx1200_{pfp,me,mec,rlc,toc}.bin` and the corresponding
+`gfx1201` names. DMCUB is intentionally not guessed from the GFX version because
+its filename is tied to the DCN revision.
 
 ## Reference architecture
 
@@ -60,3 +66,13 @@ The implementation follows Haiku's existing graphics-driver conventions rather
 than attempting to reuse Linux DRM internals directly. Linux amdgpu sources are
 used as hardware-programming references only; they are not copied as a Haiku
 userspace ABI.
+
+## Hardware-completion gate
+
+A production hardware path still requires all of the following on actual
+GFX1200/GFX1201 boards: verified firmware loading and header parsing, ASIC-specific
+reset/clock initialization, GPUVM table allocation and TLB invalidation, GFX/SDMA
+ring setup and doorbells, interrupt/fence handling, DCN4 connector/AUX/EDID and
+modeset programming, cursor/overlay support, VCN integration, power management,
+and Mesa winsys integration. These are deliberately not represented as complete
+until they can be built and exercised against the corresponding hardware.

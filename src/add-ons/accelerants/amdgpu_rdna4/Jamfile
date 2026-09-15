@@ -6,5 +6,6 @@ UsePrivateHeaders shared ;
 Addon amdgpu_rdna4.accelerant :
 	accelerant.cpp
 	hooks.cpp
+	rdna4_frontend.cpp
 	: be libaccelerantscommon.a [ TargetLibsupc++ ]
 ;

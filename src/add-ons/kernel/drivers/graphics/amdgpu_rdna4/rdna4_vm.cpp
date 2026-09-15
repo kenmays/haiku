@@ -15,7 +15,10 @@ range_overflows(uint64 address, uint64 size)
 static bool
 ranges_overlap(uint64 a, uint64 asize, uint64 b, uint64 bsize)
 {
-	return a < b + bsize && b < a + asize;
+	/* Avoid endpoint addition so the overlap test itself cannot overflow. */
+	if (a < b)
+		return b - a < asize;
+	return a - b < bsize;
 }
 
 RDNA4VM::RDNA4VM()
@@ -109,8 +112,8 @@ RDNA4VM::Flush()
 	if (!fInitialized)
 		return B_NO_INIT;
 
-	/* The mapping list is the authoritative software state.  The eventual
-	 * GFX12 implementation must follow this with the VM invalidate sequence
-	 * for the affected VMID; there is deliberately no guessed MMIO here. */
+	/* Software state is already coherent. A hardware implementation must call
+	 * the generation-specific VM invalidate operation for the affected VMID;
+	 * no unverified GFX12 register sequence is emitted here. */
 	return B_OK;
 }

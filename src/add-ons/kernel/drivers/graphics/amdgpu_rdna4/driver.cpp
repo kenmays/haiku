@@ -65,6 +65,7 @@ find_devices()
 		status_t status = rdna4_device_init(info, sSharedInfo[index]);
 		if (status != B_OK)
 			continue;
+		sSharedInfo[index].device_index = index;
 
 		char name[64];
 		snprintf(name, sizeof(name), "graphics/amdgpu_rdna4_%02x%02x%02x",
@@ -91,13 +92,14 @@ find_devices()
 extern "C" status_t
 init_hardware(void)
 {
-	if (get_module(B_PCI_MODULE_NAME, (module_info**)&sPCI) != B_OK)
+	pci_module_info* pci = NULL;
+	if (get_module(B_PCI_MODULE_NAME, (module_info**)&pci) != B_OK)
 		return B_ERROR;
 
 	status_t status = B_ENTRY_NOT_FOUND;
 	int32 cookie = 0;
 	pci_info info;
-	while (sPCI->get_nth_pci_info(cookie++, &info) == B_OK) {
+	while (pci->get_nth_pci_info(cookie++, &info) == B_OK) {
 		if (info.vendor_id == RDNA4_VENDOR_ID
 			&& info.class_base == PCI_display && info.class_sub == PCI_vga
 			&& rdna4_lookup_device(info.device_id) != NULL) {

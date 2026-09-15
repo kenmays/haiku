@@ -22,10 +22,18 @@ get_accelerant_hook(uint32 feature, void* data)
 			return (void*)amdgpu_rdna4_mode_count;
 		case B_GET_MODE_LIST:
 			return (void*)amdgpu_rdna4_get_mode_list;
-		case B_SET_DISPLAY_MODE:
-			return (void*)amdgpu_rdna4_set_display_mode;
+		case B_GET_PREFERRED_DISPLAY_MODE:
+			return (void*)amdgpu_rdna4_get_preferred_mode;
 		case B_GET_DISPLAY_MODE:
 			return (void*)amdgpu_rdna4_get_display_mode;
+		case B_SET_DISPLAY_MODE:
+			return (void*)amdgpu_rdna4_set_display_mode;
+		case B_GET_FRAME_BUFFER_CONFIG:
+			return (void*)amdgpu_rdna4_get_frame_buffer_config;
+		case B_GET_PIXEL_CLOCK_LIMITS:
+			return (void*)amdgpu_rdna4_get_pixel_clock_limits;
+		case B_GET_EDID_INFO:
+			return (void*)amdgpu_rdna4_get_edid_info;
 	}
 	return NULL;
 }

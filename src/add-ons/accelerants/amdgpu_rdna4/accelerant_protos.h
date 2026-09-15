@@ -9,6 +9,9 @@ extern "C" {
 #endif
 
 status_t amdgpu_rdna4_init_accelerant(int fd);
+ssize_t amdgpu_rdna4_accelerant_clone_info_size(void);
+void amdgpu_rdna4_get_accelerant_clone_info(void* data);
+status_t amdgpu_rdna4_clone_accelerant(void* data);
 void amdgpu_rdna4_uninit_accelerant(void);
 status_t amdgpu_rdna4_get_device_info(accelerant_device_info* info);
 

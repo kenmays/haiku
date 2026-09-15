@@ -6,9 +6,10 @@
 #include <SupportDefs.h>
 
 #define RDNA4_VENDOR_ID 0x1002
-
 #define RDNA4_GFX1200 0x1200
 #define RDNA4_GFX1201 0x1201
+#define RDNA4_PRIVATE_DATA_MAGIC 0x52443434
+#define RDNA4_GET_PRIVATE_DATA 0x52443440
 
 enum rdna4_chip {
 	RDNA4_CHIP_UNKNOWN = 0,
@@ -46,9 +47,13 @@ struct rdna4_shared_info {
 	bool framebuffer_fallback;
 };
 
+struct rdna4_get_private_data {
+	uint32 magic;
+	area_id shared_info_area;
+};
+
 status_t rdna4_device_init(const pci_info& pci, rdna4_shared_info& shared);
 void rdna4_device_uninit(rdna4_shared_info& shared);
-
 const rdna4_pci_device* rdna4_lookup_device(uint16 deviceID);
 
 #endif

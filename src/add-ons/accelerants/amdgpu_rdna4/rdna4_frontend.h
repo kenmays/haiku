@@ -4,11 +4,9 @@
 #include <Accelerant.h>
 #include <SupportDefs.h>
 
-#include "../../kernel/drivers/graphics/amdgpu_rdna4/rdna4.h"
-
 /* Frontend-facing state is deliberately independent from the hardware
- * backend. It owns the Haiku accelerant contract: devices, connectors,
- * modes, framebuffer policy, DPMS and synchronization capabilities. */
+ * backend and kernel-private driver headers. It owns the Haiku accelerant
+ * contract: devices, connectors, modes, framebuffer policy and DPMS. */
 enum rdna4_frontend_state {
 	RDNA4_FRONTEND_NEW = 0,
 	RDNA4_FRONTEND_ATTACHED,

@@ -3,6 +3,8 @@
 
 #include <SupportDefs.h>
 
+#include "rdna4_ring.h"
+
 class RDNA4SDMA {
 public:
 	RDNA4SDMA();
@@ -12,6 +14,8 @@ public:
 
 private:
 	bool fInitialized;
+	uint64 fSequence;
+	RDNA4Ring fRing;
 };
 
 #endif

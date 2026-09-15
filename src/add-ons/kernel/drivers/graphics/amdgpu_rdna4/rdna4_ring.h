@@ -3,8 +3,8 @@
 
 #include <SupportDefs.h>
 
-/* Software ring model used by the hardware backend. Packet emission,
- * write pointers and doorbells remain generation-specific. */
+/* Software ring model used by the hardware backend. It deliberately does
+ * not touch MMIO; packet emission and doorbells are generation-specific. */
 class RDNA4Ring {
 public:
 	RDNA4Ring();
@@ -21,6 +21,7 @@ public:
 	status_t Write(uint32 offset, const uint32* commands, uint32 count);
 	status_t Commit(uint32 dwords);
 	status_t Read(uint32 offset, uint32* _value) const;
+	status_t Complete(uint32 dwords);
 
 	uint64 Sequence() const { return fSequence; }
 	uint64 Signal();

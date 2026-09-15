@@ -4,6 +4,7 @@
 #include <PCI.h>
 #include <Drivers.h>
 #include <SupportDefs.h>
+#include <OS.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -14,6 +15,7 @@ static pci_module_info* sPCI;
 static char* sDeviceNames[MAX_CARDS + 1];
 static pci_info sPCIInfo[MAX_CARDS];
 static rdna4_shared_info sSharedInfo[MAX_CARDS];
+static area_id sSharedAreas[MAX_CARDS] = {-1, -1, -1, -1};
 static int32 sDeviceCount;
 
 static status_t device_open(const char* name, uint32 flags, void** cookie);
@@ -42,16 +44,25 @@ find_devices()
 		if (rdna4_lookup_device(info.device_id) == NULL)
 			continue;
 
-		sPCIInfo[sDeviceCount] = info;
-		if (rdna4_device_init(info, sSharedInfo[sDeviceCount]) != B_OK)
+		int32 index = sDeviceCount;
+		sPCIInfo[index] = info;
+		if (rdna4_device_init(info, sSharedInfo[index]) != B_OK)
 			continue;
 
 		char name[64];
 		snprintf(name, sizeof(name), "graphics/amdgpu_rdna4_%02x%02x%02x",
 			info.bus, info.device, info.function);
-		sDeviceNames[sDeviceCount] = strdup(name);
-		if (sDeviceNames[sDeviceCount] == NULL)
+		sDeviceNames[index] = strdup(name);
+		if (sDeviceNames[index] == NULL)
 			return B_NO_MEMORY;
+
+		void* address = NULL;
+		sSharedAreas[index] = create_area("amdgpu_rdna4_shared", &address,
+			B_ANY_ADDRESS, B_PAGE_SIZE, B_FULL_LOCK,
+			B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA);
+		if (sSharedAreas[index] < 0)
+			return sSharedAreas[index];
+		memcpy(address, &sSharedInfo[index], sizeof(rdna4_shared_info));
 		sDeviceCount++;
 	}
 
@@ -65,6 +76,15 @@ init_hardware(void)
 	if (get_module(B_PCI_MODULE_NAME, (module_info**)&sPCI) != B_OK)
 		return B_ERROR;
 	status_t status = find_devices();
+	for (int32 i = 0; i < sDeviceCount; i++) {
+		if (sSharedAreas[i] >= 0)
+			delete_area(sSharedAreas[i]);
+		rdna4_device_uninit(sSharedInfo[i]);
+		free(sDeviceNames[i]);
+		sDeviceNames[i] = NULL;
+		sSharedAreas[i] = -1;
+	}
+	sDeviceCount = 0;
 	put_module(B_PCI_MODULE_NAME);
 	return status;
 }
@@ -87,9 +107,12 @@ extern "C" void
 uninit_driver(void)
 {
 	for (int32 i = 0; i < sDeviceCount; i++) {
+		if (sSharedAreas[i] >= 0)
+			delete_area(sSharedAreas[i]);
 		rdna4_device_uninit(sSharedInfo[i]);
 		free(sDeviceNames[i]);
 		sDeviceNames[i] = NULL;
+		sSharedAreas[i] = -1;
 	}
 	sDeviceCount = 0;
 	if (sPCI != NULL)
@@ -103,16 +126,6 @@ publish_devices(void)
 	return (const char**)sDeviceNames;
 }
 
-extern "C" device_hooks*
-find_device(const char* name)
-{
-	for (int32 i = 0; i < sDeviceCount; i++) {
-		if (strcmp(name, sDeviceNames[i]) == 0)
-			return &sHooks;
-	}
-	return NULL;
-}
-
 static int32
 find_index(const char* name)
 {
@@ -122,6 +135,12 @@ find_index(const char* name)
 	return -1;
 }
 
+extern "C" device_hooks*
+find_device(const char* name)
+{
+	return find_index(name) >= 0 ? &sHooks : NULL;
+}
+
 static status_t
 device_open(const char* name, uint32 flags, void** cookie)
 {
@@ -129,7 +148,7 @@ device_open(const char* name, uint32 flags, void** cookie)
 	int32 index = find_index(name);
 	if (index < 0 || cookie == NULL)
 		return B_BAD_VALUE;
-	*cookie = &sSharedInfo[index];
+	*cookie = (void*)(addr_t)index;
 	return B_OK;
 }
 
@@ -150,9 +169,30 @@ device_free(void* cookie)
 static status_t
 device_ioctl(void* cookie, uint32 op, void* buffer, size_t length)
 {
-	(void)cookie;
-	(void)op;
-	(void)buffer;
-	(void)length;
+	int32 index = (int32)(addr_t)cookie;
+	if (index < 0 || index >= sDeviceCount)
+		return B_BAD_VALUE;
+
+	if (op == B_GET_ACCELERANT_SIGNATURE) {
+		const char signature[] = "amdgpu_rdna4.accelerant";
+		if (length < sizeof(signature))
+			return B_BUFFER_OVERFLOW;
+		return user_memcpy(buffer, signature, sizeof(signature));
+	}
+
+	if (op == RDNA4_GET_PRIVATE_DATA) {
+		if (length < sizeof(rdna4_get_private_data))
+			return B_BUFFER_OVERFLOW;
+		rdna4_get_private_data data;
+		status_t status = user_memcpy(&data, buffer, sizeof(data));
+		if (status != B_OK || data.magic != RDNA4_PRIVATE_DATA_MAGIC)
+			return B_BAD_VALUE;
+		data.shared_info_area = clone_area("amdgpu_rdna4_shared", NULL,
+			B_ANY_ADDRESS, B_READ_AREA | B_WRITE_AREA, sSharedAreas[index]);
+		if (data.shared_info_area < 0)
+			return data.shared_info_area;
+		return user_memcpy(buffer, &data, sizeof(data));
+	}
+
 	return B_NOT_SUPPORTED;
 }

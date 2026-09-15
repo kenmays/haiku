@@ -44,10 +44,6 @@ RDNA4GFX::Submit(const uint32* commands, uint32 count, rdna4_fence* _fence)
 
 	_fence->sequence = fRing.Signal();
 	fSequence = _fence->sequence;
-
-	/* The ring currently stops at software staging. Hardware doorbell and
-	 * write-pointer programming must be supplied by the verified GFX12 ASIC
-	 * backend before this sequence represents GPU completion. */
 	return B_OK;
 }
 
@@ -59,7 +55,11 @@ RDNA4GFX::Wait(const rdna4_fence& fence, bigtime_t timeout)
 	if (fence.sequence == 0 || fence.sequence > fSequence)
 		return B_BAD_VALUE;
 	(void)timeout;
-	return B_OK;
+
+	/* Software staging has no asynchronous consumer. Completing the staged
+	 * queue here keeps ownership bounded until the hardware fence backend is
+	 * connected; this does not claim GPU execution. */
+	return fRing.Complete(fRing.Used());
 }
 
 status_t

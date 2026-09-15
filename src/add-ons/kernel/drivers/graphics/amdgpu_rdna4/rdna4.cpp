@@ -3,6 +3,7 @@
 #include <KernelExport.h>
 #include <PCI.h>
 #include <OS.h>
+#include <stdio.h>
 #include <string.h>
 
 static const rdna4_pci_device kDevices[] = {
@@ -63,7 +64,6 @@ rdna4_device_init(const pci_info& pci, rdna4_shared_info& shared)
 	if (shared.mmio_area < 0)
 		return shared.mmio_area;
 
-	/* The kernel device name is the stable clone-accelerant identifier. */
 	snprintf(shared.device_name, sizeof(shared.device_name),
 		"graphics/amdgpu_rdna4_%02x%02x%02x", shared.bus, shared.device,
 		shared.function);

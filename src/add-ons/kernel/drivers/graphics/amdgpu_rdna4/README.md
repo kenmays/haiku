@@ -1,34 +1,57 @@
 # AMD RDNA4 / GFX12 Haiku driver
 
-Experimental native Haiku graphics driver bring-up for AMD RDNA4.
+Experimental native Haiku graphics-driver bring-up for AMD RDNA4.
 
 Supported PCI IDs currently tracked by this driver:
 
-- 0x7550, 0x7551, 0x7580, 0x7581, 0x75a1, 0x75b0 — GFX1201/Navi 48 family
-- 0x7590, 0x7591 — GFX1200/GFX1201 Navi 44 family
+- 0x7550, 0x7551, 0x7580, 0x7581, 0x75a1, 0x75b0 — GFX1201 family
+- 0x7590, 0x7591 — GFX1200 family
 
-The driver is deliberately split into hardware discovery, memory/VM, GFX, SDMA, display, IRQ and accelerant layers. The initial safe mode is firmware/boot-framebuffer handoff: the driver identifies the GPU, maps its PCI BARs, creates shared state, and exposes the Haiku accelerant ABI without programming undocumented GFX12 registers.
+The driver is split into hardware discovery, memory/VM, GFX, SDMA, display,
+IRQ and accelerant layers. The current safe mode is discovery plus an
+accelerant ABI handoff: the driver identifies the GPU, records its PCI BAR
+layout, creates per-device shared state, and exposes only functionality that
+has a real implementation. It does not yet write undocumented GFX12/DCN4
+registers.
 
 ## Status
 
 - PCI discovery: implemented
-- BAR/MMIO discovery: implemented
 - per-device shared state: implemented
 - GFX1200/GFX1201 identification: implemented
-- boot framebuffer handoff: framework implemented
+- BAR/MMIO address discovery: implemented
+- multi-GPU device enumeration: implemented
 - accelerant device information: implemented
-- display mode programming: hardware-specific implementation pending
-- GFX12 command submission: hardware-specific implementation pending
-- GPUVM: hardware-specific implementation pending
-- SDMA: hardware-specific implementation pending
-- DCN4: hardware-specific implementation pending
-- VCN: hardware-specific implementation pending
-- Mesa/radeonsi/RADV winsys: separate follow-up layer
+- boot-framebuffer mode handoff: ABI path implemented; physical framebuffer
+  discovery/mapping still requires the display/firmware layer
+- standard mode-query ABI: implemented
+- preferred-mode ABI: implemented
+- framebuffer-config ABI: implemented conservatively
+- pixel-clock query ABI: implemented conservatively
+- EDID/DDC/AUX: pending DCN4 connector implementation
+- DPMS hardware programming: pending DCN4 implementation
+- display mode programming: pending DCN4 implementation
+- GFX12 command submission: pending exact firmware/register implementation
+- GPUVM hardware page tables/TLB invalidation: pending
+- SDMA rings: pending
+- interrupts/fences/vblank: pending
+- cursor/overlay/MST: pending
+- VCN: pending
+- SMU/power management: pending
+- Mesa/radeonsi/RADV winsys: separate integration layer
 
-Do not enable command submission on real hardware until the matching GFX12 register and firmware tables are imported from the exact upstream revision being targeted.
+The VM, GFX, SDMA and display classes currently provide software state and
+validation boundaries rather than pretending to perform hardware operations.
+Command submission must not be enabled on real hardware until the exact GFX12
+register definitions, firmware images and reset sequence for the target ASIC
+revision are integrated and validated.
 
 ## Reference architecture
 
-Haiku accelerant -> kernel device ioctl -> RDNA4 device -> MMIO/VRAM/VM/GFX/SDMA/DCN/VCN.
+Haiku accelerant -> kernel device ioctl -> RDNA4 device -> MMIO/VRAM/VM/GFX/
+SDMA/DCN/VCN.
 
-The implementation intentionally follows Haiku's existing graphics-driver conventions used by `radeon_hd` rather than attempting to reuse Linux DRM internals directly.
+The implementation follows Haiku's existing graphics-driver conventions rather
+than attempting to reuse Linux DRM internals directly. Linux amdgpu sources are
+used as hardware-programming references only; they are not copied as a Haiku
+userspace ABI.

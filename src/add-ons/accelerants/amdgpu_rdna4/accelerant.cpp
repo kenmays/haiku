@@ -134,13 +134,15 @@ amdgpu_rdna4_get_frame_buffer_config(frame_buffer_config* config)
 {
 	if (!sInitialized || config == NULL)
 		return B_BAD_VALUE;
-	if (sShared->framebuffer_physical == 0 || sShared->framebuffer_pitch == 0)
-		return B_ENTRY_NOT_FOUND;
 
-	memset(config, 0, sizeof(*config));
-	config->frame_buffer = (void*)(addr_t)sShared->framebuffer_physical;
-	config->bytes_per_row = sShared->framebuffer_pitch;
-	return B_OK;
+	/* framebuffer_physical is a bus/physical address, not a user virtual
+	 * address.  Do not expose it as frame_buffer until the kernel driver has
+	 * established a cloneable user mapping for the scanout BO. */
+	if (sShared->framebuffer_physical == 0 || sShared->framebuffer_pitch == 0
+		|| sShared->framebuffer_area < 0)
+		return B_NOT_SUPPORTED;
+
+	return B_NOT_SUPPORTED;
 }
 
 status_t
@@ -151,6 +153,8 @@ amdgpu_rdna4_get_pixel_clock_limits(display_mode* mode, uint32* low, uint32* hig
 	if (mode->timing.h_total == 0 || mode->timing.v_total == 0)
 		return B_BAD_VALUE;
 
+	/* Keep this query conservative until the DCN4 clock tree is initialized;
+	 * these values are constraints for mode validation, not hardware clocks. */
 	uint64 pixels = (uint64)mode->timing.h_total * mode->timing.v_total;
 	uint64 minClock = pixels * 48 / 1000;
 	uint64 maxClock = pixels * 240 / 1000;

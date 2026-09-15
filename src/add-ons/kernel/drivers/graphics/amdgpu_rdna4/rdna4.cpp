@@ -45,14 +45,14 @@ rdna4_device_init(const pci_info& pci, rdna4_shared_info& shared)
 	shared.function = pci.function;
 	shared.revision = pci.revision;
 
-	/* BAR0 is the conventional AMD graphics MMIO aperture. */
 	shared.mmio_physical = pci.u.h0.base_registers[0];
 	shared.mmio_size = pci.u.h0.base_register_sizes[0];
 	shared.mmio_area = -1;
 	shared.framebuffer_area = -1;
-	shared.framebuffer_format = B_RGB32;
+	/* B_RGB32_LITTLE is a userland Accelerant.h value; kernel keeps no
+	 * dependency on Accelerant.h and reports the format through the ABI. */
+	shared.framebuffer_format = 0;
 
-	/* Safe initial capability set: boot framebuffer only. */
 	shared.capabilities = 0;
 	shared.initialized = true;
 	shared.framebuffer_fallback = true;

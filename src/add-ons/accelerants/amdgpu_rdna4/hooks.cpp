@@ -10,6 +10,12 @@ get_accelerant_hook(uint32 feature, void* data)
 			return (void*)amdgpu_rdna4_init_accelerant;
 		case B_UNINIT_ACCELERANT:
 			return (void*)amdgpu_rdna4_uninit_accelerant;
+		case B_CLONE_ACCELERANT:
+			return (void*)amdgpu_rdna4_clone_accelerant;
+		case B_ACCELERANT_CLONE_INFO_SIZE:
+			return (void*)amdgpu_rdna4_accelerant_clone_info_size;
+		case B_GET_ACCELERANT_CLONE_INFO:
+			return (void*)amdgpu_rdna4_get_accelerant_clone_info;
 		case B_GET_ACCELERANT_DEVICE_INFO:
 			return (void*)amdgpu_rdna4_get_device_info;
 		case B_DPMS_CAPABILITIES:

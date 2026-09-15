@@ -3,6 +3,8 @@
 
 #include <SupportDefs.h>
 
+#include "rdna4_ring.h"
+
 struct rdna4_fence {
 	uint64 sequence;
 };
@@ -19,6 +21,7 @@ public:
 private:
 	bool fInitialized;
 	uint64 fSequence;
+	RDNA4Ring fRing;
 };
 
 #endif

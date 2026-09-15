@@ -3,8 +3,8 @@
 
 #include <SupportDefs.h>
 
-/* Software ring model used by the hardware backend.  It deliberately does
- * not touch MMIO; packet emission and doorbells are generation-specific. */
+/* Software ring model used by the hardware backend. Packet emission,
+ * write pointers and doorbells remain generation-specific. */
 class RDNA4Ring {
 public:
 	RDNA4Ring();

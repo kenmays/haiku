@@ -1,0 +1,22 @@
+SubDir HAIKU_TOP src add-ons kernel drivers graphics amdgpu_rdna4 ;
+
+UsePrivateHeaders graphics kernel ;
+UsePrivateHeaders shared ;
+UsePrivateKernelHeaders ;
+
+KernelAddon amdgpu_rdna4 :
+	driver.cpp
+	rdna4.cpp
+	rdna4_mm.cpp
+	rdna4_vm.cpp
+	rdna4_ring.cpp
+	rdna4_gfx.cpp
+	rdna4_sdma.cpp
+	rdna4_display.cpp
+	rdna4_caps.cpp
+	rdna4_firmware.cpp
+	rdna4_edid.cpp
+	rdna4_backend.cpp
+	rdna4_backend_stub.cpp
+	: libgraphicscommon.a
+;

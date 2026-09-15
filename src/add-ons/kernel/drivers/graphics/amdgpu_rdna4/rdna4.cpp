@@ -35,22 +35,29 @@ rdna4_device_init(const pci_info& pci, rdna4_shared_info& shared)
 		return B_NOT_SUPPORTED;
 
 	memset(&shared, 0, sizeof(shared));
-	shared.version = 1;
+	shared.version = 2;
+	shared.size = sizeof(shared);
 	shared.chip = device->chip;
 	shared.pci_vendor_id = pci.vendor_id;
 	shared.pci_device_id = pci.device_id;
 	shared.bus = pci.bus;
 	shared.device = pci.device;
 	shared.function = pci.function;
+	shared.revision = pci.revision;
 
-	/*
-	 * This first-stage driver deliberately does not write GFX12/DCN4
-	 * registers.  Firmware ownership and the boot display remain intact.
-	 * Exact BAR selection and resource mapping are performed by the
-	 * platform driver once the Haiku PCI API exposes the required BAR data.
-	 */
+	/* BAR0 is the conventional AMD graphics MMIO aperture. */
+	shared.mmio_physical = pci.u.h0.base_registers[0];
+	shared.mmio_size = pci.u.h0.base_register_sizes[0];
+	shared.mmio_area = -1;
+	shared.framebuffer_area = -1;
+	shared.framebuffer_format = B_RGB32;
+
+	/* Safe initial capability set: boot framebuffer only. */
+	shared.capabilities = 0;
 	shared.initialized = true;
 	shared.framebuffer_fallback = true;
+	shared.display_active = false;
+	shared.cursor_visible = true;
 	return B_OK;
 }
 
@@ -58,4 +65,6 @@ void
 rdna4_device_uninit(rdna4_shared_info& shared)
 {
 	shared.initialized = false;
+	shared.mmio_area = -1;
+	shared.framebuffer_area = -1;
 }

@@ -50,7 +50,7 @@ RDNA4Ring::Reserve(uint32 dwords, uint32* _offset)
 		return B_BAD_VALUE;
 	if (dwords > Free())
 		return B_WOULD_BLOCK;
-	if (fWriteOffset + dwords > fCapacity)
+	if (fWriteOffset > fCapacity - dwords)
 		return B_WOULD_BLOCK;
 	*_offset = fWriteOffset;
 	return B_OK;
@@ -61,7 +61,7 @@ RDNA4Ring::Write(uint32 offset, const uint32* commands, uint32 count)
 {
 	if (fBuffer == NULL || commands == NULL || count == 0)
 		return B_BAD_VALUE;
-	if (offset >= fCapacity || count > fCapacity - offset)
+	if (offset > fCapacity || count > fCapacity - offset)
 		return B_BAD_VALUE;
 	memcpy(fBuffer + offset, commands, (size_t)count * sizeof(uint32));
 	return B_OK;
@@ -72,10 +72,24 @@ RDNA4Ring::Commit(uint32 dwords)
 {
 	if (fBuffer == NULL || dwords == 0 || dwords > Free())
 		return B_BAD_VALUE;
-	if (fWriteOffset + dwords > fCapacity)
+	if (fWriteOffset > fCapacity - dwords)
 		return B_BAD_VALUE;
 	fWriteOffset += dwords;
 	fUsed += dwords;
+	return B_OK;
+}
+
+status_t
+RDNA4Ring::Complete(uint32 dwords)
+{
+	if (fBuffer == NULL || dwords == 0 || dwords > fUsed)
+		return B_BAD_VALUE;
+
+	/* The current ring is a linear staging queue. Hardware-backed rings will
+	 * replace this with read/write pointers and wrap-around semantics. */
+	fUsed -= dwords;
+	if (fUsed == 0)
+		fWriteOffset = 0;
 	return B_OK;
 }
 

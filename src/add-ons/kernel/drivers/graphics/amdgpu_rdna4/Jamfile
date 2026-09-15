@@ -13,5 +13,6 @@ KernelAddon amdgpu_rdna4 :
 	rdna4_sdma.cpp
 	rdna4_display.cpp
 	rdna4_caps.cpp
+	rdna4_firmware.cpp
 	: libgraphicscommon.a
 ;

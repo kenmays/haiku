@@ -8,11 +8,10 @@ Supported PCI IDs currently tracked by this driver:
 - 0x7590, 0x7591 — GFX1200 family
 
 The driver is split into hardware discovery, memory/VM, GFX, SDMA, display,
-IRQ and accelerant layers. The current safe mode is discovery plus an
-accelerant ABI handoff: the driver identifies the GPU, records its PCI BAR
-layout, creates per-device shared state, and exposes only functionality that
-has a real implementation. It does not yet write undocumented GFX12/DCN4
-registers.
+IRQ and accelerant layers. The safe mode is discovery plus an accelerant ABI
+handoff: the driver identifies the GPU, records its PCI BAR layout, creates
+per-device shared state, and exposes only functionality with an actual
+implementation. It does not issue undocumented GFX12/DCN4 register writes.
 
 ## Status
 
@@ -45,17 +44,15 @@ registers.
 - SMU/power management: pending
 - Mesa/radeonsi/RADV winsys: separate integration layer
 
-The VM, GFX, SDMA and display classes currently provide software state and
-validation boundaries rather than pretending to perform hardware operations.
-The VM layer records the GFX12 four-level/4 KiB/48-bit address geometry and
-architectural PTE/PDE field encoding without enabling unverified MMIO. The
-ring layer now supplies bounded software staging storage and monotonic fence
-sequences that can be connected to the verified hardware ring/interrupt path.
+The VM, GFX, SDMA and display classes provide software state and validation
+boundaries rather than pretending to perform hardware operations. The ring
+layer supplies bounded staging storage and monotonic fence sequences that can
+be connected to a verified hardware ring/interrupt path.
 
-The firmware layer now exposes the exact GFX12 firmware basenames used by the
-hardware backend: `amdgpu/gfx1200_{pfp,me,mec,rlc,toc}.bin` and the corresponding
-`gfx1201` names. DMCUB is intentionally not guessed from the GFX version because
-its filename is tied to the DCN revision.
+The firmware layer exposes the GFX12 firmware basenames used by the hardware
+backend: `amdgpu/gfx1200_{pfp,me,mec,rlc,toc}.bin` and corresponding `gfx1201`
+names. DMCUB is intentionally not guessed from the GFX version because its
+filename is tied to the DCN revision.
 
 ## Reference architecture
 
@@ -75,4 +72,4 @@ reset/clock initialization, GPUVM table allocation and TLB invalidation, GFX/SDM
 ring setup and doorbells, interrupt/fence handling, DCN4 connector/AUX/EDID and
 modeset programming, cursor/overlay support, VCN integration, power management,
 and Mesa winsys integration. These are deliberately not represented as complete
-until they can be built and exercised against the corresponding hardware.
+until they can be built and exercised against corresponding hardware.

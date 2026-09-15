@@ -1,6 +1,7 @@
 #include "accelerant.h"
 #include "accelerant_protos.h"
 
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/ioctl.h>
@@ -10,33 +11,38 @@ static int sFD = -1;
 static area_id sSharedArea = -1;
 static display_mode sMode;
 static bool sInitialized = false;
+static bool sIsClone = false;
 static uint32 sModeCount = 0;
 static rdna4_shared_info* sShared = NULL;
 
 rdna4_shared_info* gSharedInfo = NULL;
 
-status_t
-amdgpu_rdna4_init_accelerant(int fd)
+static status_t
+init_common(int fd, bool isClone)
 {
-	if (fd < 0)
+	if (fd < 0 || sInitialized)
 		return B_BAD_VALUE;
 
 	rdna4_get_private_data data;
 	data.magic = RDNA4_PRIVATE_DATA_MAGIC;
 	data.shared_info_area = -1;
 	if (ioctl(fd, RDNA4_GET_PRIVATE_DATA, &data, sizeof(data)) < 0)
-		return B_ERROR;
+		return errno;
 	if (data.shared_info_area < 0)
-		return B_ERROR;
+		return data.shared_info_area;
 
 	void* address = NULL;
-	if (area_for(data.shared_info_area, &address) != B_OK)
-		return B_ERROR;
+	status_t status = area_for(data.shared_info_area, &address);
+	if (status != B_OK) {
+		delete_area(data.shared_info_area);
+		return status;
+	}
 
 	sFD = fd;
 	sSharedArea = data.shared_info_area;
 	sShared = (rdna4_shared_info*)address;
 	gSharedInfo = sShared;
+	sIsClone = isClone;
 	memset(&sMode, 0, sizeof(sMode));
 
 	if (sShared->framebuffer_width != 0 && sShared->framebuffer_height != 0
@@ -55,6 +61,50 @@ amdgpu_rdna4_init_accelerant(int fd)
 	return B_OK;
 }
 
+status_t
+amdgpu_rdna4_init_accelerant(int fd)
+{
+	return init_common(fd, false);
+}
+
+ssize_t
+amdgpu_rdna4_accelerant_clone_info_size()
+{
+	return RDNA4_DEVICE_NAME_LENGTH;
+}
+
+void
+amdgpu_rdna4_get_accelerant_clone_info(void* info)
+{
+	if (info == NULL)
+		return;
+	if (sShared != NULL)
+		memcpy(info, sShared->device_name, RDNA4_DEVICE_NAME_LENGTH);
+}
+
+status_t
+amdgpu_rdna4_clone_accelerant(void* info)
+{
+	if (info == NULL || sInitialized)
+		return B_BAD_VALUE;
+
+	char path[B_PATH_NAME_LENGTH];
+	if (RDNA4_DEVICE_NAME_LENGTH + 6 > sizeof(path))
+		return B_BUFFER_OVERFLOW;
+	memset(path, 0, sizeof(path));
+	strlcpy(path, "/dev/", sizeof(path));
+	strlcat(path, (const char*)info, sizeof(path));
+
+	int fd = open(path, B_READ_WRITE);
+	if (fd < 0)
+		return errno;
+
+	status_t status = init_common(fd, true);
+	if (status != B_OK)
+		close(fd);
+	return status;
+}
+
 void
 amdgpu_rdna4_uninit_accelerant()
 {
@@ -63,8 +113,11 @@ amdgpu_rdna4_uninit_accelerant()
 	sSharedArea = -1;
 	sShared = NULL;
 	gSharedInfo = NULL;
+	if (sIsClone && sFD >= 0)
+		close(sFD);
 	sFD = -1;
 	sModeCount = 0;
+	sIsClone = false;
 	sInitialized = false;
 }
 
@@ -134,14 +187,9 @@ amdgpu_rdna4_get_frame_buffer_config(frame_buffer_config* config)
 {
 	if (!sInitialized || config == NULL)
 		return B_BAD_VALUE;
-
-	/* framebuffer_physical is a bus/physical address, not a user virtual
-	 * address.  Do not expose it as frame_buffer until the kernel driver has
-	 * established a cloneable user mapping for the scanout BO. */
 	if (sShared->framebuffer_physical == 0 || sShared->framebuffer_pitch == 0
 		|| sShared->framebuffer_area < 0)
 		return B_NOT_SUPPORTED;
-
 	return B_NOT_SUPPORTED;
 }
 
@@ -153,8 +201,6 @@ amdgpu_rdna4_get_pixel_clock_limits(display_mode* mode, uint32* low, uint32* hig
 	if (mode->timing.h_total == 0 || mode->timing.v_total == 0)
 		return B_BAD_VALUE;
 
-	/* Keep this query conservative until the DCN4 clock tree is initialized;
-	 * these values are constraints for mode validation, not hardware clocks. */
 	uint64 pixels = (uint64)mode->timing.h_total * mode->timing.v_total;
 	uint64 minClock = pixels * 48 / 1000;
 	uint64 maxClock = pixels * 240 / 1000;
@@ -173,7 +219,6 @@ amdgpu_rdna4_get_edid_info(void* info, size_t size, uint32* version)
 	(void)version;
 	if (!sInitialized)
 		return B_NO_INIT;
-	/* EDID/DDC/AUX is implemented by the future DCN4 connector layer. */
 	return B_NOT_SUPPORTED;
 }
 

@@ -76,7 +76,7 @@ find_devices()
 		void* address = NULL;
 		sSharedAreas[index] = create_area("amdgpu_rdna4_shared", &address,
 			B_ANY_ADDRESS, B_PAGE_SIZE, B_FULL_LOCK,
-			B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA);
+			B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA | B_CLONEABLE_AREA);
 		if (sSharedAreas[index] < 0)
 			return sSharedAreas[index];
 

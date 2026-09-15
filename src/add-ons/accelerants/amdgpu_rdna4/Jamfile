@@ -1,0 +1,10 @@
+SubDir HAIKU_TOP src add-ons accelerants amdgpu_rdna4 ;
+SEARCH_SOURCE += [ FDirName $(HAIKU_TOP) src add-ons accelerants common ] ;
+UsePrivateHeaders graphics ;
+UsePrivateHeaders shared ;
+
+Addon amdgpu_rdna4.accelerant :
+	accelerant.cpp
+	hooks.cpp
+	: be libaccelerantscommon.a [ TargetLibsupc++ ]
+;

@@ -9,6 +9,7 @@ KernelAddon amdgpu_rdna4 :
 	rdna4.cpp
 	rdna4_mm.cpp
 	rdna4_vm.cpp
+	rdna4_ring.cpp
 	rdna4_gfx.cpp
 	rdna4_sdma.cpp
 	rdna4_display.cpp

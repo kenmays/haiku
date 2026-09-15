@@ -5,8 +5,6 @@
 
 #include "rdna4_hw.h"
 
-/* IP blocks are kept separate because RDNA4 is an SoC composed of versioned
- * hardware blocks. The backend selects implementations only after discovery. */
 enum rdna4_ip_block {
 	RDNA4_IP_COMMON = 0,
 	RDNA4_IP_GMC,
@@ -68,6 +66,13 @@ public:
 	const rdna4_backend_info& Info() const { return fInfo; }
 	const rdna4_hw_ops* HardwareOps() const { return fHardwareOps; }
 	void SetHardwareOps(const rdna4_hw_ops* ops) { fHardwareOps = ops; }
+
+	/* Capability gate used by the accelerant and future Mesa winsys. */
+	bool IsRunning() const { return fInfo.state == RDNA4_BACKEND_RUNNING; }
+	bool HasIP(rdna4_ip_block block) const
+	{
+		return block < RDNA4_IP_COUNT && fInfo.ip[block].present;
+	}
 
 private:
 	const rdna4_backend_ops* fOps;

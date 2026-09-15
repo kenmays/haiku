@@ -9,5 +9,6 @@ Addon amdgpu_rdna4.accelerant :
 	rdna4_frontend.cpp
 	rdna4_frontend_manager.cpp
 	rdna4_frontend_edid.cpp
+	rdna4_frontend_events.cpp
 	: be libaccelerantscommon.a [ TargetLibsupc++ ]
 ;

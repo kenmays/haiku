@@ -22,17 +22,20 @@ registers.
 - BAR/MMIO address discovery: implemented
 - multi-GPU device enumeration: implemented
 - accelerant device information: implemented
+- accelerant cloning: implemented
 - boot-framebuffer mode handoff: ABI path implemented; physical framebuffer
   discovery/mapping still requires the display/firmware layer
 - standard mode-query ABI: implemented
 - preferred-mode ABI: implemented
 - framebuffer-config ABI: implemented conservatively
 - pixel-clock query ABI: implemented conservatively
+- GFX12 VM geometry and PTE/PDE encoding: implemented as architecture helpers
+- software GPUVA mapping validation: implemented
 - EDID/DDC/AUX: pending DCN4 connector implementation
 - DPMS hardware programming: pending DCN4 implementation
 - display mode programming: pending DCN4 implementation
 - GFX12 command submission: pending exact firmware/register implementation
-- GPUVM hardware page tables/TLB invalidation: pending
+- GPUVM hardware page-table allocation/TLB invalidation: pending
 - SDMA rings: pending
 - interrupts/fences/vblank: pending
 - cursor/overlay/MST: pending
@@ -42,6 +45,8 @@ registers.
 
 The VM, GFX, SDMA and display classes currently provide software state and
 validation boundaries rather than pretending to perform hardware operations.
+The VM layer now records the GFX12 four-level/4 KiB/48-bit address geometry
+and architectural PTE/PDE field encoding without enabling unverified MMIO.
 Command submission must not be enabled on real hardware until the exact GFX12
 register definitions, firmware images and reset sequence for the target ASIC
 revision are integrated and validated.

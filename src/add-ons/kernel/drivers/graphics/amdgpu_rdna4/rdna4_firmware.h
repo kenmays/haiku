@@ -3,7 +3,6 @@
 
 #include <SupportDefs.h>
 
-#define RDNA4_FIRMWARE_MAGIC 0x42494853U
 #define RDNA4_FIRMWARE_MAX_NAME 96
 
 enum rdna4_firmware_type {
@@ -37,6 +36,8 @@ status_t rdna4_firmware_parse(const void* data, size_t size,
 	rdna4_firmware_image& image);
 status_t rdna4_firmware_validate(const rdna4_firmware_set& firmware);
 
+/* Returns the Linux-compatible firmware basename for the selected GFX12
+ * generation. The caller owns the returned static string. */
 const char* rdna4_firmware_name(rdna4_firmware_type type,
 	uint32 gfx_version);
 

@@ -16,5 +16,6 @@ KernelAddon amdgpu_rdna4 :
 	rdna4_caps.cpp
 	rdna4_firmware.cpp
 	rdna4_edid.cpp
+	rdna4_backend.cpp
 	: libgraphicscommon.a
 ;

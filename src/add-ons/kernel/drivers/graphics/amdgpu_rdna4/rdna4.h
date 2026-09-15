@@ -10,6 +10,7 @@
 #define RDNA4_GET_PRIVATE_DATA 0x52443440
 #define RDNA4_ACCELERANT_NAME "amdgpu_rdna4"
 #define RDNA4_MAX_CARDS 8
+#define RDNA4_DEVICE_NAME_LENGTH 64
 
 #define RDNA4_GFX1200 0x1200
 #define RDNA4_GFX1201 0x1201
@@ -37,6 +38,7 @@ struct rdna4_shared_info {
 	uint8 device;
 	uint8 function;
 	uint8 revision;
+	char device_name[RDNA4_DEVICE_NAME_LENGTH];
 
 	uint64 mmio_physical;
 	uint64 mmio_size;

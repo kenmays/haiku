@@ -27,12 +27,6 @@ uint32 amdgpu_rdna4_dpms_capabilities(void);
 uint32 amdgpu_rdna4_dpms_mode(void);
 status_t amdgpu_rdna4_set_dpms_mode(uint32 mode);
 
-uint32 amdgpu_rdna4_accelerant_engine_count(void);
-status_t amdgpu_rdna4_acquire_engine(uint32 capabilities, uint32 maxWait,
-	sync_token* syncToken, engine_token** engineToken);
-status_t amdgpu_rdna4_release_engine(engine_token* engineToken,
-	sync_token* syncToken);
-
 #ifdef __cplusplus
 }
 #endif

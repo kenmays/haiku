@@ -9,10 +9,9 @@ rdna4_firmware_parse(const void* data, size_t size, rdna4_firmware_image& image)
 	if (data == NULL || size == 0)
 		return B_BAD_VALUE;
 
-	/* Keep parsing opaque until the exact Haiku firmware ABI and the GFX12
-	 * firmware container used by the target ASIC are available.  We retain
-	 * the image verbatim so a later loader can consume it without another
-	 * ownership transition. */
+	/* The image remains owned by the caller.  Parsing the generation-specific
+	 * firmware header belongs in the hardware loader once the target Haiku
+	 * firmware ABI is selected. */
 	image.data = data;
 	image.size = size;
 	image.valid = true;
@@ -38,14 +37,48 @@ rdna4_firmware_validate(const rdna4_firmware_set& firmware)
 const char*
 rdna4_firmware_name(rdna4_firmware_type type, uint32 gfx_version)
 {
-	const char* suffix = gfx_version == 0x1200 ? "gfx1200" : "gfx1201";
+	const char* suffix;
+	switch (gfx_version) {
+		case 0x1200:
+			suffix = "gfx1200";
+			break;
+		case 0x1201:
+			suffix = "gfx1201";
+			break;
+		default:
+			return NULL;
+	}
+
 	switch (type) {
-		case RDNA4_FW_PFP: return suffix;
-		case RDNA4_FW_ME: return suffix;
-		case RDNA4_FW_MEC: return suffix;
-		case RDNA4_FW_RLC: return suffix;
-		case RDNA4_FW_TOC: return suffix;
-		case RDNA4_FW_DMCUB: return "dcn";
+		case RDNA4_FW_PFP: {
+			static const char pfp1200[] = "amdgpu/gfx1200_pfp.bin";
+			static const char pfp1201[] = "amdgpu/gfx1201_pfp.bin";
+			return suffix[3] == '0' ? pfp1200 : pfp1201;
+		}
+		case RDNA4_FW_ME: {
+			static const char me1200[] = "amdgpu/gfx1200_me.bin";
+			static const char me1201[] = "amdgpu/gfx1201_me.bin";
+			return suffix[3] == '0' ? me1200 : me1201;
+		}
+		case RDNA4_FW_MEC: {
+			static const char mec1200[] = "amdgpu/gfx1200_mec.bin";
+			static const char mec1201[] = "amdgpu/gfx1201_mec.bin";
+			return suffix[3] == '0' ? mec1200 : mec1201;
+		}
+		case RDNA4_FW_RLC: {
+			static const char rlc1200[] = "amdgpu/gfx1200_rlc.bin";
+			static const char rlc1201[] = "amdgpu/gfx1201_rlc.bin";
+			return suffix[3] == '0' ? rlc1200 : rlc1201;
+		}
+		case RDNA4_FW_TOC: {
+			static const char toc1200[] = "amdgpu/gfx1200_toc.bin";
+			static const char toc1201[] = "amdgpu/gfx1201_toc.bin";
+			return suffix[3] == '0' ? toc1200 : toc1201;
+		}
+		case RDNA4_FW_DMCUB:
+			/* DMCUB filenames are DCN-revision-specific; do not guess a
+			 * revision from the GFX version. */
+			return NULL;
 	}
 	return NULL;
 }

@@ -298,7 +298,7 @@ status_t
 virtio_gpu_detach_backing(virtio_gpu_driver_info* info, int resourceId)
 {
 	CALLED();
-	struct virtio_gpu_resource_detach_backing backing;
+	struct virtio_gpu_resource_detach_backing backing = {};
 	struct virtio_gpu_ctrl_hdr response = {};
 
 	backing.hdr.type = VIRTIO_GPU_CMD_RESOURCE_DETACH_BACKING;
@@ -457,6 +457,7 @@ virtio_gpu_set_display_mode(virtio_gpu_driver_info* info, display_mode *mode)
 		sharedInfo.current_mode.virtual_width = info->displayWidth;
 		sharedInfo.current_mode.virtual_height = info->displayHeight;
 		sharedInfo.current_mode.space = B_RGB32;
+		sharedInfo.current_mode.timing = mode->timing;
 	}
 
 	return B_OK;
@@ -529,6 +530,7 @@ virtio_gpu_init_device(void* _info, void** _cookie)
 	return B_OK;
 
 err3:
+	mutex_destroy(&info->commandLock);
 err2:
 	delete_area(info->commandArea);
 err1:

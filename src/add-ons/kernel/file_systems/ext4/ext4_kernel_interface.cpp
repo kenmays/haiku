@@ -1735,15 +1735,15 @@ fs_vnode_ops gExt4VnodeOps = {
 };
 
 
-static file_system_module_info sExt2FileSystem = {
+static file_system_module_info sExt4FileSystem = {
 	{
-		"file_systems/ext2" B_CURRENT_FS_API_VERSION,
+		"file_systems/ext4" B_CURRENT_FS_API_VERSION,
 		0,
 		NULL,
 	},
 
 	"ext4",								// short_name
-	"Linux Extended File System 2/3/4",	// pretty_name
+	"Linux Extended File System 4",	// pretty_name
 	B_DISK_SYSTEM_SUPPORTS_WRITING
 		| B_DISK_SYSTEM_SUPPORTS_CONTENT_NAME,	// DDM flags
 

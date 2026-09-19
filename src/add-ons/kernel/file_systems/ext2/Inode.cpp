@@ -7,6 +7,7 @@
 
 #include "Inode.h"
 #include "../ext4/OrphanList.h"
+#include "../ext4/OrphanFile.h"
 
 #include <string.h>
 #include <util/AutoLock.h>
@@ -485,10 +486,18 @@ Inode::Unlink(Transaction& transaction)
 	if ((IsDirectory() && numLinks == 2) || (numLinks == 1))  {
 		fUnlinked = true;
 
-		/* Keep the inode reachable from the on-disk orphan list until its
-		 * blocks are reclaimed.  This survives a crash between unlink and
-		 * final inode reclamation. */
-		status_t orphanStatus = Ext4OrphanList::Add(*fVolume, *this, transaction);
+		/* Keep the inode reachable from ext4's orphan machinery until its
+		 * blocks are reclaimed. Modern orphan_file filesystems use the
+		 * fixed-size orphan table; older ext4 uses s_last_orphan. */
+		status_t orphanStatus;
+		if ((fVolume->SuperBlock().CompatibleFeatures()
+				& EXT4_FEATURE_ORPHAN_FILE) != 0) {
+			orphanStatus = Ext4OrphanFile::Add(*fVolume, *this, transaction);
+			if (orphanStatus == B_OK)
+				orphanStatus = Ext4OrphanFile::MarkPresent(*fVolume,
+					transaction, true);
+		} else
+			orphanStatus = Ext4OrphanList::Add(*fVolume, *this, transaction);
 		if (orphanStatus != B_OK)
 			return orphanStatus;
 

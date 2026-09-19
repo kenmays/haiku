@@ -88,7 +88,30 @@ struct ext2_super_block {
 	uint8	checksum_type;
 	uint16	_reserved4;
 	uint64	kb_written;
-	uint32	_reserved5[60];
+	uint32	snapshot_inum;
+	uint32	snapshot_id;
+	uint64	snapshot_r_blocks_count;
+	uint32	snapshot_list;
+	uint32	error_count;
+	uint32	first_error_time;
+	uint32	first_error_ino;
+	uint64	first_error_block;
+	uint8	first_error_func[32];
+	uint32	first_error_line;
+	uint32	last_error_time;
+	uint32	last_error_ino;
+	uint32	last_error_line;
+	uint64	last_error_block;
+	uint8	last_error_func[32];
+	uint8	mount_opts[64];
+	uint32	usr_quota_inum;
+	uint32	grp_quota_inum;
+	uint32	overhead_clusters;
+	uint32	backup_bgs[2];
+	uint8	encrypt_algos[4];
+	uint8	encrypt_pw_salt[16];
+	uint32	lpf_ino;
+	uint32	prj_quota_inum;
 	uint32	checksum_seed;
 	uint8	wtime_hi;
 	uint8	mtime_hi;
@@ -101,7 +124,9 @@ struct ext2_super_block {
 	uint16	encoding;
 	uint16	encoding_flags;
 	uint32	orphan_file_inum;
-	uint32	_reserved6[94];
+	uint16	def_resuid_hi;
+	uint16	def_resgid_hi;
+	uint32	_reserved6[93];
 	uint32	checksum;
 
 	uint16 Magic() const { return B_LENDIAN_TO_HOST_INT16(magic); }
@@ -197,6 +222,9 @@ struct ext2_super_block {
 #define EXT2_FEATURE_RESIZE_INODE				0x0010
 #define EXT2_FEATURE_DIRECTORY_INDEX			0x0020
 #define EXT2_FEATURE_SPARSESUPER2				0x0200
+#define EXT4_FEATURE_FAST_COMMIT				0x0400
+#define EXT4_FEATURE_STABLE_INODES				0x0800
+#define EXT4_FEATURE_ORPHAN_FILE				0x1000
 
 // read-only compatible features
 #define EXT2_READ_ONLY_FEATURE_SPARSE_SUPER		0x0001
@@ -211,6 +239,8 @@ struct ext2_super_block {
 #define EXT4_READ_ONLY_FEATURE_METADATA_CSUM	0x0400
 #define EXT4_READ_ONLY_FEATURE_READONLY			0x1000
 #define EXT4_READ_ONLY_FEATURE_PROJECT			0x2000
+#define EXT4_READ_ONLY_FEATURE_VERITY			0x8000
+#define EXT4_READ_ONLY_FEATURE_ORPHAN_PRESENT	0x10000
 
 // incompatible features
 #define EXT2_INCOMPATIBLE_FEATURE_COMPRESSION	0x0001
@@ -228,6 +258,7 @@ struct ext2_super_block {
 #define EXT2_INCOMPATIBLE_FEATURE_LARGEDIR		0x4000
 #define EXT2_INCOMPATIBLE_FEATURE_INLINE_DATA	0x8000
 #define EXT2_INCOMPATIBLE_FEATURE_ENCRYPT		0x10000
+#define EXT2_INCOMPATIBLE_FEATURE_CASEFOLD		0x20000
 
 // states
 #define EXT2_STATE_VALID						0x01

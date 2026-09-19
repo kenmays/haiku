@@ -6,6 +6,7 @@
 
 
 #include "Inode.h"
+#include "../ext4/OrphanList.h"
 
 #include <string.h>
 #include <util/AutoLock.h>
@@ -471,6 +472,13 @@ Inode::Unlink(Transaction& transaction)
 
 	if ((IsDirectory() && numLinks == 2) || (numLinks == 1))  {
 		fUnlinked = true;
+
+		/* Keep the inode reachable from the on-disk orphan list until its
+		 * blocks are reclaimed.  This survives a crash between unlink and
+		 * final inode reclamation. */
+		status_t orphanStatus = Ext4OrphanList::Add(*fVolume, *this, transaction);
+		if (orphanStatus != B_OK)
+			return orphanStatus;
 
 		fNode.num_links = 0;
 

@@ -1757,6 +1757,6 @@ static file_system_module_info sExt4FileSystem = {
 
 
 module_info *modules[] = {
-	(module_info *)&sExt2FileSystem,
+	(module_info *)&sExt4FileSystem,
 	NULL,
 };

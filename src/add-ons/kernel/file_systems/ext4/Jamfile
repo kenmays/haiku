@@ -32,6 +32,7 @@ KernelAddon ext4 :
 	Ext4FeatureSet.cpp
 	Ext4Checksum.cpp
 	OrphanList.cpp
+	OrphanFile.cpp
 	ext4_kernel_interface.cpp
 ;
 

@@ -9,6 +9,9 @@
 #define EXT4_COMPAT_RESIZE_INODE      0x0010
 #define EXT4_COMPAT_DIR_INDEX         0x0020
 #define EXT4_COMPAT_SPARSE_SUPER2     0x0200
+#define EXT4_COMPAT_FAST_COMMIT        0x0400
+#define EXT4_COMPAT_STABLE_INODES      0x0800
+#define EXT4_COMPAT_ORPHAN_FILE        0x1000
 
 #define EXT4_RO_SPARSE_SUPER          0x0001
 #define EXT4_RO_LARGE_FILE            0x0002
@@ -19,6 +22,9 @@
 #define EXT4_RO_EXTRA_ISIZE           0x0040
 #define EXT4_RO_METADATA_CSUM         0x0400
 #define EXT4_RO_READONLY              0x1000
+#define EXT4_RO_PROJECT                0x2000
+#define EXT4_RO_VERITY                 0x8000
+#define EXT4_RO_ORPHAN_PRESENT         0x10000
 
 #define EXT4_INCOMPAT_COMPRESSION      0x0001
 #define EXT4_INCOMPAT_FILETYPE        0x0002
@@ -47,7 +53,10 @@ Ext4FeatureSet::SupportedCompat()
 		| EXT4_COMPAT_EXT_ATTR
 		| EXT4_COMPAT_RESIZE_INODE
 		| EXT4_COMPAT_DIR_INDEX
-		| EXT4_COMPAT_SPARSE_SUPER2;
+		| EXT4_COMPAT_SPARSE_SUPER2
+		| EXT4_COMPAT_FAST_COMMIT
+		| EXT4_COMPAT_STABLE_INODES
+		| EXT4_COMPAT_ORPHAN_FILE;
 }
 
 uint32
@@ -59,7 +68,9 @@ Ext4FeatureSet::SupportedReadOnly()
 		| EXT4_RO_DIR_NLINK
 		| EXT4_RO_EXTRA_ISIZE
 		| EXT4_RO_GDT_CSUM
-		| EXT4_RO_METADATA_CSUM;
+		| EXT4_RO_METADATA_CSUM
+		| EXT4_RO_PROJECT
+		| EXT4_RO_ORPHAN_PRESENT;
 }
 
 uint32
@@ -118,16 +129,17 @@ Ext4FeatureSet::Validate(const ext2_super_block& superBlock, bool readOnly)
 				| EXT4_INCOMPAT_ENCRYPT | EXT4_INCOMPAT_CASEFOLD))
 		return B_UNSUPPORTED;
 
-	if (superBlock.ReadOnlyFeatures() & (0x0200 /* BIGALLOC */
-			| 0x0100 /* QUOTA */ | 0x2000 /* PROJECT */
-			| 0x8000 /* VERITY */ | 0x10000 /* ORPHAN_PRESENT */))
+	if (superBlock.ReadOnlyFeatures() & (0x0100 /* QUOTA */
+			| 0x0200 /* BIGALLOC */ | 0x8000 /* VERITY */))
 		return B_UNSUPPORTED;
 
-	/* The modern orphan-file feature needs its dedicated inode/table
-	 * implementation.  Do not mistake it for the legacy s_last_orphan list. */
-	if ((superBlock.CompatibleFeatures() & 0x1000) != 0
-			|| (superBlock.ReadOnlyFeatures() & 0x10000) != 0)
-		return B_UNSUPPORTED;
+	/* ORPHAN_FILE is a compatible feature: the filesystem may be mounted
+	 * when the orphan-file table is present.  Its inode number is mandatory
+	 * whenever the feature is enabled, and ORPHAN_PRESENT is the crash-
+	 * recovery marker maintained by ext4. */
+	if ((superBlock.CompatibleFeatures() & EXT4_COMPAT_ORPHAN_FILE) != 0
+			&& superBlock.OrphanFileInode() == 0)
+		return B_BAD_DATA;
 
 	return B_OK;
 }

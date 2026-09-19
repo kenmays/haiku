@@ -28,6 +28,7 @@ public:
 						uint32 *_count = NULL);
 	status_t		Enlarge(Transaction& transaction, off_t& numBlocks);
 	status_t		Shrink(Transaction& transaction, off_t& numBlocks);
+	status_t		InitializeRange(Transaction& transaction, off_t offset, size_t length);
 	void			Init();
 	
 	bool			Check();

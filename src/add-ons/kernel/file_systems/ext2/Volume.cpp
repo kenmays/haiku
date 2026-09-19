@@ -362,6 +362,20 @@ Volume::Unmount()
 {
 	TRACE("Volume::Unmount()\n");
 
+	if (!IsReadOnly()
+			&& (fSuperBlock.CompatibleFeatures() & EXT4_FEATURE_ORPHAN_FILE) != 0
+			&& (fSuperBlock.ReadOnlyFeatures()
+				& EXT4_READ_ONLY_FEATURE_ORPHAN_PRESENT) != 0) {
+		bool empty = false;
+		if (Ext4OrphanFile::IsEmpty(*this, empty) == B_OK && empty) {
+			Transaction transaction(fJournal);
+			if (transaction.IsStarted()
+					&& Ext4OrphanFile::MarkPresent(*this, transaction, false)
+					== B_OK)
+				transaction.Done();
+		}
+	}
+
 	status_t status = fJournal->Uninit();
 
 	// this will wait on the block notifier/writer thread

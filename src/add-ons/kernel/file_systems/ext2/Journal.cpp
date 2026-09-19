@@ -1050,6 +1050,8 @@ Journal::_RecoverPassScan(uint32& lastCommitID)
 			TRACE("Journal recover pass scan: Found a descriptor block with "
 				"%" B_PRIu32 " tags\n", tags);
 		} else if (blockType == JOURNAL_COMMIT_BLOCK) {
+			if (fChecksumEnabled && !_Checksum((uint8*)header, false))
+				return B_BAD_DATA;
 			nextCommitID++;
 			TRACE("Journal recover pass scan: Found a commit block. Next "
 				"commit ID: %" B_PRIu32 "\n", nextCommitID);

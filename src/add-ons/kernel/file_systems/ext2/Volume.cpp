@@ -517,7 +517,7 @@ Volume::GetBlockGroup(int32 index, ext2_block_group** _group)
 	*_group = (ext2_block_group*)(fGroupBlocks[blockIndex]
 		+ blockOffset * fGroupDescriptorSize);
 	if (HasChecksumFeature()
-		&& (*_group)->checksum != _GroupCheckSum(*_group, index)) {
+		&& B_LENDIAN_TO_HOST_INT16((*_group)->checksum) != _GroupCheckSum(*_group, index)) {
 		return B_BAD_DATA;
 	}
 	return B_OK;
@@ -543,7 +543,7 @@ Volume::WriteBlockGroup(Transaction& transaction, int32 index)
 	ext2_block_group *group = (ext2_block_group*)(fGroupBlocks[blockIndex]
 		+ blockOffset * fGroupDescriptorSize);
 
-	group->checksum = _GroupCheckSum(group, index);
+	group->checksum = B_HOST_TO_LENDIAN_INT16(_GroupCheckSum(group, index));
 	TRACE("Volume::WriteBlockGroup() checksum 0x%x for group %" B_PRId32 " "
 		"(free inodes %" B_PRIu32 ", unused %" B_PRIu32 ")\n", group->checksum,
 		index, group->FreeInodes(Has64bitFeature()),
@@ -725,7 +725,7 @@ void
 Volume::_SuperBlockChecksumSeed()
 {
 	if (HasChecksumSeedFeature()) {
-		fChecksumSeed = fSuperBlock.checksum_seed;
+		fChecksumSeed = B_LENDIAN_TO_HOST_INT32(fSuperBlock.checksum_seed);
 	} else if (HasMetaGroupChecksumFeature()) {
 		fChecksumSeed = calculate_crc32c(0xffffffff, (uint8*)fSuperBlock.uuid,
 			sizeof(fSuperBlock.uuid));
@@ -742,7 +742,7 @@ Volume::_VerifySuperBlock()
 
 	uint32 checksum = calculate_crc32c(0xffffffff, (uint8*)&fSuperBlock,
 		offsetof(struct ext2_super_block, checksum));
-	return checksum == fSuperBlock.checksum;
+	return checksum == B_LENDIAN_TO_HOST_INT32(fSuperBlock.checksum);
 }
 
 

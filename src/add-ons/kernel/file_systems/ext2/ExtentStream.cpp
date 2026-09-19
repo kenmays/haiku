@@ -60,7 +60,7 @@ ExtentStream::FindBlock(off_t offset, fsblock_t& block, uint32 *_count)
 
 	ext2_extent_stream *stream = fStream;
 	if (!stream->extent_header.IsValid())
-		panic("ExtentStream::FindBlock() invalid header\n");
+		return B_BAD_DATA;
 
 	CachedBlock cached(fVolume);
 	while (stream->extent_header.Depth() != 0) {
@@ -76,11 +76,9 @@ ExtentStream::FindBlock(off_t offset, fsblock_t& block, uint32 *_count)
 		stream = (ext2_extent_stream *)cached.SetTo(
 			stream->extent_index[i - 1].PhysicalBlock());
 		if (!stream->extent_header.IsValid())
-			panic("ExtentStream::FindBlock() invalid header\n");
-		if (!fInode->VerifyExtentChecksum(stream)) {
-			panic("ExtentStream::FindBlock() invalid checksum\n");
 			return B_BAD_DATA;
-		}
+		if (!fInode->VerifyExtentChecksum(stream))
+			return B_BAD_DATA;
 	}
 
 	// find the extend following the one that should contain the logical block

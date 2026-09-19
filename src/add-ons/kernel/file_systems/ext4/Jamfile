@@ -29,6 +29,9 @@ KernelAddon ext4 :
 	../ext2/RevokeManager.cpp
 	../ext2/Transaction.cpp
 	../ext2/Volume.cpp
+	Ext4FeatureSet.cpp
+	Ext4Checksum.cpp
+	OrphanList.cpp
 	ext4_kernel_interface.cpp
 ;
 

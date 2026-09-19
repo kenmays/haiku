@@ -376,6 +376,9 @@ Journal::_WritePartialTransactionToLog(JournalHeader* descriptorBlock,
 		} else {
 			tag->SetBlockNumber(blockNumber);
 			tag->SetFlags(firstTag ? 0 : JOURNAL_FLAG_SAME_UUID);
+			if (fFeature64bits)
+				*((uint32*)(tagData + sizeof(JournalBlockTag)))
+					= B_HOST_TO_BENDIAN_INT32((uint32)(blockNumber >> 32));
 		}
 
 		CachedBlock data(fFilesystemVolume);

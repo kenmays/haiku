@@ -615,6 +615,9 @@ ExtentStream::_Check(ext2_extent_stream *stream, fileblock_t &block)
 		panic("_Check() invalid header\n");
 		return B_BAD_VALUE;
 	}
+	if (!fInode->VerifyExtentChecksum(stream))
+		return B_BAD_DATA;
+
 	if (stream->extent_header.Depth() == 0) {
 		for (int32 i = 0; i < stream->extent_header.NumEntries(); i++) {
 			ext2_extent_entry &entry = stream->extent_entries[i];

@@ -374,6 +374,10 @@ Inode::Resize(Transaction& transaction, off_t size)
 {
 	TRACE("Inode::Resize() ID:%" B_PRIdINO " size: %" B_PRIdOFF "\n", ID(),
 		size);
+
+	/* ext4 orphan protection: an inode whose link count is zero must stay
+	 * on the orphan list for the entire truncation transaction. */
+	bool orphaned = fNode.num_links == 0 && fNode.deletion_time != 0;
 	if (size < 0)
 		return B_BAD_VALUE;
 
@@ -399,6 +403,14 @@ Inode::Resize(Transaction& transaction, off_t size)
 
 	if (status != B_OK)
 		return status;
+
+	if (orphaned && size == 0 && fNode.next_orphan != 0) {
+		status_t orphanStatus = Ext4OrphanList::Remove(*fVolume, ID(),
+			transaction);
+		if (orphanStatus != B_OK && orphanStatus != B_ENTRY_NOT_FOUND)
+			return orphanStatus;
+		fNode.next_orphan = 0;
+	}
 
 	file_cache_set_size(FileCache(), size);
 	file_map_set_size(Map(), size);

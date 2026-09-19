@@ -481,6 +481,7 @@ Inode::Unlink(Transaction& transaction)
 			return orphanStatus;
 
 		fNode.num_links = 0;
+		fNode.SetDeletionTime(real_time_clock());
 
 		status_t status = remove_vnode(fVolume->FSVolume(), fID);
 		if (status != B_OK)

@@ -154,7 +154,8 @@ Journal::Journal()
 	fTransactionID(0),
 	fChecksumEnabled(false),
 	fChecksumV3Enabled(false),
-	fFeature64bits(false)
+	fFeature64bits(false),
+	fChecksumSeed(0)
 {
 	recursive_lock_init(&fLock, "ext2 journal");
 	mutex_init(&fLogEntriesLock, "ext2 journal log entries");
@@ -364,16 +365,17 @@ Journal::_WritePartialTransactionToLog(JournalHeader* descriptorBlock,
 
 	finished = false;
 	status_t status = B_OK;
+	bool firstTag = true;
 
 	while (tagData + tagSize <= tagEnd && status == B_OK) {
 		JournalBlockTag* tag = (JournalBlockTag*)tagData;
 		if (fChecksumV3Enabled) {
 			JournalBlockTagV3* tag3 = (JournalBlockTagV3*)tagData;
 			tag3->SetBlockNumber(blockNumber, fFeature64bits);
-			tag3->SetFlags(0);
+			tag3->SetFlags(firstTag ? 0 : JOURNAL_FLAG_SAME_UUID);
 		} else {
 			tag->SetBlockNumber(blockNumber);
-			tag->SetFlags(0);
+			tag->SetFlags(firstTag ? 0 : JOURNAL_FLAG_SAME_UUID);
 		}
 
 		CachedBlock data(fFilesystemVolume);
@@ -419,6 +421,11 @@ Journal::_WritePartialTransactionToLog(JournalHeader* descriptorBlock,
 			finalData = escapedData;
 		} else
 			finalData = (void*)blockData;
+
+		if (firstTag) {
+			memcpy(tagData + tagSize, fJournalUUID, sizeof(fJournalUUID));
+			firstTag = false;
+		}
 
 		/* JBD2 checksum-v2 stores the low 16 bits of CRC32C in the
 		 * descriptor tag; checksum-v3 stores the complete CRC32C. */
@@ -805,6 +812,7 @@ Journal::_LoadSuperBlock()
 				ERROR("Journal::_LoadSuperBlock(): Invalid checksum\n");
 				return B_BAD_DATA;
 			}
+			memcpy(fJournalUUID, superblock.uuid, sizeof(fJournalUUID));
 			fChecksumSeed = calculate_crc32c(0xffffffff, (uint8*)superblock.uuid,
 				sizeof(superblock.uuid));
 		}

@@ -9,6 +9,7 @@
 
 
 #include "Volume.h"
+#include "../ext4/OrphanList.h"
 
 #include <errno.h>
 #include <new>

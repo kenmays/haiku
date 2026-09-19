@@ -591,7 +591,7 @@ Journal::_WriteTransactionToLog()
 	}
 	ArrayDeleter<uint8> commitBlockDeleter((uint8*)commitBlock);
 
-	commitBlock->MakeCommit(fCurrentCommitID + 1);
+	commitBlock->MakeCommit(fCurrentCommitID);
 	memset(commitBlock->data, 0, fBlockSize - sizeof(JournalHeader));
 		// TODO: This probably isn't necessary
 
@@ -624,8 +624,6 @@ Journal::_WriteTransactionToLog()
 	uint32 commitBlockPos = logBlock;
 
 	while (!finished) {
-		descriptorBlock->IncrementSequence();
-
 		status = _WritePartialTransactionToLog(descriptorBlock, detached,
 			&escapedData, logBlock, blockNumber, cookie, escapedDataDeleter,
 			blockCount, finished);
@@ -655,7 +653,6 @@ Journal::_WriteTransactionToLog()
 
 		if (fChecksumEnabled)
 			_CommitBlock((uint8*)commitBlock, commitBlock->Sequence());
-		commitBlock->IncrementSequence();
 		blockCount++;
 
 		logBlock = _WrapAroundLog(logBlock + 1);

@@ -1,7 +1,7 @@
 #include "OrphanList.h"
 
-#include "Volume.h"
-#include "Inode.h"
+#include "../ext2/Volume.h"
+#include "../ext2/Inode.h"
 #include "../ext2/Transaction.h"
 
 status_t

@@ -411,6 +411,13 @@ Inode::Resize(Transaction& transaction, off_t size)
 		if (orphanStatus != B_OK && orphanStatus != B_ENTRY_NOT_FOUND)
 			return orphanStatus;
 		fNode.next_orphan = 0;
+	} else if (size == 0 && (fVolume->SuperBlock().CompatibleFeatures()
+			& EXT4_FEATURE_ORPHAN_FILE) != 0 && fNode.NumLinks() == 0) {
+		/* Modern orphan-file entries are not linked through deletion_time. */
+		status_t orphanStatus = Ext4OrphanFile::Remove(*fVolume, ID(),
+			transaction);
+		if (orphanStatus != B_OK && orphanStatus != B_ENTRY_NOT_FOUND)
+			return orphanStatus;
 	}
 
 	file_cache_set_size(FileCache(), size);

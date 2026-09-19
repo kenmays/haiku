@@ -28,6 +28,7 @@
 #include "../ext2/Utility.h"
 #include "../ext2/DeviceOpener.h"
 #include "Ext4FeatureSet.h"
+#include "Ext4Checksum.h"
 
 
 //#define TRACE_EXT4
@@ -109,8 +110,8 @@ ext4_mount(fs_volume* _volume, const char* device, uint32 flags,
 		return fd;
 	ext2_super_block superBlock;
 	status_t status = Volume::Identify(fd, &superBlock);
-	if (status != B_OK)
-		return status;
+	if (status != B_OK || !Ext4Checksum::VerifySuperBlock(superBlock))
+		return B_BAD_DATA;
 	status = Ext4FeatureSet::Validate(superBlock,
 		(flags & B_MOUNT_READ_ONLY) != 0);
 	if (status != B_OK)

@@ -30,6 +30,7 @@
 #define JOURNAL_FEATURE_INCOMPATIBLE_ASYNC_COMMIT	0x4
 #define JOURNAL_FEATURE_INCOMPATIBLE_CSUM_V2		0x8
 #define JOURNAL_FEATURE_INCOMPATIBLE_CSUM_V3		0x10
+#define JOURNAL_FEATURE_INCOMPATIBLE_FAST_COMMIT	0x20
 
 #define JOURNAL_KNOWN_READ_ONLY_COMPATIBLE_FEATURES	0
 #define JOURNAL_KNOWN_INCOMPATIBLE_FEATURES			\
@@ -306,6 +307,12 @@ private:
 
 			uint32				_Checksum(JournalSuperBlock* superblock);
 			bool				_Checksum(uint8 *block, bool set = false);
+			uint32				_BlockChecksum(const uint8* data, uint32 sequence) const;
+			bool				_VerifyBlockChecksum(const uint8* data, uint32 sequence,
+					uint32 checksum) const;
+			uint32				_DescriptorChecksum(const uint8* block) const;
+			uint32				_CommitChecksum(const uint8* block) const;
+			status_t			_CommitBlock(uint8* block, uint32 sequence);
 
 			uint32				_CountTags(JournalHeader *descriptorBlock);
 			size_t				_TagSize();

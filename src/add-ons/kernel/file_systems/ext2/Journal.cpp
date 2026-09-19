@@ -1227,6 +1227,12 @@ Journal::_RecoverPassReplay(uint32 lastCommitID)
 					if (written != fBlockSize)
 						return B_IO_ERROR;
 
+					if (fChecksumEnabled && fChecksumV3Enabled
+							&& !_VerifyBlockChecksum(data, nextCommitID,
+								B_BENDIAN_TO_HOST_INT32(
+									((JournalBlockTagV3*)tagData)->checksum)))
+						return B_BAD_DATA;
+
 					++count;
 				}
 

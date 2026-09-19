@@ -109,6 +109,7 @@ Journal::Journal(Volume* fsVolume, Volume* jVolume)
 	fFeature64bits(false),
 	fChecksumSeed(0)
 {
+	memset(fJournalUUID, 0, sizeof(fJournalUUID));
 	recursive_lock_init(&fLock, "ext2 journal");
 	mutex_init(&fLogEntriesLock, "ext2 journal log entries");
 

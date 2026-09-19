@@ -1,4 +1,5 @@
 #include "Ext4Checksum.h"
+#include "Ext4Integrity.h"
 
 #include <stddef.h>
 #include <string.h>

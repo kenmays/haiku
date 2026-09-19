@@ -10,6 +10,7 @@
 
 #include "Volume.h"
 #include "../ext4/OrphanList.h"
+#include "../ext4/OrphanFile.h"
 
 #include <errno.h>
 #include <new>
@@ -306,6 +307,20 @@ Volume::Mount(const char* deviceName, uint32 flags)
 	if (status != B_OK) {
 		FATAL("could not initialize start journal!\n");
 		return status;
+	}
+
+	/* Journal replay is complete; recover ext4 orphan state before exposing
+	 * the root vnode. The modern orphan file is preferred when present. */
+	if ((fSuperBlock.CompatibleFeatures() & EXT4_FEATURE_ORPHAN_FILE) != 0
+			&& (fSuperBlock.ReadOnlyFeatures()
+				& EXT4_READ_ONLY_FEATURE_ORPHAN_PRESENT) != 0) {
+		status = Ext4OrphanFile::Recover(*this);
+		if (status != B_OK)
+			return status;
+	} else if (fSuperBlock.LastOrphan() != 0) {
+		status = Ext4OrphanList::Recover(*this);
+		if (status != B_OK)
+			return status;
 	}
 
 	if (!IsReadOnly()) {

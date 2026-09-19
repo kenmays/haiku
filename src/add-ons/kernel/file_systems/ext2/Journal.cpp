@@ -835,8 +835,9 @@ Journal::_LoadSuperBlock()
 	fLogStart = superblock.LogStart();
 	fLogSize = superblock.NumBlocks();
 
-	uint32 descriptorTags = (fBlockSize - sizeof(JournalHeader))
-		/ sizeof(JournalBlockTag);
+	uint32 descriptorTags = (fBlockSize - sizeof(JournalHeader)
+		- (fChecksumEnabled ? sizeof(JournalBlockTail) : 0))
+		/ (_TagSize() + 16);
 		// Maximum tags per descriptor block
 	uint32 maxDescriptors = (fLogSize - 1) / (descriptorTags + 2);
 		// Maximum number of full journal transactions

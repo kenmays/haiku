@@ -77,20 +77,20 @@ Ext4OrphanList::Recover(Volume& volume)
 
 		ino_t next = inode.Node().NextOrphan();
 
-		Transaction* transaction = volume.StartTransaction();
-		if (transaction == NULL)
-			return B_NO_MEMORY;
+		Transaction transaction(volume.GetJournal());
+		if (!transaction.IsStarted())
+			return B_ERROR;
 
-		status_t status = inode.Resize(*transaction, 0);
+		status_t status = inode.Resize(transaction, 0);
 		if (status == B_OK) {
 			inode.Node().SetNextOrphan(0);
-			status = inode.WriteBack(*transaction);
+			status = inode.WriteBack(transaction);
 		}
 		if (status == B_OK) {
 			volume.SuperBlock().SetLastOrphan(next);
-			status = volume.WriteSuperBlock(*transaction);
+			status = volume.WriteSuperBlock(transaction);
 		}
-		status = volume.DoneTransaction(transaction, status);
+		status = transaction.Done(status == B_OK);
 		if (status != B_OK)
 			return status;
 

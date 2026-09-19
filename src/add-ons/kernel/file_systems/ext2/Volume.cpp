@@ -218,9 +218,8 @@ Volume::Mount(const char* deviceName, uint32 flags)
 	if (Has64bitFeature()) {
 		TRACE("64bits\n");
 		fGroupDescriptorSize = fSuperBlock.GroupDescriptorSize();
-		if (fGroupDescriptorSize < sizeof(ext2_block_group))
-			return B_ERROR;
-		if (fGroupDescriptorSize != sizeof(ext2_block_group))
+		if (fGroupDescriptorSize < EXT2_BLOCK_GROUP_NORMAL_SIZE
+			|| fGroupDescriptorSize > sizeof(ext2_block_group))
 			return B_UNSUPPORTED;
 	} else
 		fGroupDescriptorSize = EXT2_BLOCK_GROUP_NORMAL_SIZE;

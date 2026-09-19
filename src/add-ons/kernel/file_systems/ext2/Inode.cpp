@@ -991,7 +991,7 @@ uint32
 Inode::_InodeChecksum(ext2_inode* inode)
 {
 	size_t offset = offsetof(ext2_inode, checksum);
-	uint32 number = fID;
+	uint32 number = B_HOST_TO_LENDIAN_INT32((uint32)fID);
 	uint32 checksum = calculate_crc32c(fVolume->ChecksumSeed(),
 		(uint8*)&number, sizeof(number));
 	uint32 gen = fNode.generation;
@@ -1029,7 +1029,7 @@ Inode::_DirEntryTail(uint8* block) const
 uint32
 Inode::_DirEntryChecksum(uint8* block, uint32 id, uint32 gen) const
 {
-	uint32 number = id;
+	uint32 number = B_HOST_TO_LENDIAN_INT32(id);
 	uint32 checksum = calculate_crc32c(fVolume->ChecksumSeed(),
 		(uint8*)&number, sizeof(number));
 	checksum = calculate_crc32c(checksum, (uint8*)&gen, sizeof(gen));

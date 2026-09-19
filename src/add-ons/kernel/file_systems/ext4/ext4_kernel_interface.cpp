@@ -18,26 +18,25 @@
 #include <NodeMonitor.h>
 #include <util/AutoLock.h>
 
-#include "../ext2/Attribute.h"
-#include "../ext2/CachedBlock.h"
-#include "../ext2/DirectoryIterator.h"
-#include "../ext2/ext2.h"
-#include "../ext2/HTree.h"
-#include "../ext2/Inode.h"
-#include "../ext2/Journal.h"
-#include "../ext2/Utility.h"
-#include "../ext2/DeviceOpener.h"
-#include "Ext4FeatureSet.h"
-#include "Ext4Checksum.h"
+#include "Attribute.h"
+#include "CachedBlock.h"
+#include "DirectoryIterator.h"
+#include "ext2.h"
+#include "HTree.h"
+#include "Inode.h"
+#include "Journal.h"
+#include "Utility.h"
+#include "../ext4/Ext4FeatureSet.h"
+#include "../ext4/Ext4Checksum.h"
 
 
-//#define TRACE_EXT4
-#ifdef TRACE_EXT4
-#	define TRACE(x...) dprintf("\33[34mext4:\33[0m " x)
+//#define TRACE_EXT2
+#ifdef TRACE_EXT2
+#	define TRACE(x...) dprintf("\33[34mext2:\33[0m " x)
 #else
 #	define TRACE(x...) ;
 #endif
-#define ERROR(x...) dprintf("\33[34mext4:\33[0m " x)
+#define ERROR(x...) dprintf("\33[34mext2:\33[0m " x)
 
 
 #define EXT2_IO_SIZE	65536
@@ -59,7 +58,8 @@ ext4_identify_partition(int fd, partition_data *partition, void **_cookie)
 
 	ext2_super_block superBlock;
 	status_t status = Volume::Identify(fd, &superBlock);
-	if (status != B_OK || Ext4FeatureSet::Validate(superBlock, true) != B_OK)
+	if (status != B_OK || Ext4FeatureSet::Validate(superBlock, true) != B_OK
+		|| !Ext4Checksum::VerifySuperBlock(superBlock))
 		return -1;
 
 	identify_cookie *cookie = new identify_cookie;
@@ -104,32 +104,28 @@ static status_t
 ext4_mount(fs_volume* _volume, const char* device, uint32 flags,
 	const char* args, ino_t* _rootID)
 {
-	DeviceOpener opener(device, (flags & B_MOUNT_READ_ONLY) != 0 ? O_RDONLY : O_RDWR);
-	int fd = opener.Device();
-	if (fd < B_OK)
-		return fd;
-	ext2_super_block superBlock;
-	status_t status = Volume::Identify(fd, &superBlock);
-	if (status != B_OK || !Ext4Checksum::VerifySuperBlock(superBlock))
-		return B_BAD_DATA;
-	status = Ext4FeatureSet::Validate(superBlock,
-		(flags & B_MOUNT_READ_ONLY) != 0);
-	if (status != B_OK)
-		return status;
-
 	Volume* volume = new(std::nothrow) Volume(_volume);
 	if (volume == NULL)
 		return B_NO_MEMORY;
+
+	// TODO: this is a bit hacky: we can't use publish_vnode() to publish
+	// the root node, or else its file cache cannot be created (we could
+	// create it later, though). Therefore we're using get_vnode() in Mount(),
+	// but that requires us to export our volume data before calling it.
 	_volume->private_volume = volume;
-	_volume->ops = &gExt4VolumeOps;
-	status = volume->Mount(device, flags);
+	_volume->ops = &gExt2VolumeOps;
+
+	status_t status = volume->Mount(device, flags);
 	if (status != B_OK) {
+		ERROR("Failed mounting the volume. Error: %s\n", strerror(status));
 		delete volume;
 		return status;
 	}
+
 	*_rootID = volume->RootNode()->ID();
 	return B_OK;
 }
+
 
 static status_t
 ext4_unmount(fs_volume *_volume)
@@ -225,7 +221,7 @@ ext4_get_vnode(fs_volume* _volume, ino_t id, fs_vnode* _node, int* _type,
 
 	if (status == B_OK) {
 		_node->private_node = inode;
-		_node->ops = &gExt4VnodeOps;
+		_node->ops = &gExt2VnodeOps;
 		*_type = inode->Mode();
 		*_flags = 0;
 	} else
@@ -589,7 +585,7 @@ static status_t
 ext4_read_stat(fs_volume* _volume, fs_vnode* _node, struct stat* stat)
 {
 	Inode* inode = (Inode*)_node->private_node;
-	const ext4_inode& node = inode->Node();
+	const ext2_inode& node = inode->Node();
 
 	stat->st_dev = inode->GetVolume()->ID();
 	stat->st_ino = inode->ID();
@@ -625,7 +621,7 @@ ext4_write_stat(fs_volume* _volume, fs_vnode* _node, const struct stat* stat,
 
 	Inode* inode = (Inode*)_node->private_node;
 
-	ext4_inode& node = inode->Node();
+	ext2_inode& node = inode->Node();
 	bool updateTime = false;
 
 	TRACE("ext4_write_stat: Starting transaction\n");
@@ -742,7 +738,7 @@ ext4_create(fs_volume* _volume, fs_vnode* _directory, const char* name,
 	bool created;
 	status_t status = Inode::Create(transaction, directory, name,
 		S_FILE | (mode & S_IUMSK), openMode, EXT2_TYPE_FILE, &created, _vnodeID,
-		&inode, &gExt4VnodeOps);
+		&inode, &gExt2VnodeOps);
 	if (status != B_OK)
 		return status;
 
@@ -825,7 +821,7 @@ ext4_create_symlink(fs_volume* _volume, fs_vnode* _directory, const char* name,
 		status = link->WriteBack(transaction);
 
 	TRACE("ext4_create_symlink(): Publishing vnode\n");
-	publish_vnode(volume->FSVolume(), id, link, &gExt4VnodeOps,
+	publish_vnode(volume->FSVolume(), id, link, &gExt2VnodeOps,
 		link->Mode(), 0);
 	put_vnode(volume->FSVolume(), id);
 
@@ -1654,7 +1650,7 @@ ext4_read_attr_stat(fs_volume* _volume, fs_vnode* _node,
 }
 
 
-fs_volume_ops gExt4VolumeOps = {
+fs_volume_ops gExt2VolumeOps = {
 	&ext4_unmount,
 	&ext4_read_fs_info,
 	&ext4_write_fs_info,
@@ -1663,7 +1659,7 @@ fs_volume_ops gExt4VolumeOps = {
 };
 
 
-fs_vnode_ops gExt4VnodeOps = {
+fs_vnode_ops gExt2VnodeOps = {
 	/* vnode operations */
 	&ext4_lookup,
 	NULL,

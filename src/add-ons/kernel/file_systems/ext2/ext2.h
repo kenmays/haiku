@@ -90,7 +90,8 @@ struct ext2_super_block {
 	uint64	kb_written;
 	uint32	_reserved5[60];
 	uint32	checksum_seed;
-	uint32	_reserved6[98];
+	uint32	_wtime_hi_orphan_file_inum_pad[3];
+	uint32	_reserved6[95];
 	uint32	checksum;
 
 	uint16 Magic() const { return B_LENDIAN_TO_HOST_INT16(magic); }
@@ -135,6 +136,8 @@ struct ext2_super_block {
 		{ return B_LENDIAN_TO_HOST_INT32(compatible_features); }
 	uint32 ReadOnlyFeatures() const
 		{ return B_LENDIAN_TO_HOST_INT32(read_only_features); }
+	uint32 OrphanFileInode() const
+		{ return B_LENDIAN_TO_HOST_INT32(_wtime_hi_orphan_file_inum_pad[2]); }
 	uint32 IncompatibleFeatures() const
 		{ return B_LENDIAN_TO_HOST_INT32(incompatible_features); }
 	uint16 ReservedGDTBlocks() const

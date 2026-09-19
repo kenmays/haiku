@@ -1159,19 +1159,31 @@ Journal::_RecoverPassReplay(uint32 lastCommitID)
 		uint32 blockType = header->BlockType();
 
 		if (blockType == JOURNAL_DESCRIPTOR_BLOCK) {
-			JournalBlockTag* last_tag = (JournalBlockTag*)((uint8*)header
-				+ fBlockSize - sizeof(JournalBlockTag));
+			size_t tagSize = _TagSize();
+			uint8* tagData = (uint8*)header->data;
+			uint8* tagEnd = (uint8*)header + fBlockSize
+				- (fChecksumEnabled ? sizeof(JournalBlockTail) : 0);
 
-			for (JournalBlockTag* tag = (JournalBlockTag*)header->data;
-				tag <= last_tag; ++tag) {
+			while (tagData + tagSize <= tagEnd) {
+				JournalBlockTag* tag = (JournalBlockTag*)tagData;
+				uint64 targetBlock;
+				uint32 tagFlags;
+				if (fChecksumV3Enabled) {
+					JournalBlockTagV3* tag3 = (JournalBlockTagV3*)tagData;
+					targetBlock = tag3->BlockNumber(fFeature64bits);
+					tagFlags = tag3->Flags();
+				} else {
+					targetBlock = tag->BlockNumber();
+					tagFlags = tag->Flags();
+				}
+
 				nextBlock = _WrapAroundLog(nextBlock + 1);
 
 				status = MapBlock(nextBlock, nextBlockPos);
 				if (status != B_OK)
 					return status;
 
-				if (!fRevokeManager->Lookup(tag->BlockNumber(),
-						nextCommitID)) {
+				if (!fRevokeManager->Lookup(targetBlock, nextCommitID)) {
 					// Block isn't revoked
 					size_t read = read_pos(fJournalVolume->Device(),
 						nextBlockPos * fBlockSize, data, fBlockSize);
@@ -1195,14 +1207,11 @@ Journal::_RecoverPassReplay(uint32 lastCommitID)
 					++count;
 				}
 
-				if ((tag->Flags() & JOURNAL_FLAG_LAST_TAG) != 0)
+				if ((tagFlags & JOURNAL_FLAG_LAST_TAG) != 0)
 					break;
-				if ((tag->Flags() & JOURNAL_FLAG_SAME_UUID) == 0) {
-					// TODO: Check new UUID with file system UUID
-					tag += 2;
-						// sizeof(JournalBlockTag) = 8
-						// sizeof(UUID) = 16
-				}
+				if ((tagFlags & JOURNAL_FLAG_SAME_UUID) == 0)
+					tagData += 16;
+				tagData += tagSize;
 			}
 		} else if (blockType == JOURNAL_COMMIT_BLOCK)
 			nextCommitID++;

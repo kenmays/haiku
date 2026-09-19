@@ -986,14 +986,10 @@ Journal::_TagSize()
 	if (fChecksumV3Enabled)
 		return sizeof(JournalBlockTagV3);
 
-	size_t size = sizeof(JournalBlockTag);
-	if (fChecksumEnabled)
-		size += sizeof(uint16);
-	if (!fFeature64bits)
-		size -= sizeof(uint32);
-	return size;
+	/* JBD2 checksum-v2 uses the legacy tag with its 16-bit checksum;
+	 * 64-bit journals append the high block-number word. */
+	return sizeof(JournalBlockTag) + (fFeature64bits ? sizeof(uint32) : 0);
 }
-
 
 /*virtual*/ status_t
 Journal::Recover()

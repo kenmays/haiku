@@ -284,6 +284,11 @@ Inode::WriteAt(Transaction& transaction, off_t pos, const uint8* buffer,
 		oldSize >> 32, oldSize & 0xFFFFFFFF,
 		end >> 32, end & 0xFFFFFFFF);
 
+	/*
+	 * Ext4 may allocate newly extended ranges as unwritten extents.
+	 * Convert the blocks touched by this write before the page cache is
+	 * flushed, otherwise FindBlock() correctly presents them as holes.
+	 */
 	if (end > oldSize) {
 		status_t status = Resize(transaction, end);
 		if (status != B_OK) {
@@ -305,6 +310,16 @@ Inode::WriteAt(Transaction& transaction, off_t pos, const uint8* buffer,
 	if (oldSize < pos)
 		FillGapWithZeros(oldSize, pos);
 
+	status_t status = B_OK;
+	if (length != 0) {
+		status = fDataStream->InitializeRange(transaction, pos, length);
+		if (status != B_OK) {
+			*_length = 0;
+			WriteLockInTransaction(transaction);
+			return status;
+		}
+	}
+
 	if (length == 0) {
 		// Probably just changed the file size with the pos parameter
 		return B_OK;
@@ -312,7 +327,7 @@ Inode::WriteAt(Transaction& transaction, off_t pos, const uint8* buffer,
 
 	TRACE("Inode::WriteAt(): Performing write: %p, %" B_PRIdOFF ", %p, %"
 		B_PRIuSIZE "\n", FileCache(), pos, buffer, *_length);
-	status_t status = file_cache_write(FileCache(), NULL, pos, buffer,
+	status = file_cache_write(FileCache(), NULL, pos, buffer,
 		_length);
 
 	WriteLockInTransaction(transaction);

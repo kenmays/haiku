@@ -855,6 +855,55 @@ Journal::_Checksum(uint8* block, bool set)
 	return checksum == oldChecksum;
 }
 
+uint32
+Journal::_BlockChecksum(const uint8* data, uint32 sequence) const
+{
+	/* JBD2 checksum-v3 data blocks use the journal UUID-derived seed,
+	 * followed by the transaction sequence and complete data block. */
+	uint32 crc = fChecksumSeed;
+	crc = calculate_crc32c(crc, (const uint8*)&sequence, sizeof(sequence));
+	return calculate_crc32c(crc, data, fBlockSize);
+}
+
+
+bool
+Journal::_VerifyBlockChecksum(const uint8* data, uint32 sequence,
+	uint32 checksum) const
+{
+	return _BlockChecksum(data, sequence) == checksum;
+}
+
+
+uint32
+Journal::_DescriptorChecksum(const uint8* block) const
+{
+	uint32 crc = fChecksumSeed;
+	return calculate_crc32c(crc, block, fBlockSize - sizeof(JournalBlockTail));
+}
+
+
+uint32
+Journal::_CommitChecksum(const uint8* block) const
+{
+	uint32 crc = fChecksumSeed;
+	return calculate_crc32c(crc, block, fBlockSize - sizeof(JournalBlockTail));
+}
+
+
+status_t
+Journal::_CommitBlock(uint8* block, uint32 sequence)
+{
+	if (!fChecksumEnabled)
+		return B_OK;
+
+	JournalBlockTail* tail = (JournalBlockTail*)(block + fBlockSize
+		- sizeof(JournalBlockTail));
+	tail->checksum = 0;
+	uint32 checksum = _CommitChecksum(block);
+	tail->SetChecksum(checksum);
+	return B_OK;
+}
+
 
 uint32
 Journal::_CountTags(JournalHeader* descriptorBlock)

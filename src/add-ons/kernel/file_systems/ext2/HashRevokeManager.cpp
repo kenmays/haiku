@@ -60,7 +60,7 @@ HashRevokeManager::Init()
 
 
 status_t
-HashRevokeManager::Insert(uint32 block, uint32 commitID)
+HashRevokeManager::Insert(uint64 block, uint32 commitID)
 {
 	RevokeElement* element = fHash->Lookup(block);
 
@@ -85,7 +85,7 @@ HashRevokeManager::Insert(uint32 block, uint32 commitID)
 
 
 status_t
-HashRevokeManager::Remove(uint32 block)
+HashRevokeManager::Remove(uint64 block)
 {
 	RevokeElement* element = fHash->Lookup(block);
 
@@ -101,7 +101,7 @@ HashRevokeManager::Remove(uint32 block)
 
 
 bool
-HashRevokeManager::Lookup(uint32 block, uint32 commitID)
+HashRevokeManager::Lookup(uint64 block, uint32 commitID)
 {
 	RevokeElement* element = fHash->Lookup(block);
 
@@ -116,7 +116,7 @@ HashRevokeManager::Lookup(uint32 block, uint32 commitID)
 HashRevokeManager::Compare(void* _revoked, const void *_block)
 {
 	RevokeElement* revoked = (RevokeElement*)_revoked;
-	uint32 block = *(uint32*)_block;
+	uint64 block = *(uint64*)_block;
 
 	if (revoked->block == block)
 		return 0;
@@ -135,13 +135,13 @@ HashRevokeManager::Hash(void* _revoked, const void* _block, uint32 range)
 	if (revoked != NULL)
 		return revoked->block % range;
 
-	uint32 block = *(uint32*)_block;
+	uint64 block = *(uint64*)_block;
 	return block % range;
 }
 
 
 status_t
-HashRevokeManager::_ForceInsert(uint32 block, uint32 commitID)
+HashRevokeManager::_ForceInsert(uint64 block, uint32 commitID)
 {
 	RevokeElement* element = new(std::nothrow) RevokeElement;
 

@@ -454,7 +454,7 @@ ExtentStream::InitializeRange(Transaction& transaction, off_t offset, size_t len
 		if (pieces == 1) {
 			stream->extent_entries[i].SetUnwritten(false);
 			fInode->SetExtentChecksum(stream);
-			return B_OK;
+			continue;
 		}
 
 		int32 oldEntries = stream->extent_header.NumEntries();
@@ -491,7 +491,7 @@ ExtentStream::InitializeRange(Transaction& transaction, off_t offset, size_t len
 
 		stream->extent_header.SetNumEntries(oldEntries + pieces - 1);
 		fInode->SetExtentChecksum(stream);
-		return B_OK;
+		i += pieces - 1;
 	}
 
 	return B_OK;

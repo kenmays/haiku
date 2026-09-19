@@ -365,8 +365,14 @@ Journal::_WritePartialTransactionToLog(JournalHeader* descriptorBlock,
 	status_t status = B_OK;
 
 	while (tag < lastTag && status == B_OK) {
-		tag->SetBlockNumber(blockNumber);
-		tag->SetFlags(0);
+		if (fChecksumV3Enabled) {
+			JournalBlockTagV3* tag3 = (JournalBlockTagV3*)tag;
+			tag3->SetBlockNumber(blockNumber, fFeature64bits);
+			tag3->SetFlags(0);
+		} else {
+			tag->SetBlockNumber(blockNumber);
+			tag->SetFlags(0);
+		}
 
 		CachedBlock data(fFilesystemVolume);
 		const JournalHeader* blockData = (JournalHeader*)data.SetTo(
@@ -378,6 +384,12 @@ Journal::_WritePartialTransactionToLog(JournalHeader* descriptorBlock,
 		}
 
 		void* finalData;
+
+		if (fChecksumV3Enabled && blockData->CheckMagic()) {
+			/* Data blocks are checksummed independently in checksum-v3 mode.
+			 * The checksum is carried by the descriptor tag and is verified
+			 * during replay rather than being treated as a descriptor checksum. */
+		}
 
 		if (blockData->CheckMagic()) {
 			// The journaled block starts with the magic value
@@ -605,11 +617,18 @@ Journal::_WriteTransactionToLog()
 			return B_IO_ERROR;
 		}
 
+		if (fChecksumEnabled)
+			_CommitBlock((uint8*)commitBlock, commitBlock->Sequence());
 		commitBlock->IncrementSequence();
 		blockCount++;
 
 		logBlock = _WrapAroundLog(logBlock + 1);
 	}
+
+	/* The first commit block is the transaction's commit record. In
+	 * checksum-v2/v3 mode its tail must be finalized before it reaches disk. */
+	if (fChecksumEnabled)
+		_CommitBlock((uint8*)commitBlock, commitBlock->Sequence());
 
 	// Transaction will enter the Commit state
 	fsblock_t physicalBlock;

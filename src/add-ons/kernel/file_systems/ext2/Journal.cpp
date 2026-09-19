@@ -103,7 +103,11 @@ Journal::Journal(Volume* fsVolume, Volume* jVolume)
 	fHasSubTransaction(false),
 	fSeparateSubTransactions(false),
 	fUnwrittenTransactions(0),
-	fTransactionID(0)
+	fTransactionID(0),
+	fChecksumEnabled(false),
+	fChecksumV3Enabled(false),
+	fFeature64bits(false),
+	fChecksumSeed(0)
 {
 	recursive_lock_init(&fLock, "ext2 journal");
 	mutex_init(&fLogEntriesLock, "ext2 journal log entries");

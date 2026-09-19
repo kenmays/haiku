@@ -357,16 +357,18 @@ Journal::_WritePartialTransactionToLog(JournalHeader* descriptorBlock,
 	uint32 descriptorBlockPos = logBlock;
 	uint8* escapedData = *_escapedData;
 
-	JournalBlockTag* tag = (JournalBlockTag*)descriptorBlock->data;
-	JournalBlockTag* lastTag = (JournalBlockTag*)((uint8*)descriptorBlock
-		+ fBlockSize - sizeof(JournalHeader));
+	size_t tagSize = _TagSize();
+	uint8* tagData = (uint8*)descriptorBlock->data;
+	uint8* tagEnd = (uint8*)descriptorBlock + fBlockSize
+		- (fChecksumEnabled ? sizeof(JournalBlockTail) : 0);
 
 	finished = false;
 	status_t status = B_OK;
 
-	while (tag < lastTag && status == B_OK) {
+	while (tagData + tagSize <= tagEnd && status == B_OK) {
+		JournalBlockTag* tag = (JournalBlockTag*)tagData;
 		if (fChecksumV3Enabled) {
-			JournalBlockTagV3* tag3 = (JournalBlockTagV3*)tag;
+			JournalBlockTagV3* tag3 = (JournalBlockTagV3*)tagData;
 			tag3->SetBlockNumber(blockNumber, fFeature64bits);
 			tag3->SetFlags(0);
 		} else {
@@ -442,7 +444,7 @@ Journal::_WritePartialTransactionToLog(JournalHeader* descriptorBlock,
 			"at: %" B_PRIu32 "\n", logBlock);
 
 		blockCount++;
-		tag++;
+		tagData += tagSize;
 
 		status = cache_next_block_in_transaction(fFilesystemBlockCache,
 			fTransactionID, detached, &cookie, &blockNumber, NULL, NULL);
@@ -451,8 +453,12 @@ Journal::_WritePartialTransactionToLog(JournalHeader* descriptorBlock,
 	finished = status != B_OK;
 
 	// Write descriptor block
-	--tag;
-	tag->SetLastTagFlag();
+	if (tagData == (uint8*)descriptorBlock->data)
+		return B_BAD_DATA;
+	if (fChecksumV3Enabled)
+		((JournalBlockTagV3*)(tagData - tagSize))->SetLastTagFlag();
+	else
+		((JournalBlockTag*)(tagData - tagSize))->SetLastTagFlag();
 
 	fsblock_t physicalBlock;
 	status = MapBlock(descriptorBlockPos, physicalBlock);
@@ -1190,16 +1196,17 @@ Journal::_RecoverPassReplay(uint32 lastCommitID)
 					if (read != fBlockSize)
 						return B_IO_ERROR;
 
-					if ((tag->Flags() & JOURNAL_FLAG_ESCAPED) != 0) {
+					if ((tagFlags & JOURNAL_FLAG_ESCAPED) != 0) {
 						// Block is escaped
 						((int32*)data)[0]
 							= B_HOST_TO_BENDIAN_INT32(JOURNAL_MAGIC);
 					}
 
-					TRACE("Journal::_RevoverPassReplay(): Write to %" B_PRIu32
-						"\n", tag->BlockNumber() * fBlockSize);
+					TRACE("Journal::_RevoverPassReplay(): Write to %" B_PRIu64 "
+",
+						targetBlock * fBlockSize);
 					size_t written = write_pos(fFilesystemVolume->Device(),
-						tag->BlockNumber() * fBlockSize, data, fBlockSize);
+						targetBlock * fBlockSize, data, fBlockSize);
 
 					if (written != fBlockSize)
 						return B_IO_ERROR;

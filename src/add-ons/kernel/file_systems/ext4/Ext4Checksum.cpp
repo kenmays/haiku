@@ -19,34 +19,6 @@ Seed(const ext2_super_block& superBlock)
 		sizeof(superBlock.uuid));
 }
 
-status_t
-Ext4Integrity::VerifySuperBlock(const void* data)
-{
-	const ext2_super_block* sb = static_cast<const ext2_super_block*>(data);
-	return Ext4Checksum::VerifySuperBlock(*sb) ? B_OK : B_BAD_DATA;
-}
-
-status_t
-Ext4Integrity::VerifyGroupDescriptor(const void* data, const void* group,
-	uint32 number, uint16 size)
-{
-	const ext2_super_block* sb = static_cast<const ext2_super_block*>(data);
-	const ext2_block_group* gd = static_cast<const ext2_block_group*>(group);
-	return Ext4Checksum::VerifyGroupDescriptor(*sb, *gd, number, size)
-		? B_OK : B_BAD_DATA;
-}
-
-status_t
-Ext4Integrity::VerifyInode(const void* data, const void* inode,
-	uint32 number, uint32 size)
-{
-	const ext2_super_block* sb = static_cast<const ext2_super_block*>(data);
-	const ext2_inode* node = static_cast<const ext2_inode*>(inode);
-	return Ext4Checksum::VerifyInode(*sb, *node, number, size)
-		? B_OK : B_BAD_DATA;
-}
-
-
 uint32
 SuperBlock(const ext2_super_block& superBlock)
 {
@@ -167,3 +139,30 @@ VerifyInode(const ext2_super_block& superBlock, const ext2_inode& inode,
 }
 
 }
+status_t
+Ext4Integrity::VerifySuperBlock(const void* data)
+{
+	const ext2_super_block* sb = static_cast<const ext2_super_block*>(data);
+	return Ext4Checksum::VerifySuperBlock(*sb) ? B_OK : B_BAD_DATA;
+}
+
+status_t
+Ext4Integrity::VerifyGroupDescriptor(const void* data, const void* group,
+	uint32 number, uint16 size)
+{
+	const ext2_super_block* sb = static_cast<const ext2_super_block*>(data);
+	const ext2_block_group* gd = static_cast<const ext2_block_group*>(group);
+	return Ext4Checksum::VerifyGroupDescriptor(*sb, *gd, number, size)
+		? B_OK : B_BAD_DATA;
+}
+
+status_t
+Ext4Integrity::VerifyInode(const void* data, const void* inode,
+	uint32 number, uint32 size)
+{
+	const ext2_super_block* sb = static_cast<const ext2_super_block*>(data);
+	const ext2_inode* node = static_cast<const ext2_inode*>(inode);
+	return Ext4Checksum::VerifyInode(*sb, *node, number, size)
+		? B_OK : B_BAD_DATA;
+}
+

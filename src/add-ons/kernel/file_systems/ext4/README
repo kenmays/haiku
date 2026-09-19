@@ -1,0 +1,35 @@
+Haiku ext4 filesystem driver
+===========================
+
+This branch introduces a dedicated ext4 filesystem handler.
+
+Phase 1 intentionally shares the proven ext2 implementation for vnode,
+directory, extent, allocation and journal plumbing while adding an explicit
+ext4 feature-negotiation boundary.  It is not advertised as full Linux-ext4
+feature parity yet.
+
+Supported target:
+  - extents
+  - 64-bit block addressing as represented by the current Haiku structures
+  - flex_bg
+  - directory indexing
+  - metadata checksum infrastructure already present in the Haiku driver
+  - extra inode size/timestamps
+  - large files
+
+Explicitly rejected:
+  - bigalloc
+  - meta_bg
+  - MMP
+  - inline_data
+  - EA_INODE
+  - encrypt
+  - casefold
+  - largedir
+  - external journal device
+  - quota/project/verity features
+  - fast commit
+
+The implementation will be migrated from the ext2-derived translation units
+in subsequent phases so that ext4-specific invariants can be enforced at the
+filesystem boundary rather than through the old ext2 feature masks.

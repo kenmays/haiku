@@ -414,14 +414,17 @@ struct ext2_extent_entry {
 		{ return B_LENDIAN_TO_HOST_INT32(logical_block); }
 	uint16 RawLength() const { return B_LENDIAN_TO_HOST_INT16(length); }
 	bool IsUnwritten() const { return (RawLength() & 0x8000) != 0; }
-	uint16 Length() const { return RawLength() & 0x7fff; }
+	uint16 Length() const {
+		uint16 value = RawLength() & 0x7fff;
+		return value == 0 ? 32768 : value;
+	}
 	uint16 InitializedLength() const { return IsUnwritten() ? 0 : Length(); }
 	uint64 PhysicalBlock() const { return B_LENDIAN_TO_HOST_INT32(physical_block)
 		| ((uint64)B_LENDIAN_TO_HOST_INT16(physical_block_high) << 32); }
 	void SetLogicalBlock(uint32 block) {
 		logical_block = B_HOST_TO_LENDIAN_INT32(block); }
 	void SetLength(uint16 _length) {
-		length = B_HOST_TO_LENDIAN_INT16(_length & 0x7fff); }
+		length = B_HOST_TO_LENDIAN_INT16(_length == 32768 ? 0 : _length & 0x7fff); }
 	void SetUnwritten(bool unwritten) {
 		uint16 value = RawLength() & 0x7fff;
 		if (unwritten)

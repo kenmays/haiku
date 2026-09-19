@@ -88,6 +88,16 @@ Ext4FeatureSet::Validate(const ext2_super_block& superBlock, bool readOnly)
 	if (!IsExt4(superBlock))
 		return B_BAD_VALUE;
 
+	/* The current Haiku on-disk structures represent ext4 group descriptors
+	 * through the complete 64-byte Linux ext4 descriptor.  Never index past
+	 * that structure when presented with a newer descriptor format. */
+	uint16 descriptorSize = superBlock.GroupDescriptorSize();
+	if (descriptorSize != 0 && (descriptorSize < 32 || descriptorSize > 64))
+		return B_UNSUPPORTED;
+
+	if (superBlock.BlockShift() > 12)
+		return B_UNSUPPORTED;
+
 	if ((superBlock.IncompatibleFeatures() & ~SupportedIncompat()) != 0)
 		return B_UNSUPPORTED;
 

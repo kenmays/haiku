@@ -103,8 +103,13 @@ Journal::Journal(Volume* fsVolume, Volume* jVolume)
 	fHasSubTransaction(false),
 	fSeparateSubTransactions(false),
 	fUnwrittenTransactions(0),
-	fTransactionID(0)
+	fTransactionID(0),
+	fChecksumEnabled(false),
+	fChecksumV3Enabled(false),
+	fFeature64bits(false),
+	fChecksumSeed(0)
 {
+	memset(fJournalUUID, 0, sizeof(fJournalUUID));
 	recursive_lock_init(&fLock, "ext2 journal");
 	mutex_init(&fLogEntriesLock, "ext2 journal log entries");
 
@@ -154,8 +159,10 @@ Journal::Journal()
 	fTransactionID(0),
 	fChecksumEnabled(false),
 	fChecksumV3Enabled(false),
-	fFeature64bits(false)
+	fFeature64bits(false),
+	fChecksumSeed(0)
 {
+	memset(fJournalUUID, 0, sizeof(fJournalUUID));
 	recursive_lock_init(&fLock, "ext2 journal");
 	mutex_init(&fLogEntriesLock, "ext2 journal log entries");
 }
@@ -357,16 +364,28 @@ Journal::_WritePartialTransactionToLog(JournalHeader* descriptorBlock,
 	uint32 descriptorBlockPos = logBlock;
 	uint8* escapedData = *_escapedData;
 
-	JournalBlockTag* tag = (JournalBlockTag*)descriptorBlock->data;
-	JournalBlockTag* lastTag = (JournalBlockTag*)((uint8*)descriptorBlock
-		+ fBlockSize - sizeof(JournalHeader));
+	size_t tagSize = _TagSize();
+	uint8* tagData = (uint8*)descriptorBlock->data;
+	uint8* tagEnd = (uint8*)descriptorBlock + fBlockSize
+		- (fChecksumEnabled ? sizeof(JournalBlockTail) : 0);
 
 	finished = false;
 	status_t status = B_OK;
+	bool firstTag = true;
 
-	while (tag < lastTag && status == B_OK) {
-		tag->SetBlockNumber(blockNumber);
-		tag->SetFlags(0);
+	while (tagData + tagSize <= tagEnd && status == B_OK) {
+		JournalBlockTag* tag = (JournalBlockTag*)tagData;
+		if (fChecksumV3Enabled) {
+			JournalBlockTagV3* tag3 = (JournalBlockTagV3*)tagData;
+			tag3->SetBlockNumber(blockNumber, fFeature64bits);
+			tag3->SetFlags(firstTag ? 0 : JOURNAL_FLAG_SAME_UUID);
+		} else {
+			tag->SetBlockNumber(blockNumber);
+			tag->SetFlags(firstTag ? 0 : JOURNAL_FLAG_SAME_UUID);
+			if (fFeature64bits)
+				*((uint32*)(tagData + sizeof(JournalBlockTag)))
+					= B_HOST_TO_BENDIAN_INT32((uint32)(blockNumber >> 32));
+		}
 
 		CachedBlock data(fFilesystemVolume);
 		const JournalHeader* blockData = (JournalHeader*)data.SetTo(
@@ -379,12 +398,21 @@ Journal::_WritePartialTransactionToLog(JournalHeader* descriptorBlock,
 
 		void* finalData;
 
+		if (fChecksumV3Enabled && blockData->CheckMagic()) {
+			/* Data blocks are checksummed independently in checksum-v3 mode.
+			 * The checksum is carried by the descriptor tag and is verified
+			 * during replay rather than being treated as a descriptor checksum. */
+		}
+
 		if (blockData->CheckMagic()) {
 			// The journaled block starts with the magic value
 			// We must remove it to prevent confusion
 			TRACE("Journal::_WritePartialTransactionToLog(): Block starts with "
 				"magic number. Escaping it\n");
-			tag->SetEscapedFlag();
+			if (fChecksumV3Enabled)
+				((JournalBlockTagV3*)tagData)->SetEscapedFlag();
+			else
+				tag->SetEscapedFlag();
 
 			if (escapedData == NULL) {
 				TRACE("Journal::_WritePartialTransactionToLog(): Allocating "
@@ -405,6 +433,23 @@ Journal::_WritePartialTransactionToLog(JournalHeader* descriptorBlock,
 			finalData = escapedData;
 		} else
 			finalData = (void*)blockData;
+
+		if (firstTag) {
+			if (tagData + tagSize + sizeof(fJournalUUID) > tagEnd)
+				return B_BUFFER_OVERFLOW;
+			memcpy(tagData + tagSize, fJournalUUID, sizeof(fJournalUUID));
+			firstTag = false;
+		}
+
+		/* JBD2 checksum-v2 stores the low 16 bits of CRC32C in the
+		 * descriptor tag; checksum-v3 stores the complete CRC32C. */
+		uint32 dataChecksum = _BlockChecksum((const uint8*)finalData,
+			fCurrentCommitID);
+		if (fChecksumV3Enabled)
+			((JournalBlockTagV3*)tagData)->checksum
+				= B_HOST_TO_BENDIAN_INT32(dataChecksum);
+		else if (fChecksumEnabled)
+			tag->checksum = B_HOST_TO_BENDIAN_INT16(dataChecksum & 0xffff);
 
 		// TODO: use iovecs?
 
@@ -430,7 +475,7 @@ Journal::_WritePartialTransactionToLog(JournalHeader* descriptorBlock,
 			"at: %" B_PRIu32 "\n", logBlock);
 
 		blockCount++;
-		tag++;
+		tagData += tagSize;
 
 		status = cache_next_block_in_transaction(fFilesystemBlockCache,
 			fTransactionID, detached, &cookie, &blockNumber, NULL, NULL);
@@ -439,8 +484,12 @@ Journal::_WritePartialTransactionToLog(JournalHeader* descriptorBlock,
 	finished = status != B_OK;
 
 	// Write descriptor block
-	--tag;
-	tag->SetLastTagFlag();
+	if (tagData == (uint8*)descriptorBlock->data)
+		return B_BAD_DATA;
+	if (fChecksumV3Enabled)
+		((JournalBlockTagV3*)(tagData - tagSize))->SetLastTagFlag();
+	else
+		((JournalBlockTag*)(tagData - tagSize))->SetLastTagFlag();
 
 	fsblock_t physicalBlock;
 	status = MapBlock(descriptorBlockPos, physicalBlock);
@@ -448,6 +497,12 @@ Journal::_WritePartialTransactionToLog(JournalHeader* descriptorBlock,
 		return status;
 
 	off_t descriptorBlockOffset = physicalBlock * fBlockSize;
+
+	if (fChecksumEnabled) {
+		JournalBlockTail* tail = (JournalBlockTail*)((uint8*)descriptorBlock
+			+ fBlockSize - sizeof(JournalBlockTail));
+		tail->SetChecksum(_DescriptorChecksum((uint8*)descriptorBlock));
+	}
 
 	TRACE("Journal::_WritePartialTransactionToLog(): Writing to: %" B_PRIdOFF
 		"\n", descriptorBlockOffset);
@@ -543,7 +598,7 @@ Journal::_WriteTransactionToLog()
 	}
 	ArrayDeleter<uint8> commitBlockDeleter((uint8*)commitBlock);
 
-	commitBlock->MakeCommit(fCurrentCommitID + 1);
+	commitBlock->MakeCommit(fCurrentCommitID);
 	memset(commitBlock->data, 0, fBlockSize - sizeof(JournalHeader));
 		// TODO: This probably isn't necessary
 
@@ -576,8 +631,6 @@ Journal::_WriteTransactionToLog()
 	uint32 commitBlockPos = logBlock;
 
 	while (!finished) {
-		descriptorBlock->IncrementSequence();
-
 		status = _WritePartialTransactionToLog(descriptorBlock, detached,
 			&escapedData, logBlock, blockNumber, cookie, escapedDataDeleter,
 			blockCount, finished);
@@ -605,11 +658,17 @@ Journal::_WriteTransactionToLog()
 			return B_IO_ERROR;
 		}
 
-		commitBlock->IncrementSequence();
+		if (fChecksumEnabled)
+			_CommitBlock((uint8*)commitBlock, commitBlock->Sequence());
 		blockCount++;
 
 		logBlock = _WrapAroundLog(logBlock + 1);
 	}
+
+	/* The first commit block is the transaction's commit record. In
+	 * checksum-v2/v3 mode its tail must be finalized before it reaches disk. */
+	if (fChecksumEnabled)
+		_CommitBlock((uint8*)commitBlock, commitBlock->Sequence());
 
 	// Transaction will enter the Commit state
 	fsblock_t physicalBlock;
@@ -764,6 +823,7 @@ Journal::_LoadSuperBlock()
 				ERROR("Journal::_LoadSuperBlock(): Invalid checksum\n");
 				return B_BAD_DATA;
 			}
+			memcpy(fJournalUUID, superblock.uuid, sizeof(fJournalUUID));
 			fChecksumSeed = calculate_crc32c(0xffffffff, (uint8*)superblock.uuid,
 				sizeof(superblock.uuid));
 		}
@@ -775,8 +835,9 @@ Journal::_LoadSuperBlock()
 	fLogStart = superblock.LogStart();
 	fLogSize = superblock.NumBlocks();
 
-	uint32 descriptorTags = (fBlockSize - sizeof(JournalHeader))
-		/ sizeof(JournalBlockTag);
+	uint32 descriptorTags = (fBlockSize - sizeof(JournalHeader)
+		- (fChecksumEnabled ? sizeof(JournalBlockTail) : 0))
+		/ (_TagSize() + 16);
 		// Maximum tags per descriptor block
 	uint32 maxDescriptors = (fLogSize - 1) / (descriptorTags + 2);
 		// Maximum number of full journal transactions
@@ -819,7 +880,7 @@ Journal::_CheckFeatures(JournalSuperBlock* superblock)
 		return B_BAD_VALUE;
 	}
 
-	fChecksumEnabled = hasCsumV2 && hasCsumV3;
+	fChecksumEnabled = hasCsumV2 || hasCsumV3;
 	fChecksumV3Enabled = hasCsumV3;
 	fFeature64bits =
 		(superblock->IncompatibleFeatures() & JOURNAL_FEATURE_INCOMPATIBLE_64BIT) != 0;
@@ -855,41 +916,81 @@ Journal::_Checksum(uint8* block, bool set)
 	return checksum == oldChecksum;
 }
 
+uint32
+Journal::_BlockChecksum(const uint8* data, uint32 sequence) const
+{
+	/* JBD2 checksum-v3 data blocks use the journal UUID-derived seed,
+	 * followed by the transaction sequence and complete data block. */
+	uint32 crc = fChecksumSeed;
+	uint32 sequenceBE = B_HOST_TO_BENDIAN_INT32(sequence);
+	crc = calculate_crc32c(crc, (const uint8*)&sequenceBE, sizeof(sequenceBE));
+	return calculate_crc32c(crc, data, fBlockSize);
+}
+
+
+bool
+Journal::_VerifyBlockChecksum(const uint8* data, uint32 sequence,
+	uint32 checksum) const
+{
+	return _BlockChecksum(data, sequence) == checksum;
+}
+
+
+uint32
+Journal::_DescriptorChecksum(const uint8* block) const
+{
+	uint32 crc = fChecksumSeed;
+	return calculate_crc32c(crc, block, fBlockSize - sizeof(JournalBlockTail));
+}
+
+
+uint32
+Journal::_CommitChecksum(const uint8* block) const
+{
+	uint32 crc = fChecksumSeed;
+	return calculate_crc32c(crc, block, fBlockSize - sizeof(JournalBlockTail));
+}
+
+
+status_t
+Journal::_CommitBlock(uint8* block, uint32 sequence)
+{
+	if (!fChecksumEnabled)
+		return B_OK;
+
+	JournalBlockTail* tail = (JournalBlockTail*)(block + fBlockSize
+		- sizeof(JournalBlockTail));
+	tail->checksum = 0;
+	uint32 checksum = _CommitChecksum(block);
+	tail->SetChecksum(checksum);
+	return B_OK;
+}
+
 
 uint32
 Journal::_CountTags(JournalHeader* descriptorBlock)
 {
 	uint32 count = 0;
 	size_t tagSize = _TagSize();
-	size_t size = fBlockSize;
+	size_t size = fBlockSize - (fChecksumEnabled ? sizeof(JournalBlockTail) : 0);
+	uint8* tagData = (uint8*)descriptorBlock->data;
+	uint8* end = (uint8*)descriptorBlock + size;
 
-	if (fChecksumEnabled)
-		size -= sizeof(JournalBlockTail);
-
-	JournalBlockTag* tags = (JournalBlockTag*)descriptorBlock->data;
-		// Skip the header
-	JournalBlockTag* lastTag = (JournalBlockTag*)
-		(descriptorBlock + size - tagSize);
-
-	while (tags < lastTag && (tags->Flags() & JOURNAL_FLAG_LAST_TAG) == 0) {
-		if ((tags->Flags() & JOURNAL_FLAG_SAME_UUID) == 0)
-			tags = (JournalBlockTag*)((uint8*)tags + 16); // Skip new UUID
-
-		TRACE("Journal::_CountTags(): Tag block: %" B_PRIu32 "\n",
-			tags->BlockNumber());
-
-		tags = (JournalBlockTag*)((uint8*)tags + tagSize); // Go to next tag
+	while (tagData + tagSize <= end) {
+		uint32 flags;
+		if (fChecksumV3Enabled)
+			flags = ((JournalBlockTagV3*)tagData)->Flags();
+		else
+			flags = ((JournalBlockTag*)tagData)->Flags();
 		count++;
+		if ((flags & JOURNAL_FLAG_LAST_TAG) != 0)
+			break;
+		tagData += tagSize;
+		if ((flags & JOURNAL_FLAG_SAME_UUID) == 0)
+			tagData += 16;
 	}
-
-	if ((tags->Flags() & JOURNAL_FLAG_LAST_TAG) != 0)
-		count++;
-
-	TRACE("Journal::_CountTags(): counted tags: %" B_PRIu32 "\n", count);
-
 	return count;
 }
-
 
 size_t
 Journal::_TagSize()
@@ -897,14 +998,10 @@ Journal::_TagSize()
 	if (fChecksumV3Enabled)
 		return sizeof(JournalBlockTagV3);
 
-	size_t size = sizeof(JournalBlockTag);
-	if (fChecksumEnabled)
-		size += sizeof(uint16);
-	if (!fFeature64bits)
-		size -= sizeof(uint32);
-	return size;
+	/* JBD2 checksum-v2 uses the legacy tag with its 16-bit checksum;
+	 * 64-bit journals append the high block-number word. */
+	return sizeof(JournalBlockTag) + (fFeature64bits ? sizeof(uint32) : 0);
 }
-
 
 /*virtual*/ status_t
 Journal::Recover()
@@ -951,7 +1048,9 @@ Journal::_RecoverPassScan(uint32& lastCommitID)
 		uint32 blockType = header->BlockType();
 
 		if (blockType == JOURNAL_DESCRIPTOR_BLOCK) {
-			if (fChecksumEnabled && !_Checksum((uint8*)header, false)) {
+			if (fChecksumEnabled && _DescriptorChecksum((uint8*)header) !=
+				B_BENDIAN_TO_HOST_INT32(((JournalBlockTail*)((uint8*)header
+					+ fBlockSize - sizeof(JournalBlockTail)))->checksum)) {
 				ERROR("Journal::_RecoverPassScan(): Invalid checksum\n");
 				return B_BAD_DATA;
 			}
@@ -960,6 +1059,10 @@ Journal::_RecoverPassScan(uint32& lastCommitID)
 			TRACE("Journal recover pass scan: Found a descriptor block with "
 				"%" B_PRIu32 " tags\n", tags);
 		} else if (blockType == JOURNAL_COMMIT_BLOCK) {
+			if (fChecksumEnabled && _DescriptorChecksum((uint8*)header) !=
+				B_BENDIAN_TO_HOST_INT32(((JournalBlockTail*)((uint8*)header
+					+ fBlockSize - sizeof(JournalBlockTail)))->checksum))
+				return B_BAD_DATA;
 			nextCommitID++;
 			TRACE("Journal recover pass scan: Found a commit block. Next "
 				"commit ID: %" B_PRIu32 "\n", nextCommitID);
@@ -1091,35 +1194,64 @@ Journal::_RecoverPassReplay(uint32 lastCommitID)
 		uint32 blockType = header->BlockType();
 
 		if (blockType == JOURNAL_DESCRIPTOR_BLOCK) {
-			JournalBlockTag* last_tag = (JournalBlockTag*)((uint8*)header
-				+ fBlockSize - sizeof(JournalBlockTag));
+			size_t tagSize = _TagSize();
+			uint8* tagData = (uint8*)header->data;
+			uint8* tagEnd = (uint8*)header + fBlockSize
+				- (fChecksumEnabled ? sizeof(JournalBlockTail) : 0);
 
-			for (JournalBlockTag* tag = (JournalBlockTag*)header->data;
-				tag <= last_tag; ++tag) {
+			while (tagData + tagSize <= tagEnd) {
+							JournalBlockTag* tag = (JournalBlockTag*)tagData;
+				uint64 targetBlock;
+				uint32 tagFlags;
+				if (fChecksumV3Enabled) {
+					JournalBlockTagV3* tag3 = (JournalBlockTagV3*)tagData;
+					targetBlock = tag3->BlockNumber(fFeature64bits);
+					tagFlags = tag3->Flags();
+				} else {
+					targetBlock = tag->BlockNumber();
+					tagFlags = tag->Flags();
+					if (fFeature64bits)
+						targetBlock |= ((uint64)B_BENDIAN_TO_HOST_INT32(
+							*((uint32*)(tagData + sizeof(JournalBlockTag)))) << 32);
+				}
+
 				nextBlock = _WrapAroundLog(nextBlock + 1);
 
 				status = MapBlock(nextBlock, nextBlockPos);
 				if (status != B_OK)
 					return status;
 
-				if (!fRevokeManager->Lookup(tag->BlockNumber(),
-						nextCommitID)) {
+				if (!fRevokeManager->Lookup(targetBlock, nextCommitID)) {
 					// Block isn't revoked
 					size_t read = read_pos(fJournalVolume->Device(),
 						nextBlockPos * fBlockSize, data, fBlockSize);
 					if (read != fBlockSize)
 						return B_IO_ERROR;
 
-					if ((tag->Flags() & JOURNAL_FLAG_ESCAPED) != 0) {
+					/* Verify the journal payload before restoring an escaped magic
+					 * word; the checksum covers the exact bytes stored in the log. */
+					if (fChecksumEnabled && fChecksumV3Enabled
+							&& !_VerifyBlockChecksum(data, nextCommitID,
+								B_BENDIAN_TO_HOST_INT32(
+									((JournalBlockTagV3*)tagData)->checksum)))
+						return B_BAD_DATA;
+					if (fChecksumEnabled && !fChecksumV3Enabled) {
+						uint32 checksum = _BlockChecksum(data, nextCommitID);
+						if ((checksum & 0xffff) != B_BENDIAN_TO_HOST_INT16(
+								((JournalBlockTag*)tagData)->checksum))
+							return B_BAD_DATA;
+					}
+
+					if ((tagFlags & JOURNAL_FLAG_ESCAPED) != 0) {
 						// Block is escaped
 						((int32*)data)[0]
 							= B_HOST_TO_BENDIAN_INT32(JOURNAL_MAGIC);
 					}
 
-					TRACE("Journal::_RevoverPassReplay(): Write to %" B_PRIu32
-						"\n", tag->BlockNumber() * fBlockSize);
+					TRACE("Journal::_RevoverPassReplay(): Write to %" B_PRIu64 "\n",
+						targetBlock * fBlockSize);
 					size_t written = write_pos(fFilesystemVolume->Device(),
-						tag->BlockNumber() * fBlockSize, data, fBlockSize);
+						targetBlock * fBlockSize, data, fBlockSize);
 
 					if (written != fBlockSize)
 						return B_IO_ERROR;
@@ -1127,14 +1259,11 @@ Journal::_RecoverPassReplay(uint32 lastCommitID)
 					++count;
 				}
 
-				if ((tag->Flags() & JOURNAL_FLAG_LAST_TAG) != 0)
+				if ((tagFlags & JOURNAL_FLAG_LAST_TAG) != 0)
 					break;
-				if ((tag->Flags() & JOURNAL_FLAG_SAME_UUID) == 0) {
-					// TODO: Check new UUID with file system UUID
-					tag += 2;
-						// sizeof(JournalBlockTag) = 8
-						// sizeof(UUID) = 16
-				}
+				if ((tagFlags & JOURNAL_FLAG_SAME_UUID) == 0)
+					tagData += 16;
+				tagData += tagSize;
 			}
 		} else if (blockType == JOURNAL_COMMIT_BLOCK)
 			nextCommitID++;

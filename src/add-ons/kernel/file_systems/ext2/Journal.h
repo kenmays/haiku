@@ -30,11 +30,12 @@
 #define JOURNAL_FEATURE_INCOMPATIBLE_ASYNC_COMMIT	0x4
 #define JOURNAL_FEATURE_INCOMPATIBLE_CSUM_V2		0x8
 #define JOURNAL_FEATURE_INCOMPATIBLE_CSUM_V3		0x10
+#define JOURNAL_FEATURE_INCOMPATIBLE_FAST_COMMIT	0x20
 
 #define JOURNAL_KNOWN_READ_ONLY_COMPATIBLE_FEATURES	0
 #define JOURNAL_KNOWN_INCOMPATIBLE_FEATURES			\
 	(JOURNAL_FEATURE_INCOMPATIBLE_REVOKE | JOURNAL_FEATURE_INCOMPATIBLE_64BIT \
-		| JOURNAL_FEATURE_INCOMPATIBLE_CSUM_V3)
+		| JOURNAL_FEATURE_INCOMPATIBLE_CSUM_V2 | JOURNAL_FEATURE_INCOMPATIBLE_CSUM_V3)
 
 #define JOURNAL_CHECKSUM_TYPE_CRC32					0x1
 #define JOURNAL_CHECKSUM_TYPE_MD5					0x2
@@ -95,6 +96,19 @@ struct JournalBlockTag {
 		{ flags |= B_HOST_TO_BENDIAN_INT16(JOURNAL_FLAG_LAST_TAG); }
 	void			SetEscapedFlag()
 		{ flags |= B_HOST_TO_BENDIAN_INT16(JOURNAL_FLAG_ESCAPED); }
+} _PACKED;
+
+
+struct JournalCommitBlock {
+	JournalHeader header;
+	uint8 checksum_type;
+	uint8 checksum_size;
+	uint8 padding[2];
+	uint32 checksum[4];
+	uint64 commit_sec;
+	uint32 commit_nsec;
+
+	uint32 Sequence() const { return header.Sequence(); }
 } _PACKED;
 
 
@@ -212,7 +226,7 @@ struct JournalSuperBlock {
 	void			SetFirstCommitID(uint32 firstCommitID)
 		{ first_commit_id = B_HOST_TO_BENDIAN_INT32(firstCommitID); }
 	void			SetChecksum(uint32 checksum)
-		{ log_start = B_HOST_TO_BENDIAN_INT32(checksum); }
+		{ checksum = B_HOST_TO_BENDIAN_INT32(checksum); }
 
 
 } _PACKED;
@@ -300,12 +314,19 @@ protected:
 			bool				fChecksumV3Enabled;
 			bool				fFeature64bits;
 			uint32				fChecksumSeed;
+			uint8				fJournalUUID[16];
 
 private:
 			status_t			_CheckFeatures(JournalSuperBlock* superblock);
 
 			uint32				_Checksum(JournalSuperBlock* superblock);
 			bool				_Checksum(uint8 *block, bool set = false);
+			uint32				_BlockChecksum(const uint8* data, uint32 sequence) const;
+			bool				_VerifyBlockChecksum(const uint8* data, uint32 sequence,
+					uint32 checksum) const;
+			uint32				_DescriptorChecksum(const uint8* block) const;
+			uint32				_CommitChecksum(const uint8* block) const;
+			status_t			_CommitBlock(uint8* block, uint32 sequence);
 
 			uint32				_CountTags(JournalHeader *descriptorBlock);
 			size_t				_TagSize();

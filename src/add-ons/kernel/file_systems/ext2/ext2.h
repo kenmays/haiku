@@ -88,14 +88,50 @@ struct ext2_super_block {
 	uint8	checksum_type;
 	uint16	_reserved4;
 	uint64	kb_written;
-	uint32	_reserved5[60];
+	uint32	snapshot_inum;
+	uint32	snapshot_id;
+	uint64	snapshot_r_blocks_count;
+	uint32	snapshot_list;
+	uint32	error_count;
+	uint32	first_error_time;
+	uint32	first_error_ino;
+	uint64	first_error_block;
+	uint8	first_error_func[32];
+	uint32	first_error_line;
+	uint32	last_error_time;
+	uint32	last_error_ino;
+	uint32	last_error_line;
+	uint64	last_error_block;
+	uint8	last_error_func[32];
+	uint8	mount_opts[64];
+	uint32	usr_quota_inum;
+	uint32	grp_quota_inum;
+	uint32	overhead_clusters;
+	uint32	backup_bgs[2];
+	uint8	encrypt_algos[4];
+	uint8	encrypt_pw_salt[16];
+	uint32	lpf_ino;
+	uint32	prj_quota_inum;
 	uint32	checksum_seed;
-	uint32	_reserved6[98];
+	uint8	wtime_hi;
+	uint8	mtime_hi;
+	uint8	mkfs_time_hi;
+	uint8	lastcheck_hi;
+	uint8	first_error_time_hi;
+	uint8	last_error_time_hi;
+	uint8	first_error_errcode;
+	uint8	last_error_errcode;
+	uint16	encoding;
+	uint16	encoding_flags;
+	uint32	orphan_file_inum;
+	uint16	def_resuid_hi;
+	uint16	def_resgid_hi;
+	uint32	_reserved6[93];
 	uint32	checksum;
 
 	uint16 Magic() const { return B_LENDIAN_TO_HOST_INT16(magic); }
 	uint16 State() const { return B_LENDIAN_TO_HOST_INT16(state); }
-	uint32 RevisionLevel() const { return B_LENDIAN_TO_HOST_INT16(revision_level); }
+	uint32 RevisionLevel() const { return B_LENDIAN_TO_HOST_INT32(revision_level); }
 	uint32 BlockShift() const { return B_LENDIAN_TO_HOST_INT32(block_shift) + 10; }
 	uint32 NumInodes() const { return B_LENDIAN_TO_HOST_INT32(num_inodes); }
 	uint64 NumBlocks(bool has64bits) const
@@ -135,6 +171,8 @@ struct ext2_super_block {
 		{ return B_LENDIAN_TO_HOST_INT32(compatible_features); }
 	uint32 ReadOnlyFeatures() const
 		{ return B_LENDIAN_TO_HOST_INT32(read_only_features); }
+	uint32 OrphanFileInode() const
+		{ return B_LENDIAN_TO_HOST_INT32(orphan_file_inum); }
 	uint32 IncompatibleFeatures() const
 		{ return B_LENDIAN_TO_HOST_INT32(incompatible_features); }
 	uint16 ReservedGDTBlocks() const
@@ -184,6 +222,9 @@ struct ext2_super_block {
 #define EXT2_FEATURE_RESIZE_INODE				0x0010
 #define EXT2_FEATURE_DIRECTORY_INDEX			0x0020
 #define EXT2_FEATURE_SPARSESUPER2				0x0200
+#define EXT4_FEATURE_FAST_COMMIT				0x0400
+#define EXT4_FEATURE_STABLE_INODES				0x0800
+#define EXT4_FEATURE_ORPHAN_FILE				0x1000
 
 // read-only compatible features
 #define EXT2_READ_ONLY_FEATURE_SPARSE_SUPER		0x0001
@@ -198,6 +239,8 @@ struct ext2_super_block {
 #define EXT4_READ_ONLY_FEATURE_METADATA_CSUM	0x0400
 #define EXT4_READ_ONLY_FEATURE_READONLY			0x1000
 #define EXT4_READ_ONLY_FEATURE_PROJECT			0x2000
+#define EXT4_READ_ONLY_FEATURE_VERITY			0x8000
+#define EXT4_READ_ONLY_FEATURE_ORPHAN_PRESENT	0x10000
 
 // incompatible features
 #define EXT2_INCOMPATIBLE_FEATURE_COMPRESSION	0x0001
@@ -215,6 +258,7 @@ struct ext2_super_block {
 #define EXT2_INCOMPATIBLE_FEATURE_LARGEDIR		0x4000
 #define EXT2_INCOMPATIBLE_FEATURE_INLINE_DATA	0x8000
 #define EXT2_INCOMPATIBLE_FEATURE_ENCRYPT		0x10000
+#define EXT2_INCOMPATIBLE_FEATURE_CASEFOLD		0x20000
 
 // states
 #define EXT2_STATE_VALID						0x01
@@ -412,14 +456,25 @@ struct ext2_extent_entry {
 	uint32 physical_block;
 	uint32 LogicalBlock() const
 		{ return B_LENDIAN_TO_HOST_INT32(logical_block); }
-	uint16 Length() const { return B_LENDIAN_TO_HOST_INT16(length) == 0x8000
-		? 0x8000 : B_LENDIAN_TO_HOST_INT16(length) & 0x7fff; }
+	uint16 RawLength() const { return B_LENDIAN_TO_HOST_INT16(length); }
+	bool IsUnwritten() const { return (RawLength() & 0x8000) != 0; }
+	uint16 Length() const {
+		uint16 value = RawLength() & 0x7fff;
+		return value == 0 ? 32768 : value;
+	}
+	uint16 InitializedLength() const { return IsUnwritten() ? 0 : Length(); }
 	uint64 PhysicalBlock() const { return B_LENDIAN_TO_HOST_INT32(physical_block)
 		| ((uint64)B_LENDIAN_TO_HOST_INT16(physical_block_high) << 32); }
 	void SetLogicalBlock(uint32 block) {
 		logical_block = B_HOST_TO_LENDIAN_INT32(block); }
 	void SetLength(uint16 _length) {
-		length = B_HOST_TO_LENDIAN_INT16(_length) & 0x7fff; }
+		length = B_HOST_TO_LENDIAN_INT16(_length == 32768 ? 0 : _length & 0x7fff); }
+	void SetUnwritten(bool unwritten) {
+		uint16 value = RawLength() & 0x7fff;
+		if (unwritten)
+			value |= 0x8000;
+		length = B_HOST_TO_LENDIAN_INT16(value);
+	}
 	void SetPhysicalBlock(uint64 block) {
 		physical_block = B_HOST_TO_LENDIAN_INT32(block & 0xffffffff);
 		physical_block_high = B_HOST_TO_LENDIAN_INT16((block >> 32) & 0xffff); }
@@ -555,8 +610,7 @@ struct ext2_inode {
 	{
 		if (extra) {
 			creation_time = B_HOST_TO_LENDIAN_INT32((uint32)timespec->tv_sec);
-			creation_time_extra =
-				B_HOST_TO_LENDIAN_INT32((uint32)timespec->tv_nsec);
+			creation_time_extra = _EncodeTime(timespec);
 		}
 	}
 	void SetDeletionTime(time_t deletionTime)
@@ -596,7 +650,7 @@ struct ext2_inode {
 
 	void SetMode(uint16 newMode)
 	{
-		mode = B_LENDIAN_TO_HOST_INT16(newMode);
+		mode = B_HOST_TO_LENDIAN_INT16(newMode);
 	}
 
 	void UpdateMode(uint16 newMode, uint16 mask)

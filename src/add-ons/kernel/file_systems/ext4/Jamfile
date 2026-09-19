@@ -1,0 +1,46 @@
+SubDir HAIKU_TOP src add-ons kernel file_systems ext4 ;
+
+UsePrivateHeaders [ FDirName kernel util ] ;
+UsePrivateHeaders shared storage ;
+UsePrivateHeaders file_systems ;
+UsePrivateKernelHeaders ;
+UseHeaders [ FDirName $(HAIKU_TOP) src add-ons kernel file_systems shared ] : true ;
+
+/*
+ * Phase 1 deliberately reuses the mature ext2 implementation while the
+ * ext4-specific validation/integrity layer is introduced.  The next phases
+ * will move these translation units into this directory.
+ */
+KernelAddon ext4 :
+	../ext2/Attribute.cpp
+	../ext2/BitmapBlock.cpp
+	../ext2/BlockAllocator.cpp
+	../ext2/DataStream.cpp
+	../ext2/DirectoryIterator.cpp
+	../ext2/ExtentStream.cpp
+	../ext2/HashRevokeManager.cpp
+	../ext2/HTree.cpp
+	../ext2/HTreeEntryIterator.cpp
+	../ext2/Inode.cpp
+	../ext2/InodeAllocator.cpp
+	../ext2/InodeJournal.cpp
+	../ext2/Journal.cpp
+	../ext2/NoJournal.cpp
+	../ext2/RevokeManager.cpp
+	../ext2/Transaction.cpp
+	../ext2/Volume.cpp
+	Ext4FeatureSet.cpp
+	Ext4Checksum.cpp
+	OrphanList.cpp
+	OrphanFile.cpp
+	ext4_kernel_interface.cpp
+;
+
+SEARCH on [ FGristFiles DeviceOpener.cpp ]
+	= [ FDirName $(HAIKU_TOP) src add-ons kernel file_systems shared ] ;
+
+SEARCH on [ FGristFiles crc32.cpp ]
+	= [ FDirName $(HAIKU_TOP) src add-ons kernel file_systems shared ] ;
+
+SEARCH on [ FGristFiles CRCTable.cpp ]
+	= [ FDirName $(HAIKU_TOP) src add-ons kernel file_systems shared ] ;

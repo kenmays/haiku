@@ -60,7 +60,7 @@ ExtentStream::FindBlock(off_t offset, fsblock_t& block, uint32 *_count)
 
 	ext2_extent_stream *stream = fStream;
 	if (!stream->extent_header.IsValid())
-		panic("ExtentStream::FindBlock() invalid header\n");
+		return B_BAD_DATA;
 
 	CachedBlock cached(fVolume);
 	while (stream->extent_header.Depth() != 0) {
@@ -76,11 +76,9 @@ ExtentStream::FindBlock(off_t offset, fsblock_t& block, uint32 *_count)
 		stream = (ext2_extent_stream *)cached.SetTo(
 			stream->extent_index[i - 1].PhysicalBlock());
 		if (!stream->extent_header.IsValid())
-			panic("ExtentStream::FindBlock() invalid header\n");
-		if (!fInode->VerifyExtentChecksum(stream)) {
-			panic("ExtentStream::FindBlock() invalid checksum\n");
 			return B_BAD_DATA;
-		}
+		if (!fInode->VerifyExtentChecksum(stream))
+			return B_BAD_DATA;
 	}
 
 	// find the extend following the one that should contain the logical block
@@ -137,6 +135,18 @@ ExtentStream::FindBlock(off_t offset, fsblock_t& block, uint32 *_count)
 				? logicalEndIndex - index
 				: stream->extent_entries[extentIndex].LogicalBlock() - index;
 		}
+		return B_OK;
+	}
+
+	/*
+	 * An unwritten extent reserves physical blocks without making their
+	 * contents part of the file.  Reads must therefore return a sparse
+	 * mapping (zero-filled by the VFS) while preserving the reservation.
+	 */
+	if (extent.IsUnwritten()) {
+		block = 0;
+		if (_count != NULL)
+			*_count = extent.Length() - diff;
 		return B_OK;
 	}
 
@@ -385,6 +395,108 @@ ExtentStream::Enlarge(Transaction& transaction, off_t& numBlocks)
 
 
 status_t
+ExtentStream::InitializeRange(Transaction& transaction, off_t offset, size_t length)
+{
+	if (length == 0 || offset < 0)
+		return B_OK;
+
+	fileblock_t first = offset >> fVolume->BlockShift();
+	fileblock_t last = (offset + length - 1) >> fVolume->BlockShift();
+
+	CachedBlock cached(fVolume);
+	ext2_extent_stream* stream = fStream;
+	while (stream->extent_header.Depth() != 0) {
+		if (!stream->extent_header.IsValid())
+			return B_BAD_DATA;
+		int32 index = 0;
+		while (index + 1 < stream->extent_header.NumEntries()
+			&& stream->extent_index[index + 1].LogicalBlock() <= first)
+			index++;
+		stream = (ext2_extent_stream*)cached.SetTo(
+			stream->extent_index[index].PhysicalBlock());
+		if (stream == NULL || !stream->extent_header.IsValid())
+			return B_BAD_DATA;
+		if (!fInode->VerifyExtentChecksum(stream))
+			return B_BAD_DATA;
+	}
+
+	for (int32 i = 0; i < stream->extent_header.NumEntries(); i++) {
+		ext2_extent_entry original = stream->extent_entries[i];
+		if (!original.IsUnwritten())
+			continue;
+
+		fileblock_t start = original.LogicalBlock();
+		fileblock_t end = start + original.Length();
+		if (last < start || first >= end)
+			continue;
+
+		fileblock_t initStart = max_c(first, start);
+		fileblock_t initEnd = min_c(last + 1, end);
+		uint16 oldLength = original.Length();
+		uint16 before = (uint16)(initStart - start);
+		uint16 middle = (uint16)(initEnd - initStart);
+		uint16 after = (uint16)(oldLength - before - middle);
+		int32 pieces = (before != 0 ? 1 : 0) + 1 + (after != 0 ? 1 : 0);
+
+		if (stream->extent_header.NumEntries() + pieces - 1
+			> stream->extent_header.MaxEntries())
+			return B_BUFFER_OVERFLOW;
+
+		if (stream != fStream) {
+			stream = (ext2_extent_stream*)cached.SetToWritable(
+				transaction, cached.BlockNumber());
+			if (stream == NULL)
+				return B_IO_ERROR;
+		}
+
+		if (pieces == 1) {
+			stream->extent_entries[i].SetUnwritten(false);
+			fInode->SetExtentChecksum(stream);
+			continue;
+		}
+
+		int32 oldEntries = stream->extent_header.NumEntries();
+		int32 tailEntries = oldEntries - i - 1;
+		if (tailEntries > 0)
+			memmove(&stream->extent_entries[i + pieces],
+				&stream->extent_entries[i + 1],
+				tailEntries * sizeof(ext2_extent_entry));
+
+		int32 n = i;
+		if (before != 0) {
+			stream->extent_entries[n] = original;
+			stream->extent_entries[n].SetLength(before);
+			stream->extent_entries[n].SetUnwritten(true);
+			n++;
+		}
+
+		stream->extent_entries[n] = original;
+		stream->extent_entries[n].SetLogicalBlock(initStart);
+		stream->extent_entries[n].SetPhysicalBlock(
+			original.PhysicalBlock() + before);
+		stream->extent_entries[n].SetLength(middle);
+		stream->extent_entries[n].SetUnwritten(false);
+		n++;
+
+		if (after != 0) {
+			stream->extent_entries[n] = original;
+			stream->extent_entries[n].SetLogicalBlock(initEnd);
+			stream->extent_entries[n].SetPhysicalBlock(
+				original.PhysicalBlock() + before + middle);
+			stream->extent_entries[n].SetLength(after);
+			stream->extent_entries[n].SetUnwritten(true);
+		}
+
+		stream->extent_header.SetNumEntries(oldEntries + pieces - 1);
+		fInode->SetExtentChecksum(stream);
+		i += pieces - 1;
+	}
+
+	return B_OK;
+}
+
+
+status_t
 ExtentStream::Shrink(Transaction& transaction, off_t& numBlocks)
 {
 	TRACE("DataStream::Shrink(): current size: %" B_PRIdOFF ", target size: %"
@@ -501,6 +613,9 @@ ExtentStream::_Check(ext2_extent_stream *stream, fileblock_t &block)
 		panic("_Check() invalid header\n");
 		return B_BAD_VALUE;
 	}
+	if (!fInode->VerifyExtentChecksum(stream))
+		return B_BAD_DATA;
+
 	if (stream->extent_header.Depth() == 0) {
 		for (int32 i = 0; i < stream->extent_header.NumEntries(); i++) {
 			ext2_extent_entry &entry = stream->extent_entries[i];
@@ -543,6 +658,8 @@ ExtentStream::Check()
 status_t
 ExtentStream::_CheckBlock(ext2_extent_stream *stream, fsblock_t block)
 {
+	if (!fInode->VerifyExtentChecksum(stream))
+		return B_BAD_DATA;
 	if (stream->extent_header.Depth() == 0) {
 		for (int32 i = 0; i < stream->extent_header.NumEntries(); i++) {
 			ext2_extent_entry &entry = stream->extent_entries[i];

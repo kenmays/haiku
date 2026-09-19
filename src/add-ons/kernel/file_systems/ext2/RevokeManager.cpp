@@ -37,19 +37,24 @@ RevokeManager::ScanRevokeBlock(JournalRevokeHeader* revokeBlock,
 {
 	TRACE("RevokeManager::ScanRevokeBlock(): Commit ID: %" B_PRIu32 "\n",
 		commitID);
-	int count = revokeBlock->NumBytes() / 4;
-	
-	for (int i = 0; i < count; ++i) {
-		TRACE("RevokeManager::ScanRevokeBlock(): Found a revoked block: %"
-			B_PRIu32 "\n", revokeBlock->RevokeBlock(i));
-		status_t status = Insert(revokeBlock->RevokeBlock(i), commitID);
-		
-		if (status != B_OK) {
-			TRACE("RevokeManager::ScanRevokeBlock(): Error inserting\n");
-			return status;
-		}
-	}
+	uint32 bytes = revokeBlock->NumBytes();
+	const uint32 headerSize = sizeof(JournalRevokeHeader);
+	uint32 entrySize = fHas64bits ? sizeof(uint64) : sizeof(uint32);
+	if (bytes < headerSize || ((bytes - headerSize) % entrySize) != 0)
+		return B_BAD_DATA;
 
+	uint32 count = (bytes - headerSize) / entrySize;
+	uint8* entries = (uint8*)revokeBlock->revoke_blocks;
+	for (uint32 i = 0; i < count; i++) {
+		uint64 block;
+		if (fHas64bits)
+			block = B_BENDIAN_TO_HOST_INT64(*(uint64*)(entries + i * entrySize));
+		else
+			block = B_BENDIAN_TO_HOST_INT32(*(uint32*)(entries + i * entrySize));
+		status_t status = Insert(block, commitID);
+		if (status != B_OK)
+			return status;
+	}
 	return B_OK;
 }
 

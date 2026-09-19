@@ -9,6 +9,8 @@
 
 
 #include "Volume.h"
+#include "../ext4/OrphanList.h"
+#include "../ext4/OrphanFile.h"
 
 #include <errno.h>
 #include <new>
@@ -218,9 +220,8 @@ Volume::Mount(const char* deviceName, uint32 flags)
 	if (Has64bitFeature()) {
 		TRACE("64bits\n");
 		fGroupDescriptorSize = fSuperBlock.GroupDescriptorSize();
-		if (fGroupDescriptorSize < sizeof(ext2_block_group))
-			return B_ERROR;
-		if (fGroupDescriptorSize != sizeof(ext2_block_group))
+		if (fGroupDescriptorSize < 32
+			|| fGroupDescriptorSize > sizeof(ext2_block_group))
 			return B_UNSUPPORTED;
 	} else
 		fGroupDescriptorSize = EXT2_BLOCK_GROUP_NORMAL_SIZE;
@@ -308,6 +309,20 @@ Volume::Mount(const char* deviceName, uint32 flags)
 		return status;
 	}
 
+	/* Journal replay is complete; recover ext4 orphan state before exposing
+	 * the root vnode. The modern orphan file is preferred when present. */
+	if ((fSuperBlock.CompatibleFeatures() & EXT4_FEATURE_ORPHAN_FILE) != 0
+			&& (fSuperBlock.ReadOnlyFeatures()
+				& EXT4_READ_ONLY_FEATURE_ORPHAN_PRESENT) != 0) {
+		status = Ext4OrphanFile::Recover(*this);
+		if (status != B_OK)
+			return status;
+	} else if (fSuperBlock.LastOrphan() != 0) {
+		status = Ext4OrphanList::Recover(*this);
+		if (status != B_OK)
+			return status;
+	}
+
 	if (!IsReadOnly()) {
 		// Initialize allocators
 		fBlockAllocator = new(std::nothrow) BlockAllocator(this);
@@ -346,6 +361,20 @@ status_t
 Volume::Unmount()
 {
 	TRACE("Volume::Unmount()\n");
+
+	if (!IsReadOnly()
+			&& (fSuperBlock.CompatibleFeatures() & EXT4_FEATURE_ORPHAN_FILE) != 0
+			&& (fSuperBlock.ReadOnlyFeatures()
+				& EXT4_READ_ONLY_FEATURE_ORPHAN_PRESENT) != 0) {
+		bool empty = false;
+		if (Ext4OrphanFile::IsEmpty(*this, empty) == B_OK && empty) {
+			Transaction transaction(fJournal);
+			if (transaction.IsStarted()
+					&& Ext4OrphanFile::MarkPresent(*this, transaction, false)
+					== B_OK)
+				transaction.Done();
+		}
+	}
 
 	status_t status = fJournal->Uninit();
 
@@ -517,7 +546,7 @@ Volume::GetBlockGroup(int32 index, ext2_block_group** _group)
 	*_group = (ext2_block_group*)(fGroupBlocks[blockIndex]
 		+ blockOffset * fGroupDescriptorSize);
 	if (HasChecksumFeature()
-		&& (*_group)->checksum != _GroupCheckSum(*_group, index)) {
+		&& B_LENDIAN_TO_HOST_INT16((*_group)->checksum) != _GroupCheckSum(*_group, index)) {
 		return B_BAD_DATA;
 	}
 	return B_OK;
@@ -543,7 +572,7 @@ Volume::WriteBlockGroup(Transaction& transaction, int32 index)
 	ext2_block_group *group = (ext2_block_group*)(fGroupBlocks[blockIndex]
 		+ blockOffset * fGroupDescriptorSize);
 
-	group->checksum = _GroupCheckSum(group, index);
+	group->checksum = B_HOST_TO_LENDIAN_INT16(_GroupCheckSum(group, index));
 	TRACE("Volume::WriteBlockGroup() checksum 0x%x for group %" B_PRId32 " "
 		"(free inodes %" B_PRIu32 ", unused %" B_PRIu32 ")\n", group->checksum,
 		index, group->FreeInodes(Has64bitFeature()),
@@ -725,7 +754,7 @@ void
 Volume::_SuperBlockChecksumSeed()
 {
 	if (HasChecksumSeedFeature()) {
-		fChecksumSeed = fSuperBlock.checksum_seed;
+		fChecksumSeed = B_LENDIAN_TO_HOST_INT32(fSuperBlock.checksum_seed);
 	} else if (HasMetaGroupChecksumFeature()) {
 		fChecksumSeed = calculate_crc32c(0xffffffff, (uint8*)fSuperBlock.uuid,
 			sizeof(fSuperBlock.uuid));
@@ -742,7 +771,7 @@ Volume::_VerifySuperBlock()
 
 	uint32 checksum = calculate_crc32c(0xffffffff, (uint8*)&fSuperBlock,
 		offsetof(struct ext2_super_block, checksum));
-	return checksum == fSuperBlock.checksum;
+	return checksum == B_LENDIAN_TO_HOST_INT32(fSuperBlock.checksum);
 }
 
 

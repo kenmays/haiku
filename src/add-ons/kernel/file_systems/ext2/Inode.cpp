@@ -6,6 +6,8 @@
 
 
 #include "Inode.h"
+#include "../ext4/OrphanList.h"
+#include "../ext4/OrphanFile.h"
 
 #include <string.h>
 #include <util/AutoLock.h>
@@ -284,6 +286,11 @@ Inode::WriteAt(Transaction& transaction, off_t pos, const uint8* buffer,
 		oldSize >> 32, oldSize & 0xFFFFFFFF,
 		end >> 32, end & 0xFFFFFFFF);
 
+	/*
+	 * Ext4 may allocate newly extended ranges as unwritten extents.
+	 * Convert the blocks touched by this write before the page cache is
+	 * flushed, otherwise FindBlock() correctly presents them as holes.
+	 */
 	if (end > oldSize) {
 		status_t status = Resize(transaction, end);
 		if (status != B_OK) {
@@ -305,6 +312,17 @@ Inode::WriteAt(Transaction& transaction, off_t pos, const uint8* buffer,
 	if (oldSize < pos)
 		FillGapWithZeros(oldSize, pos);
 
+	status_t status = B_OK;
+	if (length != 0 && (Flags() & EXT2_INODE_EXTENTS) != 0) {
+		ExtentStream stream(fVolume, this, &fNode.extent_stream, Size());
+		status = stream.InitializeRange(transaction, pos, length);
+		if (status != B_OK) {
+			*_length = 0;
+			WriteLockInTransaction(transaction);
+			return status;
+		}
+	}
+
 	if (length == 0) {
 		// Probably just changed the file size with the pos parameter
 		return B_OK;
@@ -312,7 +330,7 @@ Inode::WriteAt(Transaction& transaction, off_t pos, const uint8* buffer,
 
 	TRACE("Inode::WriteAt(): Performing write: %p, %" B_PRIdOFF ", %p, %"
 		B_PRIuSIZE "\n", FileCache(), pos, buffer, *_length);
-	status_t status = file_cache_write(FileCache(), NULL, pos, buffer,
+	status = file_cache_write(FileCache(), NULL, pos, buffer,
 		_length);
 
 	WriteLockInTransaction(transaction);
@@ -357,6 +375,10 @@ Inode::Resize(Transaction& transaction, off_t size)
 {
 	TRACE("Inode::Resize() ID:%" B_PRIdINO " size: %" B_PRIdOFF "\n", ID(),
 		size);
+
+	/* ext4 orphan protection: an inode whose link count is zero must stay
+	 * on the orphan list for the entire truncation transaction. */
+	bool orphaned = fNode.num_links == 0 && fNode.deletion_time != 0;
 	if (size < 0)
 		return B_BAD_VALUE;
 
@@ -369,6 +391,24 @@ Inode::Resize(Transaction& transaction, off_t size)
 		"\n", oldSize, size);
 
 	status_t status;
+	bool shrinkOrphanAdded = false;
+	bool modernOrphan = (fVolume->SuperBlock().CompatibleFeatures()
+		& EXT4_FEATURE_ORPHAN_FILE) != 0;
+	if (size < oldSize && fNode.NumLinks() != 0) {
+		if (modernOrphan) {
+			status = Ext4OrphanFile::Add(*fVolume, *this, transaction);
+			if (status == B_OK)
+				status = Ext4OrphanFile::MarkPresent(*fVolume,
+					transaction, true);
+		} else if (fNode.next_orphan == 0)
+			status = Ext4OrphanList::Add(*fVolume, *this, transaction);
+		else
+			status = B_OK;
+		if (status != B_OK)
+			return status;
+		shrinkOrphanAdded = true;
+	}
+
 	if (size > oldSize) {
 		status = _EnlargeDataStream(transaction, size);
 		if (status != B_OK) {
@@ -378,10 +418,50 @@ Inode::Resize(Transaction& transaction, off_t size)
 	} else
 		status = _ShrinkDataStream(transaction, size);
 
+	if (status == B_OK && shrinkOrphanAdded) {
+		if (modernOrphan) {
+			status = Ext4OrphanFile::Remove(*fVolume, ID(), transaction);
+			if (status == B_OK) {
+				bool empty = false;
+				status = Ext4OrphanFile::IsEmpty(*fVolume, empty);
+				if (status == B_OK && empty)
+					status = Ext4OrphanFile::MarkPresent(*fVolume,
+						transaction, false);
+			}
+		} else {
+			status = Ext4OrphanList::Remove(*fVolume, ID(), transaction);
+			fNode.next_orphan = 0;
+		}
+	}
+
 	TRACE("Inode::Resize(): Updating file map and cache\n");
 
 	if (status != B_OK)
 		return status;
+
+	if (orphaned && size == 0 && fNode.next_orphan != 0) {
+		status_t orphanStatus = Ext4OrphanList::Remove(*fVolume, ID(),
+			transaction);
+		if (orphanStatus != B_OK && orphanStatus != B_ENTRY_NOT_FOUND)
+			return orphanStatus;
+		fNode.next_orphan = 0;
+	} else if (size == 0 && (fVolume->SuperBlock().CompatibleFeatures()
+			& EXT4_FEATURE_ORPHAN_FILE) != 0 && fNode.NumLinks() == 0) {
+		/* Modern orphan-file entries are not linked through deletion_time. */
+		status_t orphanStatus = Ext4OrphanFile::Remove(*fVolume, ID(),
+			transaction);
+		if (orphanStatus != B_OK && orphanStatus != B_ENTRY_NOT_FOUND)
+			return orphanStatus;
+		if (orphanStatus == B_OK) {
+			bool empty = false;
+			orphanStatus = Ext4OrphanFile::IsEmpty(*fVolume, empty);
+			if (orphanStatus == B_OK && empty)
+				orphanStatus = Ext4OrphanFile::MarkPresent(*fVolume,
+					transaction, false);
+			if (orphanStatus != B_OK)
+				return orphanStatus;
+		}
+	}
 
 	file_cache_set_size(FileCache(), size);
 	file_map_set_size(Map(), size);
@@ -456,7 +536,23 @@ Inode::Unlink(Transaction& transaction)
 	if ((IsDirectory() && numLinks == 2) || (numLinks == 1))  {
 		fUnlinked = true;
 
+		/* Keep the inode reachable from ext4's orphan machinery until its
+		 * blocks are reclaimed. Modern orphan_file filesystems use the
+		 * fixed-size orphan table; older ext4 uses s_last_orphan. */
+		status_t orphanStatus;
+		if ((fVolume->SuperBlock().CompatibleFeatures()
+				& EXT4_FEATURE_ORPHAN_FILE) != 0) {
+			orphanStatus = Ext4OrphanFile::Add(*fVolume, *this, transaction);
+			if (orphanStatus == B_OK)
+				orphanStatus = Ext4OrphanFile::MarkPresent(*fVolume,
+					transaction, true);
+		} else
+			orphanStatus = Ext4OrphanList::Add(*fVolume, *this, transaction);
+		if (orphanStatus != B_OK)
+			return orphanStatus;
+
 		fNode.num_links = 0;
+		fNode.SetDeletionTime(real_time_clock());
 
 		status_t status = remove_vnode(fVolume->FSVolume(), fID);
 		if (status != B_OK)
@@ -929,7 +1025,7 @@ uint32
 Inode::_InodeChecksum(ext2_inode* inode)
 {
 	size_t offset = offsetof(ext2_inode, checksum);
-	uint32 number = fID;
+	uint32 number = B_HOST_TO_LENDIAN_INT32((uint32)fID);
 	uint32 checksum = calculate_crc32c(fVolume->ChecksumSeed(),
 		(uint8*)&number, sizeof(number));
 	uint32 gen = fNode.generation;
@@ -967,7 +1063,7 @@ Inode::_DirEntryTail(uint8* block) const
 uint32
 Inode::_DirEntryChecksum(uint8* block, uint32 id, uint32 gen) const
 {
-	uint32 number = id;
+	uint32 number = B_HOST_TO_LENDIAN_INT32(id);
 	uint32 checksum = calculate_crc32c(fVolume->ChecksumSeed(),
 		(uint8*)&number, sizeof(number));
 	checksum = calculate_crc32c(checksum, (uint8*)&gen, sizeof(gen));
@@ -1001,9 +1097,16 @@ Inode::SetDirEntryChecksum(uint8* block)
 uint32
 Inode::_ExtentLength(ext2_extent_stream* stream) const
 {
-	return sizeof(struct ext2_extent_header)
-		+ stream->extent_header.MaxEntries()
-			* sizeof(struct ext2_extent_entry);
+	/*
+	 * Ext4 places the extent-tree checksum tail at the end of the
+	 * containing extent block.  The inode extent root is contained in the
+	 * inode itself, so its tail is at the end of the inode.  Index/leaf
+	 * blocks use the filesystem block size.
+	 */
+	if (stream == &fNode.extent_stream)
+		return fNodeSize - sizeof(ext2_extent_tail);
+
+	return fVolume->BlockSize() - sizeof(ext2_extent_tail);
 }
 
 
@@ -1028,7 +1131,7 @@ Inode::SetExtentChecksum(ext2_extent_stream* stream)
 		uint32 checksum = _ExtentChecksum(stream);
 		struct ext2_extent_tail *tail = (struct ext2_extent_tail *)
 			((uint8*)stream + _ExtentLength(stream));
-		tail->checksum = checksum;
+		tail->checksum = B_HOST_TO_LENDIAN_INT32(checksum);
 	}
 }
 
@@ -1040,7 +1143,7 @@ Inode::VerifyExtentChecksum(ext2_extent_stream* stream)
 		uint32 checksum = _ExtentChecksum(stream);
 		struct ext2_extent_tail *tail = (struct ext2_extent_tail *)
 			((uint8*)stream + _ExtentLength(stream));
-		return tail->checksum == checksum;
+		return B_LENDIAN_TO_HOST_INT32(tail->checksum) == checksum;
 	}
 	return true;
 }

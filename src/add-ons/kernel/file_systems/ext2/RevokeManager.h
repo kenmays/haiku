@@ -18,9 +18,9 @@ public:
 						RevokeManager(bool has64bits);
 	virtual				~RevokeManager() = 0;
 
-	virtual	status_t	Insert(uint32 block, uint32 commitID) = 0;
-	virtual	status_t	Remove(uint32 block) = 0;
-	virtual	bool		Lookup(uint32 block, uint32 commitID) = 0;
+	virtual	status_t	Insert(uint64 block, uint32 commitID) = 0;
+	virtual	status_t	Remove(uint64 block) = 0;
+	virtual	bool		Lookup(uint64 block, uint32 commitID) = 0;
 			
 			uint32		NumRevokes() { return fRevokeCount; }
 

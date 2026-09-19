@@ -82,7 +82,11 @@ Ext4OrphanList::Recover(Volume& volume)
 			return B_ERROR;
 
 		status_t status = inode.Resize(transaction, 0);
-		if (status == B_OK) {
+		if (status == B_OK && inode.Node().NumLinks() == 0) {
+			/* The inode was unlinked before the crash. Linux ext4 reclaims
+			 * the inode after its data blocks have been truncated. */
+			status = volume.FreeInode(transaction, inode.ID(), inode.IsDirectory());
+		} else if (status == B_OK) {
 			inode.Node().SetNextOrphan(0);
 			status = inode.WriteBack(transaction);
 		}

@@ -1001,9 +1001,16 @@ Inode::SetDirEntryChecksum(uint8* block)
 uint32
 Inode::_ExtentLength(ext2_extent_stream* stream) const
 {
-	return sizeof(struct ext2_extent_header)
-		+ stream->extent_header.MaxEntries()
-			* sizeof(struct ext2_extent_entry);
+	/*
+	 * Ext4 places the extent-tree checksum tail at the end of the
+	 * containing extent block.  The inode extent root is contained in the
+	 * inode itself, so its tail is at the end of the inode.  Index/leaf
+	 * blocks use the filesystem block size.
+	 */
+	if (stream == &fNode.extent_stream)
+		return fNodeSize - sizeof(ext2_extent_tail);
+
+	return fVolume->BlockSize() - sizeof(ext2_extent_tail);
 }
 
 
@@ -1028,7 +1035,7 @@ Inode::SetExtentChecksum(ext2_extent_stream* stream)
 		uint32 checksum = _ExtentChecksum(stream);
 		struct ext2_extent_tail *tail = (struct ext2_extent_tail *)
 			((uint8*)stream + _ExtentLength(stream));
-		tail->checksum = checksum;
+		tail->checksum = B_HOST_TO_LENDIAN_INT32(checksum);
 	}
 }
 
@@ -1040,7 +1047,7 @@ Inode::VerifyExtentChecksum(ext2_extent_stream* stream)
 		uint32 checksum = _ExtentChecksum(stream);
 		struct ext2_extent_tail *tail = (struct ext2_extent_tail *)
 			((uint8*)stream + _ExtentLength(stream));
-		return tail->checksum == checksum;
+		return B_LENDIAN_TO_HOST_INT32(tail->checksum) == checksum;
 	}
 	return true;
 }

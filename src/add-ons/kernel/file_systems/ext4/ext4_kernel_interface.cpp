@@ -29,6 +29,9 @@
 #include "../ext4/Ext4FeatureSet.h"
 #include "../ext4/Ext4Checksum.h"
 
+extern fs_volume_ops gExt2VolumeOps;
+extern fs_vnode_ops gExt2VnodeOps;
+
 
 //#define TRACE_EXT2
 #ifdef TRACE_EXT2

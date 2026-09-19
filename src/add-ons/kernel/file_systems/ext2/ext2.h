@@ -131,7 +131,7 @@ struct ext2_super_block {
 
 	uint16 Magic() const { return B_LENDIAN_TO_HOST_INT16(magic); }
 	uint16 State() const { return B_LENDIAN_TO_HOST_INT16(state); }
-	uint32 RevisionLevel() const { return B_LENDIAN_TO_HOST_INT16(revision_level); }
+	uint32 RevisionLevel() const { return B_LENDIAN_TO_HOST_INT32(revision_level); }
 	uint32 BlockShift() const { return B_LENDIAN_TO_HOST_INT32(block_shift) + 10; }
 	uint32 NumInodes() const { return B_LENDIAN_TO_HOST_INT32(num_inodes); }
 	uint64 NumBlocks(bool has64bits) const
@@ -610,8 +610,7 @@ struct ext2_inode {
 	{
 		if (extra) {
 			creation_time = B_HOST_TO_LENDIAN_INT32((uint32)timespec->tv_sec);
-			creation_time_extra =
-				B_HOST_TO_LENDIAN_INT32((uint32)timespec->tv_nsec);
+			creation_time_extra = _EncodeTime(timespec);
 		}
 	}
 	void SetDeletionTime(time_t deletionTime)
@@ -651,7 +650,7 @@ struct ext2_inode {
 
 	void SetMode(uint16 newMode)
 	{
-		mode = B_LENDIAN_TO_HOST_INT16(newMode);
+		mode = B_HOST_TO_LENDIAN_INT16(newMode);
 	}
 
 	void UpdateMode(uint16 newMode, uint16 mask)

@@ -119,7 +119,8 @@ Ext4FeatureSet::Validate(const ext2_super_block& superBlock, bool readOnly)
 		return B_UNSUPPORTED;
 
 	if (superBlock.ReadOnlyFeatures() & (0x0200 /* BIGALLOC */
-			| 0x0100 /* QUOTA */ | 0x2000 /* PROJECT */))
+			| 0x0100 /* QUOTA */ | 0x2000 /* PROJECT */
+			| 0x8000 /* VERITY */ | 0x10000 /* ORPHAN_PRESENT */))
 		return B_UNSUPPORTED;
 
 	/* The modern orphan-file feature needs its dedicated inode/table

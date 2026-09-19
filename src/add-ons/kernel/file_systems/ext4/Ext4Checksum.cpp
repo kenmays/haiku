@@ -3,7 +3,7 @@
 #include <stddef.h>
 #include <string.h>
 
-#include "CRCTable.h"
+#include "../ext2/CRCTable.h"
 #include "../ext2/ext2.h"
 #include "Ext4Integrity.h"
 

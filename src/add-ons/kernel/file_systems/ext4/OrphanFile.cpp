@@ -271,10 +271,10 @@ Ext4OrphanFile::Recover(Volume& volume)
 
 			status = inode.Resize(transaction,
 				inode.Node().NumLinks() == 0 ? 0 : inode.Size());
+			if (status == B_OK)
+				status = Remove(volume, id, transaction);
 			if (status == B_OK && inode.Node().NumLinks() == 0)
 				status = volume.FreeInode(transaction, inode.ID(), inode.IsDirectory());
-			else if (status == B_OK)
-				status = Remove(volume, id, transaction);
 			if (status == B_OK)
 				status = transaction.Done(true);
 			else

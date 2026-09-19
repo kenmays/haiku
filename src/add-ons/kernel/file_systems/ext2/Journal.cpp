@@ -902,7 +902,8 @@ Journal::_BlockChecksum(const uint8* data, uint32 sequence) const
 	/* JBD2 checksum-v3 data blocks use the journal UUID-derived seed,
 	 * followed by the transaction sequence and complete data block. */
 	uint32 crc = fChecksumSeed;
-	crc = calculate_crc32c(crc, (const uint8*)&sequence, sizeof(sequence));
+	uint32 sequenceBE = B_HOST_TO_BENDIAN_INT32(sequence);
+	crc = calculate_crc32c(crc, (const uint8*)&sequenceBE, sizeof(sequenceBE));
 	return calculate_crc32c(crc, data, fBlockSize);
 }
 
@@ -1189,7 +1190,7 @@ Journal::_RecoverPassReplay(uint32 lastCommitID)
 				- (fChecksumEnabled ? sizeof(JournalBlockTail) : 0);
 
 			while (tagData + tagSize <= tagEnd) {
-				JournalBlockTag* tag = (JournalBlockTag*)tagData;
+							JournalBlockTag* tag = (JournalBlockTag*)tagData;
 				uint64 targetBlock;
 				uint32 tagFlags;
 				if (fChecksumV3Enabled) {

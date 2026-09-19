@@ -311,8 +311,9 @@ Inode::WriteAt(Transaction& transaction, off_t pos, const uint8* buffer,
 		FillGapWithZeros(oldSize, pos);
 
 	status_t status = B_OK;
-	if (length != 0) {
-		status = fDataStream->InitializeRange(transaction, pos, length);
+	if (length != 0 && (Flags() & EXT2_INODE_EXTENTS) != 0) {
+		ExtentStream stream(fVolume, this, &fNode.extent_stream, Size());
+		status = stream.InitializeRange(transaction, pos, length);
 		if (status != B_OK) {
 			*_length = 0;
 			WriteLockInTransaction(transaction);

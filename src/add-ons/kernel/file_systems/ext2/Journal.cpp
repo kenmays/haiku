@@ -1227,21 +1227,8 @@ Journal::_RecoverPassReplay(uint32 lastCommitID)
 					if (read != fBlockSize)
 						return B_IO_ERROR;
 
-					if ((tagFlags & JOURNAL_FLAG_ESCAPED) != 0) {
-						// Block is escaped
-						((int32*)data)[0]
-							= B_HOST_TO_BENDIAN_INT32(JOURNAL_MAGIC);
-					}
-
-					TRACE("Journal::_RevoverPassReplay(): Write to %" B_PRIu64 "
-",
-						targetBlock * fBlockSize);
-					size_t written = write_pos(fFilesystemVolume->Device(),
-						targetBlock * fBlockSize, data, fBlockSize);
-
-					if (written != fBlockSize)
-						return B_IO_ERROR;
-
+					/* Verify the journal payload before restoring an escaped magic
+					 * word; the checksum covers the exact bytes stored in the log. */
 					if (fChecksumEnabled && fChecksumV3Enabled
 							&& !_VerifyBlockChecksum(data, nextCommitID,
 								B_BENDIAN_TO_HOST_INT32(
@@ -1253,6 +1240,20 @@ Journal::_RecoverPassReplay(uint32 lastCommitID)
 								((JournalBlockTag*)tagData)->checksum))
 							return B_BAD_DATA;
 					}
+
+					if ((tagFlags & JOURNAL_FLAG_ESCAPED) != 0) {
+						// Block is escaped
+						((int32*)data)[0]
+							= B_HOST_TO_BENDIAN_INT32(JOURNAL_MAGIC);
+					}
+
+					TRACE("Journal::_RevoverPassReplay(): Write to %" B_PRIu64 "\n",
+						targetBlock * fBlockSize);
+					size_t written = write_pos(fFilesystemVolume->Device(),
+						targetBlock * fBlockSize, data, fBlockSize);
+
+					if (written != fBlockSize)
+						return B_IO_ERROR;
 
 					++count;
 				}

@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <string.h>
 
-#include "../ext2/CRCTable.h"
+#include "CRCTable.h"
 #include "../ext2/ext2.h"
 
 

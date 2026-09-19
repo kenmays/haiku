@@ -432,6 +432,8 @@ Journal::_WritePartialTransactionToLog(JournalHeader* descriptorBlock,
 			finalData = (void*)blockData;
 
 		if (firstTag) {
+			if (tagData + tagSize + sizeof(fJournalUUID) > tagEnd)
+				return B_BUFFER_OVERFLOW;
 			memcpy(tagData + tagSize, fJournalUUID, sizeof(fJournalUUID));
 			firstTag = false;
 		}

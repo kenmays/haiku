@@ -397,6 +397,103 @@ ExtentStream::Enlarge(Transaction& transaction, off_t& numBlocks)
 
 
 status_t
+ExtentStream::InitializeRange(Transaction& transaction, off_t offset, size_t length)
+{
+	if (length == 0 || offset < 0)
+		return B_OK;
+
+	fileblock_t first = offset >> fVolume->BlockShift();
+	fileblock_t last = (offset + length - 1) >> fVolume->BlockShift();
+
+	CachedBlock cached(fVolume);
+	ext2_extent_stream* stream = fStream;
+	while (stream->extent_header.Depth() != 0) {
+		int32 index = 0;
+		while (index + 1 < stream->extent_header.NumEntries()
+			&& stream->extent_index[index + 1].LogicalBlock() <= first)
+			index++;
+		stream = (ext2_extent_stream*)cached.SetTo(
+			stream->extent_index[index].PhysicalBlock());
+		if (stream == NULL || !stream->extent_header.IsValid())
+			return B_BAD_DATA;
+	}
+
+	for (int32 i = 0; i < stream->extent_header.NumEntries(); i++) {
+		ext2_extent_entry& extent = stream->extent_entries[i];
+		if (!extent.IsUnwritten())
+			continue;
+
+		fileblock_t start = extent.LogicalBlock();
+		fileblock_t end = start + extent.Length();
+		if (last < start || first >= end)
+			continue;
+
+		fileblock_t initStart = max_c(first, start);
+		fileblock_t initEnd = min_c(last + 1, end);
+		uint16 oldLength = extent.Length();
+		uint16 before = initStart - start;
+		uint16 middle = initEnd - initStart;
+		uint16 after = oldLength - before - middle;
+
+		int32 pieces = (before != 0) + 1 + (after != 0);
+		if (stream->extent_header.NumEntries() + pieces - 1
+			> stream->extent_header.MaxEntries())
+			return B_BUFFER_OVERFLOW;
+
+		if (stream != fStream)
+			stream = (ext2_extent_stream*)cached.SetToWritable(
+				transaction, cached.BlockNumber());
+		if (stream == NULL)
+			return B_IO_ERROR;
+
+		if (pieces == 1) {
+			extent.SetUnwritten(false);
+			fInode->SetExtentChecksum(stream);
+			continue;
+		}
+
+		/* Make room for the additional extent(s). */
+		int32 tail = stream->extent_header.NumEntries() - i - 1;
+		if (after != 0)
+			tail++;
+		if (tail > 0) {
+			memmove(&stream->extent_entries[i + pieces],
+				&stream->extent_entries[i + 1],
+				tail * sizeof(ext2_extent_entry));
+		}
+
+		int32 n = i;
+		if (before != 0) {
+			stream->extent_entries[n] = extent;
+			stream->extent_entries[n].SetLength(before);
+			n++;
+		}
+		stream->extent_entries[n] = extent;
+		stream->extent_entries[n].SetLogicalBlock(initStart);
+		stream->extent_entries[n].SetPhysicalBlock(
+			extent.PhysicalBlock() + before);
+		stream->extent_entries[n].SetLength(middle);
+		stream->extent_entries[n].SetUnwritten(false);
+		n++;
+		if (after != 0) {
+			stream->extent_entries[n] = extent;
+			stream->extent_entries[n].SetLogicalBlock(initEnd);
+			stream->extent_entries[n].SetPhysicalBlock(
+				extent.PhysicalBlock() + before + middle);
+			stream->extent_entries[n].SetLength(after);
+			stream->extent_entries[n].SetUnwritten(true);
+		}
+		stream->extent_header.SetNumEntries(
+			stream->extent_header.NumEntries() + pieces - 1);
+		fInode->SetExtentChecksum(stream);
+		break;
+	}
+
+	return B_OK;
+}
+
+
+status_t
 ExtentStream::Shrink(Transaction& transaction, off_t& numBlocks)
 {
 	TRACE("DataStream::Shrink(): current size: %" B_PRIdOFF ", target size: %"

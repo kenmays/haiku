@@ -314,6 +314,7 @@ protected:
 			bool				fChecksumV3Enabled;
 			bool				fFeature64bits;
 			uint32				fChecksumSeed;
+			uint8				fJournalUUID[16];
 
 private:
 			status_t			_CheckFeatures(JournalSuperBlock* superblock);

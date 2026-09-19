@@ -647,51 +647,10 @@ ext4_write_stat(fs_volume* _volume, fs_vnode* _node, const struct stat* stat,
 			(long)inode->Size(), (long)stat->st_size);
 
 		off_t oldSize = inode->Size();
-		bool orphanAdded = false;
-		bool modernOrphan = (volume->SuperBlock().CompatibleFeatures()
-			& EXT4_FEATURE_ORPHAN_FILE) != 0;
-
-		/* ext4 protects truncation with orphan tracking so a crash after
-		 * i_size is committed cannot strand blocks. */
-		if (stat->st_size < oldSize) {
-			status_t orphanStatus;
-			if (modernOrphan) {
-				orphanStatus = Ext4OrphanFile::Add(*volume, *inode,
-					transaction);
-				if (orphanStatus == B_OK)
-					orphanStatus = Ext4OrphanFile::MarkPresent(*volume,
-						transaction, true);
-			} else
-				orphanStatus = Ext4OrphanList::Add(*volume, *inode,
-					transaction);
-			if (orphanStatus != B_OK)
-				return orphanStatus;
-			orphanAdded = true;
-		}
 
 		status_t status = inode->Resize(transaction, stat->st_size);
 		if (status != B_OK)
 			return status;
-
-		if (orphanAdded) {
-			if (modernOrphan) {
-				status = Ext4OrphanFile::Remove(*volume, inode->ID(),
-					transaction);
-				if (status == B_OK) {
-					bool empty = false;
-					status = Ext4OrphanFile::IsEmpty(*volume, empty);
-					if (status == B_OK && empty)
-						status = Ext4OrphanFile::MarkPresent(*volume,
-							transaction, false);
-				}
-			} else {
-				status = Ext4OrphanList::Remove(*volume, inode->ID(),
-					transaction);
-				inode->Node().SetNextOrphan(0);
-			}
-			if (status != B_OK && status != B_ENTRY_NOT_FOUND)
-				return status;
-		}
 
 		if ((mask & B_STAT_SIZE_INSECURE) == 0) {
 			rw_lock_write_unlock(inode->Lock());

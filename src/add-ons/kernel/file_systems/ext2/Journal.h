@@ -99,6 +99,19 @@ struct JournalBlockTag {
 } _PACKED;
 
 
+struct JournalCommitBlock {
+	JournalHeader header;
+	uint8 checksum_type;
+	uint8 checksum_size;
+	uint8 padding[2];
+	uint32 checksum[4];
+	uint64 commit_sec;
+	uint32 commit_nsec;
+
+	uint32 Sequence() const { return header.Sequence(); }
+} _PACKED;
+
+
 struct JournalBlockTagV3 {
 	uint32			block_number;
 	uint32			flags;

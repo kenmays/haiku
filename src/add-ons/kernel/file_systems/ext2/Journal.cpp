@@ -1042,7 +1042,9 @@ Journal::_RecoverPassScan(uint32& lastCommitID)
 		uint32 blockType = header->BlockType();
 
 		if (blockType == JOURNAL_DESCRIPTOR_BLOCK) {
-			if (fChecksumEnabled && !_Checksum((uint8*)header, false)) {
+			if (fChecksumEnabled && _DescriptorChecksum((uint8*)header) !=
+				B_BENDIAN_TO_HOST_INT32(((JournalBlockTail*)((uint8*)header
+					+ fBlockSize - sizeof(JournalBlockTail)))->checksum)) {
 				ERROR("Journal::_RecoverPassScan(): Invalid checksum\n");
 				return B_BAD_DATA;
 			}
@@ -1051,7 +1053,9 @@ Journal::_RecoverPassScan(uint32& lastCommitID)
 			TRACE("Journal recover pass scan: Found a descriptor block with "
 				"%" B_PRIu32 " tags\n", tags);
 		} else if (blockType == JOURNAL_COMMIT_BLOCK) {
-			if (fChecksumEnabled && !_Checksum((uint8*)header, false))
+			if (fChecksumEnabled && _DescriptorChecksum((uint8*)header) !=
+				B_BENDIAN_TO_HOST_INT32(((JournalBlockTail*)((uint8*)header
+					+ fBlockSize - sizeof(JournalBlockTail)))->checksum))
 				return B_BAD_DATA;
 			nextCommitID++;
 			TRACE("Journal recover pass scan: Found a commit block. Next "

@@ -420,6 +420,16 @@ Journal::_WritePartialTransactionToLog(JournalHeader* descriptorBlock,
 		} else
 			finalData = (void*)blockData;
 
+		/* JBD2 checksum-v2 stores the low 16 bits of CRC32C in the
+		 * descriptor tag; checksum-v3 stores the complete CRC32C. */
+		uint32 dataChecksum = _BlockChecksum((const uint8*)finalData,
+			fCurrentCommitID);
+		if (fChecksumV3Enabled)
+			((JournalBlockTagV3*)tagData)->checksum
+				= B_HOST_TO_BENDIAN_INT32(dataChecksum);
+		else if (fChecksumEnabled)
+			tag->checksum = B_HOST_TO_BENDIAN_INT16(dataChecksum & 0xffff);
+
 		// TODO: use iovecs?
 
 		logBlock = _WrapAroundLog(logBlock + 1);
@@ -466,6 +476,12 @@ Journal::_WritePartialTransactionToLog(JournalHeader* descriptorBlock,
 		return status;
 
 	off_t descriptorBlockOffset = physicalBlock * fBlockSize;
+
+	if (fChecksumEnabled) {
+		JournalBlockTail* tail = (JournalBlockTail*)((uint8*)descriptorBlock
+			+ fBlockSize - sizeof(JournalBlockTail));
+		tail->SetChecksum(_DescriptorChecksum((uint8*)descriptorBlock));
+	}
 
 	TRACE("Journal::_WritePartialTransactionToLog(): Writing to: %" B_PRIdOFF
 		"\n", descriptorBlockOffset);

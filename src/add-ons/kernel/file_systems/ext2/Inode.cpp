@@ -418,6 +418,15 @@ Inode::Resize(Transaction& transaction, off_t size)
 			transaction);
 		if (orphanStatus != B_OK && orphanStatus != B_ENTRY_NOT_FOUND)
 			return orphanStatus;
+		if (orphanStatus == B_OK) {
+			bool empty = false;
+			orphanStatus = Ext4OrphanFile::IsEmpty(*fVolume, empty);
+			if (orphanStatus == B_OK && empty)
+				orphanStatus = Ext4OrphanFile::MarkPresent(*fVolume,
+					transaction, false);
+			if (orphanStatus != B_OK)
+				return orphanStatus;
+		}
 	}
 
 	file_cache_set_size(FileCache(), size);

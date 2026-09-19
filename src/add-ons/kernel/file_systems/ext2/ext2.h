@@ -412,14 +412,22 @@ struct ext2_extent_entry {
 	uint32 physical_block;
 	uint32 LogicalBlock() const
 		{ return B_LENDIAN_TO_HOST_INT32(logical_block); }
-	uint16 Length() const { return B_LENDIAN_TO_HOST_INT16(length) == 0x8000
-		? 0x8000 : B_LENDIAN_TO_HOST_INT16(length) & 0x7fff; }
+	uint16 RawLength() const { return B_LENDIAN_TO_HOST_INT16(length); }
+	bool IsUnwritten() const { return (RawLength() & 0x8000) != 0; }
+	uint16 Length() const { return RawLength() & 0x7fff; }
+	uint16 InitializedLength() const { return IsUnwritten() ? 0 : Length(); }
 	uint64 PhysicalBlock() const { return B_LENDIAN_TO_HOST_INT32(physical_block)
 		| ((uint64)B_LENDIAN_TO_HOST_INT16(physical_block_high) << 32); }
 	void SetLogicalBlock(uint32 block) {
 		logical_block = B_HOST_TO_LENDIAN_INT32(block); }
 	void SetLength(uint16 _length) {
-		length = B_HOST_TO_LENDIAN_INT16(_length) & 0x7fff; }
+		length = B_HOST_TO_LENDIAN_INT16(_length & 0x7fff); }
+	void SetUnwritten(bool unwritten) {
+		uint16 value = RawLength() & 0x7fff;
+		if (unwritten)
+			value |= 0x8000;
+		length = B_HOST_TO_LENDIAN_INT16(value);
+	}
 	void SetPhysicalBlock(uint64 block) {
 		physical_block = B_HOST_TO_LENDIAN_INT32(block & 0xffffffff);
 		physical_block_high = B_HOST_TO_LENDIAN_INT16((block >> 32) & 0xffff); }

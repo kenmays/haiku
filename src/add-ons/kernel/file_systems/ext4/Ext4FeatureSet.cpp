@@ -54,8 +54,6 @@ Ext4FeatureSet::SupportedCompat()
 		| EXT4_COMPAT_RESIZE_INODE
 		| EXT4_COMPAT_DIR_INDEX
 		| EXT4_COMPAT_SPARSE_SUPER2
-		| EXT4_COMPAT_FAST_COMMIT
-		| EXT4_COMPAT_STABLE_INODES
 		| EXT4_COMPAT_ORPHAN_FILE;
 }
 
@@ -69,7 +67,6 @@ Ext4FeatureSet::SupportedReadOnly()
 		| EXT4_RO_EXTRA_ISIZE
 		| EXT4_RO_GDT_CSUM
 		| EXT4_RO_METADATA_CSUM
-		| EXT4_RO_PROJECT
 		| EXT4_RO_ORPHAN_PRESENT;
 }
 
@@ -121,6 +118,10 @@ Ext4FeatureSet::Validate(const ext2_super_block& superBlock, bool readOnly)
 	 * implementation does not yet provide.  Explicitly reject them instead
 	 * of mounting a filesystem with potentially corrupting semantics.
 	 */
+	if ((superBlock.CompatibleFeatures()
+			& (EXT4_COMPAT_FAST_COMMIT | EXT4_COMPAT_STABLE_INODES)) != 0
+			return B_UNSUPPORTED;
+
 	if (superBlock.IncompatibleFeatures()
 			& (EXT4_INCOMPAT_COMPRESSION | EXT4_INCOMPAT_JOURNAL_DEV
 				| EXT4_INCOMPAT_META_BG | EXT4_INCOMPAT_MMP

@@ -4,6 +4,8 @@
 #include <SupportDefs.h>
 #include <fs_interface.h>
 
+#include "../ext2/ext2.h"
+
 class Inode;
 class Transaction;
 class Volume;

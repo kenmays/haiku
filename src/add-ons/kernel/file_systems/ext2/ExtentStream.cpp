@@ -140,6 +140,18 @@ ExtentStream::FindBlock(off_t offset, fsblock_t& block, uint32 *_count)
 		return B_OK;
 	}
 
+	/*
+	 * An unwritten extent reserves physical blocks without making their
+	 * contents part of the file.  Reads must therefore return a sparse
+	 * mapping (zero-filled by the VFS) while preserving the reservation.
+	 */
+	if (extent.IsUnwritten()) {
+		block = 0;
+		if (_count != NULL)
+			*_count = extent.Length() - diff;
+		return B_OK;
+	}
+
 	block = extent.PhysicalBlock() + diff;
 	if (_count != NULL)
 		*_count = extent.Length() - diff;

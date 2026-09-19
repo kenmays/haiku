@@ -1198,6 +1198,9 @@ Journal::_RecoverPassReplay(uint32 lastCommitID)
 				} else {
 					targetBlock = tag->BlockNumber();
 					tagFlags = tag->Flags();
+					if (fFeature64bits)
+						targetBlock |= ((uint64)B_BENDIAN_TO_HOST_INT32(
+							*((uint32*)(tagData + sizeof(JournalBlockTag)))) << 32);
 				}
 
 				nextBlock = _WrapAroundLog(nextBlock + 1);

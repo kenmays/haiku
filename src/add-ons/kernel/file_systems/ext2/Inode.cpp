@@ -391,6 +391,24 @@ Inode::Resize(Transaction& transaction, off_t size)
 		"\n", oldSize, size);
 
 	status_t status;
+	bool shrinkOrphanAdded = false;
+	bool modernOrphan = (fVolume->SuperBlock().CompatibleFeatures()
+		& EXT4_FEATURE_ORPHAN_FILE) != 0;
+	if (size < oldSize && fNode.NumLinks() != 0) {
+		if (modernOrphan) {
+			status = Ext4OrphanFile::Add(*fVolume, *this, transaction);
+			if (status == B_OK)
+				status = Ext4OrphanFile::MarkPresent(*fVolume,
+					transaction, true);
+		} else if (fNode.next_orphan == 0)
+			status = Ext4OrphanList::Add(*fVolume, *this, transaction);
+		else
+			status = B_OK;
+		if (status != B_OK)
+			return status;
+		shrinkOrphanAdded = true;
+	}
+
 	if (size > oldSize) {
 		status = _EnlargeDataStream(transaction, size);
 		if (status != B_OK) {
@@ -399,6 +417,22 @@ Inode::Resize(Transaction& transaction, off_t size)
 		}
 	} else
 		status = _ShrinkDataStream(transaction, size);
+
+	if (status == B_OK && shrinkOrphanAdded) {
+		if (modernOrphan) {
+			status = Ext4OrphanFile::Remove(*fVolume, ID(), transaction);
+			if (status == B_OK) {
+				bool empty = false;
+				status = Ext4OrphanFile::IsEmpty(*fVolume, empty);
+				if (status == B_OK && empty)
+					status = Ext4OrphanFile::MarkPresent(*fVolume,
+						transaction, false);
+			}
+		} else {
+			status = Ext4OrphanList::Remove(*fVolume, ID(), transaction);
+			fNode.next_orphan = 0;
+		}
+	}
 
 	TRACE("Inode::Resize(): Updating file map and cache\n");
 

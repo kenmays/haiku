@@ -660,6 +660,8 @@ ExtentStream::Check()
 status_t
 ExtentStream::_CheckBlock(ext2_extent_stream *stream, fsblock_t block)
 {
+	if (!fInode->VerifyExtentChecksum(stream))
+		return B_BAD_DATA;
 	if (stream->extent_header.Depth() == 0) {
 		for (int32 i = 0; i < stream->extent_header.NumEntries(); i++) {
 			ext2_extent_entry &entry = stream->extent_entries[i];

@@ -952,35 +952,25 @@ Journal::_CountTags(JournalHeader* descriptorBlock)
 {
 	uint32 count = 0;
 	size_t tagSize = _TagSize();
-	size_t size = fBlockSize;
+	size_t size = fBlockSize - (fChecksumEnabled ? sizeof(JournalBlockTail) : 0);
+	uint8* tagData = (uint8*)descriptorBlock->data;
+	uint8* end = (uint8*)descriptorBlock + size;
 
-	if (fChecksumEnabled)
-		size -= sizeof(JournalBlockTail);
-
-	JournalBlockTag* tags = (JournalBlockTag*)descriptorBlock->data;
-		// Skip the header
-	JournalBlockTag* lastTag = (JournalBlockTag*)
-		(descriptorBlock + size - tagSize);
-
-	while (tags < lastTag && (tags->Flags() & JOURNAL_FLAG_LAST_TAG) == 0) {
-		if ((tags->Flags() & JOURNAL_FLAG_SAME_UUID) == 0)
-			tags = (JournalBlockTag*)((uint8*)tags + 16); // Skip new UUID
-
-		TRACE("Journal::_CountTags(): Tag block: %" B_PRIu32 "\n",
-			tags->BlockNumber());
-
-		tags = (JournalBlockTag*)((uint8*)tags + tagSize); // Go to next tag
+	while (tagData + tagSize <= end) {
+		uint32 flags;
+		if (fChecksumV3Enabled)
+			flags = ((JournalBlockTagV3*)tagData)->Flags();
+		else
+			flags = ((JournalBlockTag*)tagData)->Flags();
 		count++;
+		if ((flags & JOURNAL_FLAG_LAST_TAG) != 0)
+			break;
+		tagData += tagSize;
+		if ((flags & JOURNAL_FLAG_SAME_UUID) == 0)
+			tagData += 16;
 	}
-
-	if ((tags->Flags() & JOURNAL_FLAG_LAST_TAG) != 0)
-		count++;
-
-	TRACE("Journal::_CountTags(): counted tags: %" B_PRIu32 "\n", count);
-
 	return count;
 }
-
 
 size_t
 Journal::_TagSize()

@@ -409,7 +409,10 @@ Journal::_WritePartialTransactionToLog(JournalHeader* descriptorBlock,
 			// We must remove it to prevent confusion
 			TRACE("Journal::_WritePartialTransactionToLog(): Block starts with "
 				"magic number. Escaping it\n");
-			tag->SetEscapedFlag();
+			if (fChecksumV3Enabled)
+				((JournalBlockTagV3*)tagData)->SetEscapedFlag();
+			else
+				tag->SetEscapedFlag();
 
 			if (escapedData == NULL) {
 				TRACE("Journal::_WritePartialTransactionToLog(): Allocating "

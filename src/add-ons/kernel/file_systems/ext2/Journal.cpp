@@ -819,7 +819,7 @@ Journal::_CheckFeatures(JournalSuperBlock* superblock)
 		return B_BAD_VALUE;
 	}
 
-	fChecksumEnabled = hasCsumV2 && hasCsumV3;
+	fChecksumEnabled = hasCsumV2 || hasCsumV3;
 	fChecksumV3Enabled = hasCsumV3;
 	fFeature64bits =
 		(superblock->IncompatibleFeatures() & JOURNAL_FEATURE_INCOMPATIBLE_64BIT) != 0;

@@ -26,6 +26,8 @@
 #include "../ext2/Inode.h"
 #include "../ext2/Journal.h"
 #include "../ext2/Utility.h"
+#include "../ext2/DeviceOpener.h"
+#include "Ext4FeatureSet.h"
 
 
 //#define TRACE_EXT4
@@ -41,7 +43,7 @@
 
 
 struct identify_cookie {
-	ext4_super_block super_block;
+	ext2_super_block super_block;
 };
 
 
@@ -51,16 +53,16 @@ struct identify_cookie {
 static float
 ext4_identify_partition(int fd, partition_data *partition, void **_cookie)
 {
-	STATIC_ASSERT(sizeof(struct ext4_super_block) == 1024);
-	STATIC_ASSERT(sizeof(struct ext4_block_group) == 64);
+	STATIC_ASSERT(sizeof(struct ext2_super_block) == 1024);
+	STATIC_ASSERT(sizeof(struct ext2_block_group) == 64);
 
-	ext4_super_block superBlock;
+	ext2_super_block superBlock;
 	status_t status = Volume::Identify(fd, &superBlock);
-	if (status != B_OK)
+	if (status != B_OK || Ext4FeatureSet::Validate(superBlock, true) != B_OK)
 		return -1;
 
 	identify_cookie *cookie = new identify_cookie;
-	memcpy(&cookie->super_block, &superBlock, sizeof(ext4_super_block));
+	memcpy(&cookie->super_block, &superBlock, sizeof(ext2_super_block));
 
 	*_cookie = cookie;
 	return 0.8f;
@@ -101,12 +103,12 @@ static status_t
 ext4_mount(fs_volume* _volume, const char* device, uint32 flags,
 	const char* args, ino_t* _rootID)
 {
-	int fd = open(device, (flags & B_MOUNT_READ_ONLY) != 0 ? O_RDONLY : O_RDWR);
-	if (fd < 0)
-		return errno;
+	DeviceOpener opener(device, (flags & B_MOUNT_READ_ONLY) != 0 ? O_RDONLY : O_RDWR);
+	int fd = opener.Device();
+	if (fd < B_OK)
+		return fd;
 	ext2_super_block superBlock;
 	status_t status = Volume::Identify(fd, &superBlock);
-	close(fd);
 	if (status != B_OK)
 		return status;
 	status = Ext4FeatureSet::Validate(superBlock,

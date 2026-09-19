@@ -15,13 +15,13 @@
 
 struct RevokeElement {
 	RevokeElement*	next;	// Next in hash
-	uint32			block;
+	uint64			block;
 	uint32			commitID;
 };
 
 
 struct RevokeHash {
-		typedef uint32			KeyType;
+		typedef uint64			KeyType;
 		typedef	RevokeElement	ValueType;
 
 		size_t HashKey(KeyType key) const
@@ -56,15 +56,15 @@ public:
 
 			status_t	Init();
 
-	virtual	status_t	Insert(uint32 block, uint32 commitID);
-	virtual	status_t	Remove(uint32 block);
-	virtual	bool		Lookup(uint32 block, uint32 commitID);
+	virtual	status_t	Insert(uint64 block, uint32 commitID);
+	virtual	status_t	Remove(uint64 block);
+	virtual	bool		Lookup(uint64 block, uint32 commitID);
 
 	static	int			Compare(void* element, const void* key);
 	static	uint32		Hash(void* element, const void* key, uint32 range);
 
 protected:
-			status_t	_ForceInsert(uint32 block, uint32 commitID);
+			status_t	_ForceInsert(uint64 block, uint32 commitID);
 
 private:
 			RevokeTable*	fHash;

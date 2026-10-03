@@ -218,7 +218,17 @@ rdna4_init(rdna4_device& d)
 	d.shared->framebuffer_phys = d.fb_phys;
 	d.shared->registers_size = d.mmio_size;
 	d.shared->framebuffer_size = d.fb_size;
-	d.shared->vram_size = d.fb_size;
+
+	/* RCC_CONFIG_MEMSIZE is a SoC-wide register and reports the physical
+	 * VRAM size in MiB.  Keep the PCI BAR size as the visible aperture;
+	 * they are not necessarily equal on large discrete boards. */
+	uint64 vramSize = d.fb_size;
+	if (d.mmio != NULL) {
+		uint32 memSizeMiB = *(volatile uint32*)(d.mmio + (0x0de3u << 2));
+		if (memSizeMiB != 0 && memSizeMiB < (1u << 20))
+			vramSize = (uint64)memSizeMiB << 20;
+	}
+	d.shared->vram_size = vramSize;
 	d.shared->gtt_size = 512ull << 20;
 	d.shared->feature_mask = RDNA4_FEATURE_DISPLAY
 		| RDNA4_FEATURE_VRAM | RDNA4_FEATURE_GTT

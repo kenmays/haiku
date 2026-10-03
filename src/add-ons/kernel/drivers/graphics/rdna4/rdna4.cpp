@@ -2,6 +2,9 @@
 #include "rdna4_gfx.h"
 #include "rdna4_gfxhub.h"
 #include "rdna4_vm.h"
+#include "rdna4_fw.h"
+#include "rdna4_irq.h"
+#include "rdna4_recovery.h"
 
 #include <KernelExport.h>
 #include <OS.h>
@@ -226,6 +229,10 @@ rdna4_init(rdna4_device& d)
 	d.gfx_mqd_area = -1;
 	d.gfx_mqd_cpu = NULL;
 	d.gfx_mqd_phys = 0;
+	d.psp_fw_area = -1;
+	d.fence_sem = -1;
+	d.irq_installed = false;
+	d.interrupt_count = 0;
 	d.gfx_ring_rptr_cpu = NULL;
 	d.gfx_ring_wptr_poll_cpu = NULL;
 	d.gfxhub_ready = false;
@@ -253,12 +260,20 @@ rdna4_init(rdna4_device& d)
 		rdna4_uninit(d);
 		return status;
 	}
+
+	status = rdna4_irq_init(d);
+	if (status != B_OK) {
+		rdna4_uninit(d);
+		return status;
+	}
 	return B_OK;
 }
 
 void
 rdna4_uninit(rdna4_device& d)
 {
+	rdna4_irq_uninit(d);
+	rdna4_firmware_uninit(d);
 	rdna4_gfx_ring_free(d);
 	if (d.gfxhub_ready)
 		rdna4_gfxhub_uninit(d);
@@ -347,37 +362,47 @@ rdna4_ioctl(rdna4_device& d, uint32 op, void* buffer, size_t length)
 		case RDNA4_RESET_GPU: {
 			if (length != 0 && length < sizeof(uint32))
 				return B_BUFFER_OVERFLOW;
-			if (d.shared != NULL)
-				d.shared->gfx_state = RDNA4_ENGINE_RESETTING;
+			return rdna4_gpu_recover(d);
+		}
 
-			status_t status = wait_for_gfx_idle(d, 500000);
+		case RDNA4_STAGE_FIRMWARE: {
+			if (length < sizeof(rdna4_firmware_stage))
+				return B_BUFFER_OVERFLOW;
+			rdna4_firmware_stage request;
+			if (user_memcpy(&request, buffer, sizeof(request)) != B_OK)
+				return B_BAD_ADDRESS;
+			status_t status = rdna4_firmware_stage(d, request);
 			if (status != B_OK)
-				status = pci_function_level_reset(d);
-			if (status == B_OK) {
-				d.gfxhub_ready = false;
-				if (d.shared != NULL)
-					d.shared->vm_state = RDNA4_ENGINE_RESETTING;
+				return status;
+			request.psp_sos_offset = d.psp_sos_offset;
+			request.psp_sos_size = d.psp_sos_size;
+			request.psp_version_major = d.psp_fw_version_major;
+			request.psp_version_minor = d.psp_fw_version_minor;
+			return user_memcpy(buffer, &request, sizeof(request));
+		}
 
-				/* FLR can invalidate all VM state, so rebuild it. */
-				if (d.shared != NULL)
-					rdna4_gfxhub_uninit(d);
-				status_t vmStatus = rdna4_gfxhub_init(d);
-				if (vmStatus == B_OK) {
-					d.gfxhub_ready = true;
-					d.gfx_ring_ready = false;
-				} else
-					status = vmStatus;
+		case RDNA4_BOOT_FIRMWARE:
+			return rdna4_firmware_boot(d);
 
-				if (d.shared != NULL) {
-					d.shared->gpu_reset_generation++;
-					d.shared->gfx_state = RDNA4_ENGINE_DISCOVERED;
-					d.shared->vm_state = status == B_OK
-						? RDNA4_ENGINE_VM_READY : RDNA4_ENGINE_FAILED;
-					d.shared->mes_state = RDNA4_ENGINE_OFF;
-					d.shared->sdma_state = RDNA4_ENGINE_OFF;
-				}
+		case RDNA4_GET_BRINGUP_STATUS: {
+			if (length < sizeof(rdna4_bringup_status))
+				return B_BUFFER_OVERFLOW;
+			rdna4_bringup_status status = {};
+			status.version = 1;
+			if (d.shared != NULL) {
+				status.psp_state = d.shared->psp_state;
+				status.gfx_state = d.shared->gfx_state;
+				status.mes_state = d.shared->mes_state;
+				status.sdma_state = d.shared->sdma_state;
+				status.vm_state = d.shared->vm_state;
+				status.reset_generation = d.shared->gpu_reset_generation;
 			}
-			return status;
+			status.psp_firmware_version_major = d.psp_fw_version_major;
+			status.psp_firmware_version_minor = d.psp_fw_version_minor;
+			status.psp_sos_size = d.psp_sos_size;
+			status.psp_sos_physical = d.psp_fw_phys + d.psp_sos_offset;
+			status.interrupt_count = d.interrupt_count;
+			return user_memcpy(buffer, &status, sizeof(status));
 		}
 
 		case RDNA4_WAIT_IDLE: {

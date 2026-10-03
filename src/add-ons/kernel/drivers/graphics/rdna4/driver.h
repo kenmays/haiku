@@ -88,9 +88,13 @@ struct rdna4_device {
 	uint32 revision;
 
 	addr_t mmio_phys;
+	addr_t doorbell_phys;
 	size_t mmio_size;
+	size_t doorbell_size;
 	uint8* mmio;
+	volatile uint32* doorbell;
 	area_id mmio_area;
+	area_id doorbell_area;
 
 	addr_t fb_phys;
 	size_t fb_size;

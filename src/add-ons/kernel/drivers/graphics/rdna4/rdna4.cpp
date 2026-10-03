@@ -5,6 +5,8 @@
 #include "rdna4_fw.h"
 #include "rdna4_irq.h"
 #include "rdna4_recovery.h"
+#include "rdna4_sdma.h"
+#include "rdna4_mes.h"
 
 #include <KernelExport.h>
 #include <OS.h>
@@ -233,6 +235,8 @@ rdna4_init(rdna4_device& d)
 	d.fence_sem = -1;
 	d.irq_installed = false;
 	d.interrupt_count = 0;
+	for (uint32 i = 0; i < RDNA4_FW_MAX; i++) d.firmware[i].area = -1;
+	d.mes.ring_area = d.mes.status_area = -1;
 	d.gfx_ring_rptr_cpu = NULL;
 	d.gfx_ring_wptr_poll_cpu = NULL;
 	d.gfxhub_ready = false;
@@ -261,6 +265,17 @@ rdna4_init(rdna4_device& d)
 		return status;
 	}
 
+	status = rdna4_sdma_init(d);
+	if (status != B_OK) {
+		rdna4_uninit(d);
+		return status;
+	}
+	status = rdna4_mes_init(d);
+	if (status != B_OK) {
+		rdna4_uninit(d);
+		return status;
+	}
+
 	status = rdna4_irq_init(d);
 	if (status != B_OK) {
 		rdna4_uninit(d);
@@ -273,6 +288,8 @@ void
 rdna4_uninit(rdna4_device& d)
 {
 	rdna4_irq_uninit(d);
+	rdna4_mes_uninit(d);
+	rdna4_sdma_uninit(d);
 	rdna4_firmware_uninit(d);
 	rdna4_gfx_ring_free(d);
 	if (d.gfxhub_ready)
@@ -381,8 +398,20 @@ rdna4_ioctl(rdna4_device& d, uint32 op, void* buffer, size_t length)
 			return user_memcpy(buffer, &request, sizeof(request));
 		}
 
-		case RDNA4_BOOT_FIRMWARE:
-			return rdna4_firmware_boot(d);
+		case RDNA4_BOOT_FIRMWARE: {
+			status_t status = rdna4_firmware_boot(d);
+			if (status != B_OK)
+				return status;
+			status = rdna4_sdma_start(d);
+			if (status != B_OK)
+				return status;
+			status = rdna4_mes_start(d);
+			if (status != B_OK) {
+				rdna4_sdma_stop(d);
+				return status;
+			}
+			return B_OK;
+		}
 
 		case RDNA4_GET_BRINGUP_STATUS: {
 			if (length < sizeof(rdna4_bringup_status))

@@ -48,7 +48,7 @@ struct psp_cmd_buffer {
 	uint32 tmr_size;
 	uint32 reserved[11];
 	uint8 response_union[32];
-	uint8 tail[864];
+	uint8 tail[64];
 } __attribute__((packed));
 
 struct psp_ring_frame {

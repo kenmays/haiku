@@ -3,6 +3,8 @@
 #include "rdna4_gfx.h"
 #include "rdna4_gfxhub.h"
 #include "rdna4_vm.h"
+#include "rdna4_sdma.h"
+#include "rdna4_mes.h"
 #include <KernelExport.h>
 #include <OS.h>
 #include <PCI.h>
@@ -38,6 +40,8 @@ status_t rdna4_gpu_recover(rdna4_device& d)
 		return B_NO_INIT;
 	d.shared->gfx_state = RDNA4_ENGINE_RESETTING;
 	d.shared->vm_state = RDNA4_ENGINE_RESETTING;
+	rdna4_mes_stop(d);
+	rdna4_sdma_stop(d);
 	rdna4_gfx_ring_free(d);
 	if (d.gfxhub_ready)
 		rdna4_gfxhub_uninit(d);

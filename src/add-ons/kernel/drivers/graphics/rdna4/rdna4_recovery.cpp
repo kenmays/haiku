@@ -56,6 +56,10 @@ status_t rdna4_gpu_recover(rdna4_device& d)
 	 * If PSP cannot answer, the teardown below prepares the device for FLR. */
 	status_t pspReset = rdna4_psp_mode1_reset(d);
 
+	/* Mode-1 reset destroys PSP ring state as part of the GPU reset. Never
+	 * send a post-reset DESTROY_RINGS command to stale PSP state. */
+	d.psp_ring_ready = false;
+
 	/* Quiesce every engine and release all GPUVM-backed allocations before
 	 * tearing down the address space. This is the critical ordering for a
 	 * reset: no stale GPU virtual address may survive the FLR. */

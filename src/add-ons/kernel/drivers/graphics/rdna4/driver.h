@@ -8,6 +8,7 @@
 #include "rdna4.h"
 #include "rdna4_bo.h"
 #include "rdna4_fw.h"
+#include "rdna4_discovery.h"
 
 #define RDNA4_VM_MAX_TABLES 1024
 #define RDNA4_VM_MAX_BOS 256
@@ -65,6 +66,8 @@ struct rdna4_mes_state {
 	phys_addr_t status_phys;
 	uint64 status_gpu;
 	uint32 wptr;
+	uint32 completion_seq;
+	uint32 last_irq_data;
 	bool ready;
 };
 
@@ -140,7 +143,19 @@ struct rdna4_device {
 	uint32 psp_fw_version_minor;
 	sem_id fence_sem;
 	bool irq_installed;
+	area_id ih_area;
+	uint32* ih_cpu;
+	phys_addr_t ih_phys;
+	uint64 ih_gpu;
+	uint32 ih_rptr;
+	bool ih_enabled;
 	volatile uint64 interrupt_count;
+	volatile uint64 vm_fault_count;
+	volatile uint64 vm_fault_address;
+	volatile uint32 vm_fault_status;
+	volatile uint32 vm_fault_vmid;
+	volatile uint32 mes_last_irq_data;
+	rdna4_discovery_state discovery;
 	rdna4_firmware_slot firmware[RDNA4_FW_MAX];
 	rdna4_sdma_ring sdma[2];
 	rdna4_mes_state mes;

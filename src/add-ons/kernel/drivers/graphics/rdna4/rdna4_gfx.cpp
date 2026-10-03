@@ -1,4 +1,5 @@
 #include "rdna4_gfx.h"
+#include <graphics/rdna4/rdna4.h>
 
 static inline bool
 is_privileged_opcode(uint32 opcode)

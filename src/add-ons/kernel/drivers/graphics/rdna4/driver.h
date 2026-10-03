@@ -42,6 +42,7 @@ struct rdna4_firmware_slot {
 	phys_addr_t payload_phys;
 	uint64 payload_gpu;
 	uint32 payload_size;
+	uint64 psp_loaded_gpu;
 };
 
 struct rdna4_sdma_ring {

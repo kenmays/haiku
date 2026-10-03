@@ -19,7 +19,7 @@ static status_t submit(rdna4_device&d,uint32 base,uint32 statusDw,bigtime_t time
  uint32*p=d.mes.ring_cpu+base; put64(p,statusDw,d.mes.status_gpu);put64(p,statusDw+2,seq);
  /* GFX12 MES scheduler rings are 64-bit-doorbell rings; Linux uses MES ring0
     doorbell index 0x0b and writes the DW write pointer. */
- rdna4_doorbell_write(d,0x0b<<1,d.mes.wptr);
+ rdna4_doorbell_write(d,0x0b,d.mes.wptr);
  bigtime_t end=system_time()+timeout;
  for(;;){
   uint64 v=*d.mes.status_cpu;
@@ -48,9 +48,12 @@ status_t rdna4_mes_set_hw_resources(rdna4_device&d,uint32 vmidMM,uint32 vmidGFX,
  for(uint32 i=0;i<8;i++)p[5+i]=(computeMask>>i)&1;
  p[13]=gfxMask&1;p[14]=(gfxMask>>1)&1;p[15]=sdmaMask&1;p[16]=(sdmaMask>>1)&1;
  for(uint32 i=0;i<5;i++)p[17+i]=0;
- put64(p,22,d.mes.status_gpu);put64(p,24,d.mes.status_gpu);
+ put64(p,22,0);put64(p,24,d.mes.status_gpu);
+ for(uint32 i=0;i<8;i++)p[26+i]=0;
+ for(uint32 i=0;i<8;i++)p[34+i]=0;
+ for(uint32 i=0;i<8;i++)p[42+i]=0;
  /* enable MES fence interrupt and keep reset/logging defaults. */
- p[54]=(1u<<20);p[55]=0;
+ p[54]=(1u<<21);p[55]=0;
  return submit(d,b,50,2100000);
 }
 status_t rdna4_mes_set_scheduling_config(rdna4_device&d,uint64 quantum,uint64 grace,uint32 yield){

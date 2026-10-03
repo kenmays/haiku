@@ -225,7 +225,7 @@ rdna4_init(rdna4_device& d)
 	 * they are not necessarily equal on large discrete boards. */
 	uint64 vramSize = d.fb_size;
 	if (d.mmio != NULL) {
-		uint32 memSizeMiB = *(volatile uint32*)(d.mmio + (0x0de3u << 2));
+		uint32 memSizeMiB = *(volatile uint32*)(d.mmio + (0x00c3u << 2));
 		if (memSizeMiB != 0 && memSizeMiB < (1u << 20))
 			vramSize = (uint64)memSizeMiB << 20;
 	}

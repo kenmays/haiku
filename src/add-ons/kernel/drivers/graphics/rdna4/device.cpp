@@ -67,7 +67,11 @@ free_device(void* cookie)
 static status_t
 ioctl_device(void* cookie, uint32 op, void* buffer, size_t length)
 {
-	return rdna4_ioctl(*(rdna4_device*)cookie, op, buffer, length);
+	rdna4_device* device = (rdna4_device*)cookie;
+	mutex_lock(&device->lock);
+	status_t status = rdna4_ioctl(*device, op, buffer, length);
+	mutex_unlock(&device->lock);
+	return status;
 }
 
 static status_t

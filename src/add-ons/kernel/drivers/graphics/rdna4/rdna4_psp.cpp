@@ -81,6 +81,9 @@ struct psp_ring_frame {
 	uint32 reserved2[7];
 } __attribute__((packed));
 
+static_assert(sizeof(psp_cmd_buffer) == 1024, "PSP GPCOM command buffer must be 1024 bytes");
+static_assert(sizeof(psp_ring_frame) == 64, "PSP GPCOM ring frame must be 64 bytes");
+
 static inline uint32 reg_read(rdna4_device& d, uint32 reg)
 {
 	return *(volatile uint32*)(d.mmio + ((size_t)reg << 2));

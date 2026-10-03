@@ -61,7 +61,9 @@ alloc_resources(rdna4_device& d)
 	s = get_memory_map(cpu, 64 * 1024, &e, 1);
 	if (s != B_OK || e.size < 64 * 1024) return s != B_OK ? s : B_NOT_SUPPORTED;
 	m.ring_phys = e.address;
-	m.ring_gpu = e.address;
+	rdna4_bo rb = {}; rb.area=m.ring_area; rb.cpu=m.ring_cpu; rb.size=64*1024; rb.physical=e.address; rb.used=true;
+	s = rdna4_vm_map_bo(d, rb, B_PAGE_SIZE); if (s != B_OK) { delete_area(m.ring_area); m.ring_area=-1; return s; }
+	m.ring_gpu = rb.gpu;
 	memset(m.ring_cpu, 0, 64 * 1024);
 
 	volatile uint64* status = NULL;
@@ -73,7 +75,9 @@ alloc_resources(rdna4_device& d)
 	s = get_memory_map((void*)status, B_PAGE_SIZE, &e, 1);
 	if (s != B_OK) return s;
 	m.status_phys = e.address;
-	m.status_gpu = e.address;
+	rdna4_bo sb = {}; sb.area=m.status_area; sb.cpu=(void*)m.status_cpu; sb.size=B_PAGE_SIZE; sb.physical=e.address; sb.used=true;
+	s = rdna4_vm_map_bo(d, sb, B_PAGE_SIZE); if (s != B_OK) { delete_area(m.status_area); m.status_area=-1; return s; }
+	m.status_gpu = sb.gpu;
 	*m.status_cpu = 0;
 	m.wptr = 0;
 	return B_OK;
@@ -82,8 +86,8 @@ alloc_resources(rdna4_device& d)
 static void
 free_resources(rdna4_device& d)
 {
-	if (d.mes.status_area >= 0) delete_area(d.mes.status_area);
-	if (d.mes.ring_area >= 0) delete_area(d.mes.ring_area);
+	if (d.mes.status_area >= 0) { physical_entry e; if (get_memory_map((void*)d.mes.status_cpu,B_PAGE_SIZE,&e,1)==B_OK) { rdna4_bo b={}; b.area=d.mes.status_area;b.cpu=(void*)d.mes.status_cpu;b.size=B_PAGE_SIZE;b.physical=e.address;b.gpu=d.mes.status_gpu;b.used=true;rdna4_vm_unmap_bo(d,b); } delete_area(d.mes.status_area); }
+	if (d.mes.ring_area >= 0) { physical_entry e; if (get_memory_map(d.mes.ring_cpu,64*1024,&e,1)==B_OK) { rdna4_bo b={}; b.area=d.mes.ring_area;b.cpu=d.mes.ring_cpu;b.size=64*1024;b.physical=e.address;b.gpu=d.mes.ring_gpu;b.used=true;rdna4_vm_unmap_bo(d,b); } delete_area(d.mes.ring_area); }
 	d.mes = {};
 	d.mes.ring_area = d.mes.status_area = -1;
 }

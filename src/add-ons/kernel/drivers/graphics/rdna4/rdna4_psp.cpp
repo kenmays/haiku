@@ -150,8 +150,7 @@ static uint32 ring_wptr(rdna4_device& d)
 	return reg_read(d, C2P67) % kRingDwords;
 }
 
-static status_t submit_frame(rdna4_device& d, const psp_ring_frame& frame,
-	uint32& fenceValue)
+static status_t submit_frame(rdna4_device& d, psp_ring_frame frame)
 {
 	if (!d.psp_ring_ready || d.psp_ring_cpu == NULL)
 		return B_NO_INIT;
@@ -165,15 +164,15 @@ static status_t submit_frame(rdna4_device& d, const psp_ring_frame& frame,
 
 	psp_ring_frame* ring = (psp_ring_frame*)d.psp_ring_cpu;
 	ring[index] = frame;
-	fenceValue++;
-	((psp_ring_frame*)d.psp_ring_cpu)[index].fence_value = fenceValue;
-	memory_write_barrier();
+	d.psp_fence_value++;
+	frame.fence_value = d.psp_fence_value;
+	((psp_ring_frame*)d.psp_ring_cpu)[index] = frame;
 	uint32 next = (wptr + kFrameDwords) % kRingDwords;
 	reg_write(d, C2P67, next);
 
 	bigtime_t deadline = system_time() + 5000000;
 	while (system_time() < deadline) {
-		if (d.psp_fence_cpu != NULL && *d.psp_fence_cpu == fenceValue)
+		if (d.psp_fence_cpu != NULL && *d.psp_fence_cpu == d.psp_fence_value)
 			return B_OK;
 		snooze(50);
 	}
@@ -296,8 +295,7 @@ rdna4_psp_load_ip_firmware(rdna4_device& d, uint32 type, uint32 pspType)
 	frame.fence_hi = (uint32)(d.psp_fence_gpu >> 32);
 	frame.vmid = 0;
 
-	uint32 fence = d.psp_fence_value;
-	status_t status = submit_frame(d, frame, fence);
+	status_t status = submit_frame(d, frame);
 	if (status != B_OK)
 		return status;
 
@@ -348,8 +346,7 @@ rdna4_psp_load_firmware(rdna4_device& d)
 		frame.fence_lo = (uint32)d.psp_fence_gpu;
 		frame.fence_hi = (uint32)(d.psp_fence_gpu >> 32);
 		frame.vmid = 0;
-		uint32 fence = d.psp_fence_value;
-		status = submit_frame(d, frame, fence);
+		status = submit_frame(d, frame);
 		if (status != B_OK)
 			return status;
 		if (cmd->status != 0)

@@ -10,6 +10,7 @@
 #include "rdna4_mmhub.h"
 #include "rdna4_cursor.h"
 #include "rdna4_vcn.h"
+#include "rdna4_discovery.h"
 
 #include <KernelExport.h>
 #include <OS.h>
@@ -188,6 +189,13 @@ rdna4_init(rdna4_device& d)
 	d.gfx_ip = d.device_id == RDNA4_DEVICE_NAVI48_ALT
 		? RDNA4_GFX12_1 : RDNA4_GFX12_0;
 
+	/* IP discovery must run before IP-specific register programming. */
+	status = rdna4_discovery_init(d);
+	if (status != B_OK && status != B_ENTRY_NOT_FOUND) {
+		unmap_resources(d);
+		return status;
+	}
+
 	d.shared = NULL;
 	d.shared_area = create_area("rdna4 shared", (void**)&d.shared,
 		B_ANY_ADDRESS, B_PAGE_SIZE, B_FULL_LOCK,
@@ -202,6 +210,7 @@ rdna4_init(rdna4_device& d)
 	d.shared->device_id = d.device_id;
 	d.shared->revision = d.revision;
 	d.shared->gfx_ip = d.gfx_ip;
+	d.shared->dcn_ip = d.discovery.valid ? 0x0401 : 0;
 	d.shared->wave_size = 32;
 	d.shared->registers_area = d.mmio_area;
 	d.shared->framebuffer_area = d.framebuffer_area;
@@ -230,6 +239,16 @@ rdna4_init(rdna4_device& d)
 	d.gfx_mqd_phys = 0;
 	d.psp_fw_area = -1;
 	d.fence_sem = -1;
+	d.ih_area = -1;
+	d.ih_cpu = NULL;
+	d.ih_gpu = 0;
+	d.ih_rptr = 0;
+	d.ih_enabled = false;
+	d.vm_fault_count = 0;
+	d.vm_fault_address = 0;
+	d.vm_fault_status = 0;
+	d.vm_fault_vmid = 0;
+	d.mes_last_irq_data = 0;
 	d.irq_installed = false;
 	d.interrupt_count = 0;
 	for (uint32 i = 0; i < RDNA4_FW_MAX; i++) d.firmware[i].area = -1;
@@ -424,6 +443,31 @@ rdna4_ioctl(rdna4_device& d, uint32 op, void* buffer, size_t length)
 				}
 			}
 			return B_OK;
+		}
+
+		case RDNA4_GET_IP_DISCOVERY: {
+			if (length < sizeof(rdna4_ip_discovery_info))
+				return B_BUFFER_OVERFLOW;
+			rdna4_ip_discovery_info out = {};
+			out.version = d.discovery.version;
+			out.binary_version_major = d.discovery.binary_version_major;
+			out.binary_version_minor = d.discovery.binary_version_minor;
+			out.table_version = d.discovery.table_version;
+			out.num_dies = d.discovery.num_dies;
+			out.ip_count = d.discovery.ip_count;
+			out.valid = d.discovery.valid;
+			for (uint32 i = 0; i < d.discovery.ip_count && i < 96; i++) {
+				out.ip[i].hw_id = d.discovery.ip[i].hw_id;
+				out.ip[i].instance = d.discovery.ip[i].instance;
+				out.ip[i].harvest = d.discovery.ip[i].harvest;
+				out.ip[i].major = d.discovery.ip[i].major;
+				out.ip[i].minor = d.discovery.ip[i].minor;
+				out.ip[i].revision = d.discovery.ip[i].revision;
+				out.ip[i].base_count = d.discovery.ip[i].base_count;
+				for (uint32 j = 0; j < d.discovery.ip[i].base_count && j < 8; j++)
+					out.ip[i].base[j] = d.discovery.ip[i].base[j];
+			}
+			return user_memcpy(buffer, &out, sizeof(out));
 		}
 
 		case RDNA4_GET_BRINGUP_STATUS: {

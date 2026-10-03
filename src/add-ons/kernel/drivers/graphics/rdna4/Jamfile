@@ -9,4 +9,5 @@ KernelAddon rdna4 :
 	driver.cpp
 	device.cpp
 	rdna4.cpp
+	rdna4_vm.cpp
 	: libgraphicscommon.a ;

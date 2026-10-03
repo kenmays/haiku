@@ -1,6 +1,7 @@
 #include "rdna4_mes.h"
 #include "driver.h"
 #include "rdna4_fw.h"
+#include "rdna4_mes_api.h"
 #include <KernelExport.h>
 #include <OS.h>
 #include <string.h>
@@ -154,6 +155,11 @@ rdna4_mes_start(rdna4_device& d)
 	if (s != B_OK)
 		return s;
 	d.mes.ready = true;
+	d.mes.completion_seq = 0;
+	status_t api = rdna4_mes_set_hw_resources(d, 1u << 0, 1u << 0, 1u, 0xffu, 0x3u);
+	if (api != B_OK) { rdna4_mes_stop(d); return api; }
+	api = rdna4_mes_set_scheduling_config(d, 1000, 100, 10);
+	if (api != B_OK) { rdna4_mes_stop(d); return api; }
 	if (d.shared) {
 		d.shared->mes_state = RDNA4_ENGINE_SCHEDULER_READY;
 		d.shared->feature_mask |= RDNA4_FEATURE_MES;

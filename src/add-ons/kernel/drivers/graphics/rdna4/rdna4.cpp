@@ -199,6 +199,7 @@ rdna4_init(rdna4_device& d)
 	}
 	status = rdna4_discovery_init(d);
 	if (status != B_OK && status != B_ENTRY_NOT_FOUND) {
+		rdna4_nbio_uninit(d);
 		unmap_resources(d);
 		return status;
 	}

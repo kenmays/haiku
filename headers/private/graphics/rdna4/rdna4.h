@@ -200,7 +200,7 @@ struct rdna4_vm_info {
 static inline uint32
 rdna4_mode_flags()
 {
-	return B_HARDWARE_CURSOR | B_PARALLEL_ACCESS | B_DPMS;
+	return B_PARALLEL_ACCESS | B_DPMS;
 }
 
 #endif

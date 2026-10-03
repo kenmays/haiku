@@ -374,6 +374,7 @@ rdna4_ioctl(rdna4_device& d, uint32 op, void* buffer, size_t length)
 			rdna4_bo& bo = d.bos[slot];
 			memset(&bo, 0, sizeof(bo));
 			bo.area = area;
+			bo.cpu = address;
 			bo.size = size;
 			bo.alignment = alignment;
 			bo.physical = entry.address;
@@ -399,6 +400,40 @@ rdna4_ioctl(rdna4_device& d, uint32 op, void* buffer, size_t length)
 				return B_BAD_ADDRESS;
 			}
 			return B_OK;
+		}
+
+		case RDNA4_WAIT_FENCE: {
+			if (length < sizeof(rdna4_wait_fence))
+				return B_BUFFER_OVERFLOW;
+			rdna4_wait_fence request;
+			if (user_memcpy(&request, buffer, sizeof(request)) != B_OK)
+				return B_BAD_ADDRESS;
+			if (request.magic != RDNA4_PRIVATE_DATA_MAGIC
+				|| request.timeout < 0 || request.timeout > 10000000)
+				return B_BAD_VALUE;
+
+			volatile uint64* fence = NULL;
+			for (uint32 i = 0; i < RDNA4_VM_MAX_BOS; i++) {
+				rdna4_bo& bo = d.bos[i];
+				if (!bo.used || request.fence_gpu_address < bo.gpu
+					|| request.fence_gpu_address + sizeof(uint64) > bo.gpu + bo.size)
+					continue;
+				uint64 offset = request.fence_gpu_address - bo.gpu;
+				if ((offset & 7) != 0)
+					return B_BAD_VALUE;
+				fence = (volatile uint64*)((uint8*)bo.cpu + offset);
+				break;
+			}
+			if (fence == NULL)
+				return B_ENTRY_NOT_FOUND;
+
+			bigtime_t deadline = system_time() + request.timeout;
+			do {
+				if (*fence >= request.fence_value)
+					return B_OK;
+				snooze(50);
+			} while (request.timeout < 0 || system_time() < deadline);
+			return B_TIMED_OUT;
 		}
 
 		case RDNA4_FREE_BUFFER: {

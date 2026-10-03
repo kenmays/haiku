@@ -8,12 +8,14 @@
 /* GFX12.0 SDMA register block: gc_gfx_cpwd_sdma0_sdmadec. */
 static const uint32 SDMA_BASE = 0x4980;
 static const uint32 SDMA_INSTANCE_STRIDE = 0x600;
+static const uint32 SDMA_HYP_BASE = 0x3e200;
+static const uint32 SDMA_HYP_STRIDE = 0x20;
 static const uint32 STATUS = 0x24;
-static const uint32 MCU_CNTL = 0x1d;
-static const uint32 IC_CNTL = 0x18;
-static const uint32 IC_BASE_LO = 0x19;
-static const uint32 IC_BASE_HI = 0x1a;
-static const uint32 IC_OP_CNTL = 0x1b;
+static const uint32 MCU_CNTL = 0x588e;
+static const uint32 IC_CNTL = 0x5894;
+static const uint32 IC_BASE_LO = 0x588f;
+static const uint32 IC_BASE_HI = 0x5890;
+static const uint32 IC_OP_CNTL = 0x5892;
 static const uint32 RB_CNTL = 0x80;
 static const uint32 RB_BASE = 0x81;
 static const uint32 RB_BASE_HI = 0x82;
@@ -32,6 +34,8 @@ static const uint32 RB_WPTR_POLL_HI = 0x99;
 static inline uint32
 reg(rdna4_device& d, uint32 instance, uint32 off)
 {
+	if (off >= 0x5880)
+		return SDMA_HYP_BASE + instance * SDMA_HYP_STRIDE + off;
 	return SDMA_BASE + instance * SDMA_INSTANCE_STRIDE + off;
 }
 
@@ -201,7 +205,7 @@ rdna4_sdma_init(rdna4_device& d)
 status_t
 rdna4_sdma_start(rdna4_device& d)
 {
-	if (!d.sdma[0].area || !d.sdma[1].area)
+	if (d.sdma[0].area < 0 || d.sdma[1].area < 0)
 		return B_NO_INIT;
 	for (uint32 i = 0; i < 2; i++) {
 		status_t s = load_ucode(d, i);

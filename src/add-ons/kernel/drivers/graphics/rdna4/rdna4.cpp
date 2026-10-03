@@ -3,6 +3,7 @@
 #include "rdna4_gfxhub.h"
 #include "rdna4_vm.h"
 #include "rdna4_fw.h"
+#include "rdna4_psp.h"
 #include "rdna4_irq.h"
 #include "rdna4_recovery.h"
 #include "rdna4_sdma.h"
@@ -248,6 +249,7 @@ rdna4_init(rdna4_device& d)
 	d.gfx_mqd_cpu = NULL;
 	d.gfx_mqd_phys = 0;
 	d.psp_fw_area = -1;
+	rdna4_psp_init(d);
 	d.psp_boot_area = -1;
 	d.psp_boot_cpu = NULL;
 	d.psp_boot_phys = 0;
@@ -327,6 +329,7 @@ rdna4_uninit(rdna4_device& d)
 	rdna4_sdma_uninit(d);
 	rdna4_vcn_uninit(d);
 	rdna4_mmhub_uninit(d);
+	rdna4_psp_uninit(d);
 	rdna4_firmware_uninit(d);
 	rdna4_gfx_ring_free(d);
 	if (d.gfxhub_ready)
@@ -437,6 +440,9 @@ rdna4_ioctl(rdna4_device& d, uint32 op, void* buffer, size_t length)
 
 		case RDNA4_BOOT_FIRMWARE: {
 			status_t status = rdna4_firmware_boot(d);
+			if (status != B_OK)
+				return status;
+			status = rdna4_psp_load_firmware(d);
 			if (status != B_OK)
 				return status;
 			status = rdna4_sdma_start(d);

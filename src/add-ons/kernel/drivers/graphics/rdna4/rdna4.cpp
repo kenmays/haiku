@@ -445,6 +445,9 @@ rdna4_ioctl(rdna4_device& d, uint32 op, void* buffer, size_t length)
 			status = rdna4_psp_load_firmware(d);
 			if (status != B_OK)
 				return status;
+			status = rdna4_gfx_program_ring(d);
+			if (status != B_OK)
+				return status;
 			status = rdna4_sdma_start(d);
 			if (status != B_OK)
 				return status;

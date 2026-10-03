@@ -75,7 +75,11 @@ status_t rdna4_gpu_recover(rdna4_device& d)
 
 	/* Prefer the PSP Mode 1 reset when the authenticated PSP is alive;
 	 * fall back to PCIe FLR if PSP cannot service the request. */
-	status_t status = rdna4_psp_mode1_reset(d);
+	/* PSP state was torn down above, so try the mode-1 mailbox reset only
+	 * while its SOS is still responsive.  Otherwise use PCIe FLR. */
+	status_t status = B_NOT_SUPPORTED;
+	if (*(volatile uint32*)(d.mmio + ((size_t)0x16091 << 2)) != 0)
+		status = rdna4_psp_mode1_reset(d);
 	if (status != B_OK)
 		status = do_flr(d);
 	if (status != B_OK) {
@@ -110,10 +114,10 @@ status_t rdna4_gpu_recover(rdna4_device& d)
 		goto failed;
 
 	/* PSP SOS must be alive before any authenticated IP image is submitted. */
+	rdna4_psp_init(d);
 	status = rdna4_firmware_boot(d);
 	if (status != B_OK)
 		goto failed;
-	rdna4_psp_init(d);
 	status = rdna4_psp_load_firmware(d);
 	if (status != B_OK)
 		goto failed;

@@ -226,11 +226,7 @@ rdna4_gfx_ring_alloc(rdna4_device& d)
 	d.gfx_ring_rptr = 0;
 	d.gfx_ring_ready = false;
 
-	/*
-	 * Keep the writeback BO alive through its area and GPUVA. It is not
-	 * exposed as a userspace BO; it is private to the kernel ring.
-	 */
-	d.bos[0].used = d.bos[0].used;
+	/* The writeback BO remains private to the kernel ring. */
 	return B_OK;
 }
 

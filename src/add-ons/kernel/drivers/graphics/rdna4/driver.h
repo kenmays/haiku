@@ -6,6 +6,20 @@
 #include <kernel/lock.h>
 
 #include "rdna4.h"
+#include "rdna4_bo.h"
+
+#define RDNA4_VM_MAX_TABLES 1024
+#define RDNA4_VM_MAX_BOS 256
+
+struct rdna4_vm_table {
+	area_id area;
+	uint64* cpu;
+	phys_addr_t phys;
+	uint8 level;
+	uint8 used;
+	uint16 reserved;
+	uint64 base;
+};
 
 struct rdna4_device {
 	int32 id;
@@ -30,6 +44,13 @@ struct rdna4_device {
 	int32 open_count;
 	status_t init_status;
 	mutex lock;
+
+	bool vm_ready;
+	uint32 vm_root_index;
+	phys_addr_t vm_root_phys;
+	uint64 vm_next_va;
+	rdna4_vm_table vm_tables[RDNA4_VM_MAX_TABLES];
+	rdna4_bo bos[RDNA4_VM_MAX_BOS];
 };
 
 extern pci_module_info* gPCI;

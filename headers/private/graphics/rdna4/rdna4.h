@@ -135,7 +135,10 @@ enum {
 	RDNA4_RESET_GPU,
 	RDNA4_GET_FIRMWARE_INFO,
 	RDNA4_GET_VM_INFO,
-	RDNA4_WAIT_IDLE
+	RDNA4_WAIT_IDLE,
+	RDNA4_STAGE_FIRMWARE,
+	RDNA4_BOOT_FIRMWARE,
+	RDNA4_GET_BRINGUP_STATUS
 };
 
 struct rdna4_buffer_request {
@@ -168,6 +171,21 @@ struct rdna4_wait_fence {
 	uint64 fence_gpu_address;
 	uint64 fence_value;
 	bigtime_t timeout;
+};
+
+struct rdna4_bringup_status {
+	uint32 version;
+	uint32 psp_state;
+	uint32 gfx_state;
+	uint32 mes_state;
+	uint32 sdma_state;
+	uint32 vm_state;
+	uint32 psp_firmware_version_major;
+	uint32 psp_firmware_version_minor;
+	uint32 psp_sos_size;
+	uint64 psp_sos_physical;
+	uint64 reset_generation;
+	uint64 interrupt_count;
 };
 
 struct rdna4_firmware_info {

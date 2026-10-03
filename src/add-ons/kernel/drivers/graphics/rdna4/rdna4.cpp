@@ -206,21 +206,27 @@ rdna4_init(rdna4_device& d)
 	d.shared->sdma_state = RDNA4_ENGINE_OFF;
 	d.shared->gpu_reset_generation = 0;
 
+	d.gfx_ring_area = -1;
 	status = rdna4_vm_init(d);
 	if (status != B_OK) {
 		rdna4_uninit(d);
 		return status;
 	}
 
-	/* GPUVM is now a real four-level GFX12 page-table hierarchy. The root is
-	   not advertised as active GPU execution until the GFX hub registers are
-	   programmed and firmware has authenticated the command processor. */
+	/* Allocate the native GFX12 ring now that GPUVM exists. CP programming is
+	   intentionally deferred until authenticated firmware is actually ready. */
+	status = rdna4_gfx_ring_alloc(d);
+	if (status != B_OK) {
+		rdna4_uninit(d);
+		return status;
+	}
 	return B_OK;
 }
 
 void
 rdna4_uninit(rdna4_device& d)
 {
+	rdna4_gfx_ring_free(d);
 	rdna4_vm_uninit(d);
 
 	for (uint32 i = 0; i < RDNA4_VM_MAX_BOS; i++)

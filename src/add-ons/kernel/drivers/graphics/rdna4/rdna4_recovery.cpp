@@ -51,6 +51,11 @@ status_t rdna4_gpu_recover(rdna4_device& d)
 	d.shared->mes_state = RDNA4_ENGINE_RESETTING;
 	d.shared->psp_state = RDNA4_ENGINE_RESETTING;
 
+	/* Mode-1 reset must be requested while PSP SOS/GPCOM is still alive.
+	 * Do it before destroying the PSP ring or authenticated firmware state.
+	 * If PSP cannot answer, the teardown below prepares the device for FLR. */
+	status_t pspReset = rdna4_psp_mode1_reset(d);
+
 	/* Quiesce every engine and release all GPUVM-backed allocations before
 	 * tearing down the address space. This is the critical ordering for a
 	 * reset: no stale GPU virtual address may survive the FLR. */

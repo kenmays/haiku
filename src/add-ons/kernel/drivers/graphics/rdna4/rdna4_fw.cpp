@@ -74,6 +74,19 @@ static status_t parse_ip_firmware(const uint8* data, uint32 size,
 			return B_BAD_DATA;
 		return B_OK;
 	}
+	if (h->header_version_major >= 2
+		&& h->header_size_bytes >= sizeof(common_fw_header) + 28) {
+		const uint32* g = (const uint32*)(data + sizeof(common_fw_header));
+		out.ucodeSize = g[1];
+		out.ucodeOffset = g[2];
+		out.dataSize = g[3];
+		out.dataOffset = g[4];
+		out.ucodeStart = (uint64)g[6] << 32 | g[5];
+		if (!range_valid(out.ucodeOffset, out.ucodeSize, h->size_bytes)
+			|| !range_valid(out.dataOffset, out.dataSize, h->size_bytes))
+			return B_BAD_DATA;
+		return B_OK;
+	}
 	out.ucodeOffset = h->ucode_array_offset_bytes;
 	out.ucodeSize = h->ucode_size_bytes;
 	if (!range_valid(out.ucodeOffset, out.ucodeSize, h->size_bytes))

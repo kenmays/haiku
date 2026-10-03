@@ -10,4 +10,5 @@ KernelAddon rdna4 :
 	device.cpp
 	rdna4.cpp
 	rdna4_vm.cpp
+	rdna4_gfx.cpp
 	: libgraphicscommon.a ;

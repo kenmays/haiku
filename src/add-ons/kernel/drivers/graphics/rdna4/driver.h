@@ -77,6 +77,7 @@ struct rdna4_device {
 	uint32 psp_fw_version_minor;
 	sem_id fence_sem;
 	bool irq_installed;
+	volatile uint64 interrupt_count;
 	area_id gfx_mqd_area;
 	void* gfx_mqd_cpu;
 	phys_addr_t gfx_mqd_phys;

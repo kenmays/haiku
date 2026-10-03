@@ -35,7 +35,7 @@ static void free_vcn(rdna4_device&d){
  if(d.vcn.work_area>=0){rdna4_bo b={};physical_entry e;if(get_memory_map(d.vcn.work_cpu,8*1024*1024,&e,1)==B_OK){b.area=d.vcn.work_area;b.cpu=d.vcn.work_cpu;b.size=8*1024*1024;b.physical=e.address;b.gpu=d.vcn.work_gpu;b.used=true;rdna4_vm_unmap_bo(d,b);}delete_area(d.vcn.work_area);}
  d.vcn={}; d.vcn.ring_area=d.vcn.work_area=-1;
 }
-static status_t start_vcn(rdna4_device&d){
+status_t rdna4_vcn_start(rdna4_device&d){
  const rdna4_firmware_slot& f=d.firmware[RDNA4_FW_VCN];
  if(!f.staged||f.size==0)return B_NO_INIT;
  void*ringCpu=NULL; d.vcn.ring_dwords=4096;
@@ -64,7 +64,7 @@ static status_t start_vcn(rdna4_device&d){
  rb=rd(d,VCN_RB_ENABLE)|VCN_RB1_ENABLE;wr(d,VCN_RB_ENABLE,rb);
  wr(d,VCN_RB1_DB_CTRL,(0x20u<<2)|1u);
  if((rd(d,UVD_STATUS)&0xffff)==0){/* firmware may report status asynchronously */}
- d.vcn.wptr=0;d.vcn.ready=true;return B_OK;
+ d.vcn.wptr=0;d.vcn.ready=true;if(d.shared)d.shared->feature_mask|=RDNA4_FEATURE_VIDEO_DECODE|RDNA4_FEATURE_VIDEO_ENCODE;return B_OK;
 }
 static bool valid_codec(rdna4_vcn_codec c){return c<=RDNA4_VCN_JPEG;}
 status_t rdna4_vcn_init(rdna4_device&d){if(!d.mmio||!d.mmhub_ready)return B_NO_INIT;d.vcn.ring_area=d.vcn.work_area=-1;return B_OK;}

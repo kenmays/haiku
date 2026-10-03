@@ -349,6 +349,10 @@ rdna4_gfx_program_ring(rdna4_device& d)
 	if (d.shared == NULL || d.shared->gfx_state != RDNA4_ENGINE_FIRMWARE_READY)
 		return B_NOT_INITIALIZED;
 
+	status_t mqdStatus = rdna4_gfx_program_mqd(d);
+	if (mqdStatus != B_OK)
+		return mqdStatus;
+
 	/*
 	 * The CP ring is 64 KiB, expressed to hardware as a 2^n dword
 	 * buffer-size mask. Ring 0 is the sole GFX12 graphics ring.

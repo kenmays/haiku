@@ -30,3 +30,9 @@ uint32 rdna4_pm4_indirect_buffer(uint32* out, uint64 address,
 status_t rdna4_validate_command_buffer(const rdna4_command_buffer& command);
 
 #endif
+
+status_t rdna4_gfx_ring_alloc(rdna4_device& device);
+void rdna4_gfx_ring_free(rdna4_device& device);
+status_t rdna4_gfx_ring_write(rdna4_device& device, const uint32* packets,
+	size_t dwords);
+status_t rdna4_gfx_ring_kick(rdna4_device& device);

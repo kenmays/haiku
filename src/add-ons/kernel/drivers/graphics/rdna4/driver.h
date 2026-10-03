@@ -164,6 +164,11 @@ struct rdna4_device {
 	uint64 psp_fence_gpu;
 	uint32 psp_fence_value;
 	bool psp_ring_ready;
+	area_id psp_tmr_area;
+	void* psp_tmr_cpu;
+	phys_addr_t psp_tmr_phys;
+	uint64 psp_tmr_gpu;
+	uint32 psp_tmr_size;
 	sem_id fence_sem;
 	bool irq_installed;
 	area_id ih_area;

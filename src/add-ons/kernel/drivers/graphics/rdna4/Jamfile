@@ -13,6 +13,7 @@ KernelAddon rdna4 :
 	rdna4_gfxhub.cpp
 	rdna4_gfx.cpp
 	rdna4_fw.cpp
+	rdna4_psp.cpp
 	rdna4_irq.cpp
 	rdna4_recovery.cpp
 	rdna4_sdma.cpp

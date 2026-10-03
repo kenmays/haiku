@@ -408,6 +408,63 @@ rdna4_ioctl(rdna4_device& d, uint32 op, void* buffer, size_t length)
 			return B_OK;
 		}
 
+		case RDNA4_SUBMIT_GFX: {
+			if (length < sizeof(rdna4_submit))
+				return B_BUFFER_OVERFLOW;
+			rdna4_submit request;
+			if (user_memcpy(&request, buffer, sizeof(request)) != B_OK)
+				return B_BAD_ADDRESS;
+			if (request.magic != RDNA4_PRIVATE_DATA_MAGIC
+				|| request.queue != 0 || request.command_count == 0
+				|| request.command_count > 1024 * 1024)
+				return B_BAD_VALUE;
+
+			rdna4_bo* commandBO = NULL;
+			rdna4_bo* fenceBO = NULL;
+			for (uint32 i = 0; i < RDNA4_VM_MAX_BOS; i++) {
+				rdna4_bo& bo = d.bos[i];
+				if (!bo.used)
+					continue;
+				if (request.command_gpu_address >= bo.gpu
+					&& request.command_gpu_address < bo.gpu + bo.size)
+					commandBO = &bo;
+				if (request.fence_gpu_address >= bo.gpu
+					&& request.fence_gpu_address + sizeof(uint64) <= bo.gpu + bo.size)
+					fenceBO = &bo;
+			}
+			if (commandBO == NULL || fenceBO == NULL)
+				return B_ENTRY_NOT_FOUND;
+
+			uint64 commandOffset = request.command_gpu_address - commandBO->gpu;
+			uint64 commandBytes = (uint64)request.command_count * sizeof(uint32);
+			if (commandOffset + commandBytes > commandBO->size)
+				return B_BAD_VALUE;
+
+			rdna4_command_buffer command;
+			command.words = (const uint32*)((uint8*)commandBO->cpu + commandOffset);
+			command.word_count = request.command_count;
+			status_t status = rdna4_validate_command_buffer(command);
+			if (status != B_OK)
+				return status;
+
+			uint64 fenceOffset = request.fence_gpu_address - fenceBO->gpu;
+			if ((fenceOffset & 7) != 0)
+				return B_BAD_VALUE;
+
+			/* The kernel constructs the privileged IB and fence packets. */
+			uint32 packets[16];
+			uint32 words = rdna4_pm4_indirect_buffer(packets,
+				request.command_gpu_address, request.command_count);
+			uint32 releaseWords = rdna4_pm4_release_mem(
+				packets + words, request.fence_gpu_address, request.fence_value);
+			words += releaseWords;
+
+			status = rdna4_gfx_ring_write(d, packets, words);
+			if (status != B_OK)
+				return status;
+			return rdna4_gfx_ring_kick(d);
+		}
+
 		case RDNA4_WAIT_FENCE: {
 			if (length < sizeof(rdna4_wait_fence))
 				return B_BUFFER_OVERFLOW;

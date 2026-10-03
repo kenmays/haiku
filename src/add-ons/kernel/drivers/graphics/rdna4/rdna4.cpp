@@ -204,15 +204,26 @@ rdna4_init(rdna4_device& d)
 	d.shared->sdma_state = RDNA4_ENGINE_OFF;
 	d.shared->gpu_reset_generation = 0;
 
-	/* Do not claim GFX/MES/SDMA/3D until firmware, GPUVM and queues are
-	   actually running. B_PARALLEL_ACCESS remains valid for the mapped
-	   display framebuffer only. */
+	status = rdna4_vm_init(d);
+	if (status != B_OK) {
+		rdna4_uninit(d);
+		return status;
+	}
+
+	/* GPUVM is now a real four-level GFX12 page-table hierarchy. The root is
+	   not advertised as active GPU execution until the GFX hub registers are
+	   programmed and firmware has authenticated the command processor. */
 	return B_OK;
 }
 
 void
 rdna4_uninit(rdna4_device& d)
 {
+	rdna4_vm_uninit(d);
+
+	for (uint32 i = 0; i < RDNA4_VM_MAX_BOS; i++)
+		d.bos[i].used = false;
+
 	if (d.shared_area >= 0)
 		delete_area(d.shared_area);
 	d.shared = NULL;
@@ -323,16 +334,31 @@ rdna4_ioctl(rdna4_device& d, uint32 op, void* buffer, size_t length)
 				return B_BAD_ADDRESS;
 			if (request.size == 0 || request.size > (64ull << 20))
 				return B_BAD_VALUE;
-			if (request.magic != RDNA4_PRIVATE_DATA_MAGIC)
+			if (request.magic != RDNA4_PRIVATE_DATA_MAGIC || !d.vm_ready)
 				return B_BAD_VALUE;
+
+			uint64 alignment = request.alignment;
+			if (alignment < B_PAGE_SIZE)
+				alignment = B_PAGE_SIZE;
+			if ((alignment & (alignment - 1)) != 0 || alignment > (2ull << 20))
+				return B_BAD_VALUE;
+
+			int32 slot = -1;
+			for (uint32 i = 0; i < RDNA4_VM_MAX_BOS; i++) {
+				if (!d.bos[i].used) {
+					slot = (int32)i;
+					break;
+				}
+			}
+			if (slot < 0)
+				return B_NO_MEMORY;
 
 			size_t size = (size_t)((request.size + B_PAGE_SIZE - 1)
 				& ~(uint64)(B_PAGE_SIZE - 1));
 			void* address = NULL;
 			area_id area = create_area("rdna4 buffer", &address,
 				B_ANY_KERNEL_ADDRESS, size, B_CONTIGUOUS,
-				B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA
-					| B_CLONEABLE_AREA);
+				B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA | B_CLONEABLE_AREA);
 			if (area < 0)
 				return area;
 
@@ -343,10 +369,30 @@ rdna4_ioctl(rdna4_device& d, uint32 op, void* buffer, size_t length)
 				return status != B_OK ? status : B_NOT_SUPPORTED;
 			}
 
+			rdna4_bo& bo = d.bos[slot];
+			memset(&bo, 0, sizeof(bo));
+			bo.area = area;
+			bo.size = size;
+			bo.alignment = alignment;
+			bo.physical = entry.address;
+			bo.flags = request.flags;
+			bo.used = true;
+
+			status = rdna4_vm_map_bo(d, bo, alignment);
+			if (status != B_OK) {
+				bo.used = false;
+				delete_area(area);
+				return status;
+			}
+
 			request.area = area;
-			request.physical_address = entry.address;
-			request.gpu_address = 0; /* assigned by GPUVM, never physical identity */
+			request.size = size;
+			request.alignment = alignment;
+			request.physical_address = bo.physical;
+			request.gpu_address = bo.gpu;
 			if (user_memcpy(buffer, &request, sizeof(request)) != B_OK) {
+				rdna4_vm_unmap_bo(d, bo);
+				bo.used = false;
 				delete_area(area);
 				return B_BAD_ADDRESS;
 			}
@@ -359,9 +405,19 @@ rdna4_ioctl(rdna4_device& d, uint32 op, void* buffer, size_t length)
 			rdna4_buffer_request request;
 			if (user_memcpy(&request, buffer, sizeof(request)) != B_OK)
 				return B_BAD_ADDRESS;
-			if (request.area < 0)
-				return B_BAD_VALUE;
-			return delete_area(request.area);
+
+			for (uint32 i = 0; i < RDNA4_VM_MAX_BOS; i++) {
+				rdna4_bo& bo = d.bos[i];
+				if (!bo.used || bo.area != request.area)
+					continue;
+				status_t status = rdna4_vm_unmap_bo(d, bo);
+				if (status != B_OK)
+					return status;
+				status = delete_area(bo.area);
+				bo.used = false;
+				return status;
+			}
+			return B_ENTRY_NOT_FOUND;
 		}
 
 		default:

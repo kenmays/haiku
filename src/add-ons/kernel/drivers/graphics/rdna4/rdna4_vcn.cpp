@@ -46,7 +46,8 @@ status_t rdna4_vcn_start(rdna4_device&d){
  if(d.vcn.work_area<0){free_vcn(d);return d.vcn.work_area;} d.vcn.work_cpu=workCpu;memset(workCpu,0,8*1024*1024);
  s=map_area(d,d.vcn.work_area,workCpu,8*1024*1024,d.vcn.work_gpu);if(s!=B_OK){free_vcn(d);return s;}
 
- uint64 firmwareGPU = f.psp_loaded_gpu != 0 ? f.psp_loaded_gpu : f.gpu;
+ uint64 firmwareGPU = f.psp_loaded_gpu;
+ if (firmwareGPU == 0) return B_NO_INIT;
  uint32 fwSize=(f.payload_size+B_PAGE_SIZE-1)&~(uint32)(B_PAGE_SIZE-1);
  uint32 stackOff=fwSize, ctxOff=stackOff+1024*1024;
  wr(d,CACHE_BAR_LO,(uint32)firmwareGPU);wr(d,CACHE_BAR_HI,(uint32)(firmwareGPU>>32));

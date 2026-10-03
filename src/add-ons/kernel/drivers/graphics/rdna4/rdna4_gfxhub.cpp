@@ -10,8 +10,10 @@
 #define GCVM_INVALIDATE_ENG0_SEM                   0x1635
 #define GCVM_INVALIDATE_ENG0_REQ                   0x1647
 #define GCVM_INVALIDATE_ENG0_ACK                   0x1659
-#define GCVM_INVALIDATE_ENG0_ADDR_RANGE_LO32       0x166b
-#define GCVM_INVALIDATE_ENG0_ADDR_RANGE_HI32       0x166c
+#define GCVM_INVALIDATE_ENG17_REQ                  0x1658
+#define GCVM_INVALIDATE_ENG17_ACK                  0x166a
+#define GCVM_INVALIDATE_ENG17_ADDR_RANGE_LO32      0x168d
+#define GCVM_INVALIDATE_ENG17_ADDR_RANGE_HI32      0x168e
 #define GCVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_LO32    0x168f
 #define GCVM_CONTEXT0_PAGE_TABLE_BASE_ADDR_HI32    0x1690
 #define GCVM_CONTEXT0_PAGE_TABLE_START_ADDR_LO32   0x16af
@@ -85,7 +87,7 @@ read_reg(rdna4_device& d, uint32 reg)
 }
 
 static status_t
-flush_engine0(rdna4_device& d, uint32 vmid, uint32 flushType)
+flush_engine17(rdna4_device& d, uint32 vmid, uint32 flushType)
 {
 	if (vmid > 15)
 		return B_BAD_VALUE;
@@ -108,16 +110,15 @@ flush_engine0(rdna4_device& d, uint32 vmid, uint32 flushType)
 	 * the helper suitable for both mapping and unmapping without requiring
 	 * per-object invalidation state.
 	 */
-	write_reg(d, GCVM_INVALIDATE_ENG0_ADDR_RANGE_LO32, 0xffffffffu);
-	write_reg(d, GCVM_INVALIDATE_ENG0_ADDR_RANGE_HI32, 0x000000ffu);
+	write_reg(d, GCVM_INVALIDATE_ENG17_ADDR_RANGE_LO32, 0xffffffffu);
+	write_reg(d, GCVM_INVALIDATE_ENG17_ADDR_RANGE_HI32, 0x0000001fu);
 
-	uint32 oldAck = read_reg(d, GCVM_INVALIDATE_ENG0_ACK);
-	write_reg(d, GCVM_INVALIDATE_ENG0_REQ, request);
+	write_reg(d, GCVM_INVALIDATE_ENG17_REQ, request);
 
 	bigtime_t deadline = system_time() + 100000;
 	for (;;) {
-		uint32 ack = read_reg(d, GCVM_INVALIDATE_ENG0_ACK);
-		if (ack != oldAck)
+		uint32 ack = read_reg(d, GCVM_INVALIDATE_ENG17_ACK);
+		if ((ack & (1u << vmid)) != 0)
 			return B_OK;
 		if (system_time() >= deadline)
 			break;
@@ -158,7 +159,7 @@ rdna4_gfxhub_init(rdna4_device& d)
 	write_reg(d, GCVM_CONTEXT0_PAGE_TABLE_END_ADDR_LO32,
 		0xffffffffu);
 	write_reg(d, GCVM_CONTEXT0_PAGE_TABLE_END_ADDR_HI32,
-		0x000000ffu);
+		0x0000000fu);
 
 	/* Enable the GFXHub L1 translation cache. */
 	uint32 tlb = read_reg(d, GCMC_VM_MX_L1_TLB_CNTL);
@@ -182,10 +183,10 @@ rdna4_gfxhub_init(rdna4_device& d)
 	 * exposes eighteen engines on GFX12; engine 0 is sufficient for the
 	 * native kernel VMID0 path.
 	 */
-	write_reg(d, GCVM_INVALIDATE_ENG0_ADDR_RANGE_LO32, 0xffffffffu);
-	write_reg(d, GCVM_INVALIDATE_ENG0_ADDR_RANGE_HI32, 0x000000ffu);
+	write_reg(d, GCVM_INVALIDATE_ENG17_ADDR_RANGE_LO32, 0xffffffffu);
+	write_reg(d, GCVM_INVALIDATE_ENG17_ADDR_RANGE_HI32, 0x0000001fu);
 
-	status_t status = flush_engine0(d, 0, 0);
+	status_t status = flush_engine17(d, 0, 0);
 	if (status != B_OK)
 		return status;
 
@@ -213,5 +214,5 @@ rdna4_gfxhub_flush_tlb(rdna4_device& d, uint32 vmid, uint32 flushType)
 {
 	if (d.mmio == NULL || !d.vm_ready)
 		return B_NO_INIT;
-	return flush_engine0(d, vmid, flushType);
+	return flush_engine17(d, vmid, flushType);
 }

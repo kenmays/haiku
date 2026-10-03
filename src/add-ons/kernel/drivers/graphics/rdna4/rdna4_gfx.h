@@ -23,7 +23,7 @@ uint32 rdna4_pm4_nop(uint32* out, uint32 count);
 uint32 rdna4_pm4_write_data(uint32* out, uint64 address,
 	uint32 value);
 uint32 rdna4_pm4_release_mem(uint32* out, uint64 address,
-	uint64 value);
+	uint64 value, uint32 gfx_ip);
 uint32 rdna4_pm4_indirect_buffer(uint32* out, uint64 address,
 	uint32 size_dw);
 

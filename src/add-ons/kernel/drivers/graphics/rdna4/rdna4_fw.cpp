@@ -157,6 +157,9 @@ stage_payload(rdna4_device& d, rdna4_firmware_slot& slot, uint32 type)
 			|| !range_valid(dramOffset, dramSize, slot.size)
 			|| iramSize == 0 || dramSize == 0)
 			return B_BAD_DATA;
+		size_t iramAlloc = (slot.ucode_size + B_PAGE_SIZE - 1) & ~(size_t)(B_PAGE_SIZE - 1);
+		if (iramSize > iramAlloc)
+			return B_BAD_DATA;
 
 		size_t dramAlloc = (dramSize + B_PAGE_SIZE - 1) & ~(size_t)(B_PAGE_SIZE - 1);
 		void* dramCpu = NULL;

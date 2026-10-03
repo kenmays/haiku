@@ -180,6 +180,11 @@ rdna4_gfx_ring_alloc(rdna4_device& d)
 	}
 
 	memset(address, 0, size);
+	if (d.gfx_mqd_area >= 0)
+		delete_area(d.gfx_mqd_area);
+	d.gfx_mqd_area = -1;
+	d.gfx_mqd_cpu = NULL;
+	d.gfx_mqd_phys = 0;
 	memset(&d.gfx_ring_bo, 0, sizeof(d.gfx_ring_bo));
 	d.gfx_ring_bo.area = area;
 	d.gfx_ring_bo.cpu = address;

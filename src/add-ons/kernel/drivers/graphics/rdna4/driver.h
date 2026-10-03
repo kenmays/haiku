@@ -65,6 +65,9 @@ struct rdna4_device {
 	uint32 gfx_ring_wptr;
 	uint32 gfx_ring_rptr;
 	bool gfx_ring_ready;
+	area_id gfx_mqd_area;
+	void* gfx_mqd_cpu;
+	phys_addr_t gfx_mqd_phys;
 	rdna4_bo gfx_ring_bo;
 	rdna4_vm_table vm_tables[RDNA4_VM_MAX_TABLES];
 	rdna4_bo bos[RDNA4_VM_MAX_BOS];

@@ -122,6 +122,7 @@ struct rdna4_shared_info {
 	volatile uint32 smu_state;
 	volatile uint32 mes_state;
 	volatile uint32 sdma_state;
+	volatile uint32 vm_state;
 };
 
 enum {

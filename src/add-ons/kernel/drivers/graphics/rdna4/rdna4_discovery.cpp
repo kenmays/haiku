@@ -23,7 +23,7 @@ status_t rdna4_discovery_parse(rdna4_device& d,const void*data,size_t size)
 	const table_info&ti=h->tables[0];
 	if(!ti.offset||!range_ok(ti.offset,ti.size,h->binary_size))return B_BAD_DATA;
 	const ip_discovery_header*ih=(const ip_discovery_header*)(b+ti.offset);
-	if(!ih->num_dies||ih->num_dies>16||ih->id!=0x4f504544u)return B_BAD_DATA;
+	if(!ih->num_dies||ih->num_dies>16||ih->signature==0)return B_BAD_DATA;
 	memset(&d.discovery,0,sizeof(d.discovery));d.discovery.version=1;
 	d.discovery.binary_version_major=h->version_major;d.discovery.binary_version_minor=h->version_minor;
 	d.discovery.table_version=ih->version;d.discovery.num_dies=ih->num_dies;

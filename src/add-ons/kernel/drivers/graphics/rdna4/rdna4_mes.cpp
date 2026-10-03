@@ -30,7 +30,8 @@ static const uint32 MES_INVALIDATE_ICACHE = 1u << 5;
 static inline volatile uint32*
 reg_ptr(rdna4_device& d, uint32 off)
 {
-	return (volatile uint32*)(d.mmio + ((size_t)(MES_BASE + off) << 2));
+	uint32 base = off >= 0x5800 ? 0x3e000 : MES_BASE;
+	return (volatile uint32*)(d.mmio + ((size_t)(base + off) << 2));
 }
 
 static inline uint32 read_reg(rdna4_device& d, uint32 off)

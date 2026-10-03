@@ -363,6 +363,7 @@ rdna4_gfx_ring_kick(rdna4_device& d)
 
 	rdna4_write_reg(d, RDNA4_CP_RB0_WPTR, d.gfx_ring_wptr);
 	rdna4_write_reg(d, RDNA4_CP_RB0_WPTR_HI, 0);
+	rdna4_doorbell_write(d, RDNA4_GFX_DOORBELL_INDEX, d.gfx_ring_wptr);
 	return B_OK;
 }
 

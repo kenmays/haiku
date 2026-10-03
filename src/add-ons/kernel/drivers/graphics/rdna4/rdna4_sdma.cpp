@@ -287,5 +287,6 @@ rdna4_sdma_submit_copy(rdna4_device& d, uint32 i, uint64 src, uint64 dst,
 	*r.wptr_cpu = (uint64)r.wptr << 2;
 	write32(d, i, RB_WPTR, (uint32)r.wptr << 2);
 	write32(d, i, RB_WPTR_HI, (uint32)((uint64)r.wptr << 2 >> 32));
+	rdna4_doorbell_write(d, 0x100 + i * 2, (uint64)r.wptr << 2);
 	return B_OK;
 }

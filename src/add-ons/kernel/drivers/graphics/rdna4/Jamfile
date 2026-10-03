@@ -12,4 +12,7 @@ KernelAddon rdna4 :
 	rdna4_vm.cpp
 	rdna4_gfxhub.cpp
 	rdna4_gfx.cpp
+	rdna4_fw.cpp
+	rdna4_irq.cpp
+	rdna4_recovery.cpp
 	: libgraphicscommon.a ;

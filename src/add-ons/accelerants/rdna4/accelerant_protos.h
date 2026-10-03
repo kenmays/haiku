@@ -31,9 +31,12 @@ status_t rdna4_acquire_engine(uint32 capabilities, uint32 maxWait,
 	sync_token* syncToken, engine_token** engineToken);
 status_t rdna4_release_engine(engine_token* engineToken, sync_token* syncToken);
 
-status_t rdna4_fill_rectangle(engine_token*, uint32 color,
-	fill_rect_params*);
-status_t rdna4_screen_to_screen_blit(engine_token*, blit_params*);
+void rdna4_fill_rectangle(engine_token*, uint32 color,
+	fill_rect_params*, uint32 count);
+void rdna4_screen_to_screen_blit(engine_token*, blit_params*, uint32 count);
+void rdna4_wait_engine_idle(void);
+status_t rdna4_get_sync_token(engine_token*, sync_token*);
+status_t rdna4_sync_to_token(sync_token*);
 
 #ifdef __cplusplus
 }

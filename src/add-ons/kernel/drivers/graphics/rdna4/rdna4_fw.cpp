@@ -28,6 +28,8 @@ struct psp_fw_bin_desc {
 	uint32 size_bytes;
 } __attribute__((packed));
 
+static bool range_valid(uint32 offset, uint32 size, uint32 total);
+
 struct fw_parsed {
 	uint32 ucodeOffset;
 	uint32 ucodeSize;

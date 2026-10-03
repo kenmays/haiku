@@ -102,7 +102,6 @@ allocate_path(rdna4_device& device, uint64 va, rdna4_vm_table*& _pte)
 			if (next == NULL)
 				return B_BAD_DATA;
 		} else {
-			return B_ENTRY_NOT_FOUND;
 			status_t status = allocate_table(device, (uint8)level,
 				table_base(va, (uint8)level), next);
 			if (status != B_OK)
@@ -116,6 +115,22 @@ allocate_path(rdna4_device& device, uint64 va, rdna4_vm_table*& _pte)
 
 	_pte = current;
 	return B_OK;
+}
+
+
+static status_t
+lookup_path(rdna4_device& device, uint64 va, rdna4_vm_table*& _pte)
+{
+ rdna4_vm_table* current = &device.vm_tables[device.vm_root_index];
+ for (int level = 2; level >= 0; level--) {
+  uint32 index = vm_index(va, (uint8)level + 1);
+  uint64 entry = current->cpu[index];
+  if ((entry & RDNA4_PTE_VALID) == 0) return B_ENTRY_NOT_FOUND;
+  rdna4_vm_table* next = find_table_by_phys(device, entry & 0x0000fffffffff000ull);
+  if (!next) return B_BAD_DATA;
+  current = next;
+ }
+ _pte = current; return B_OK;
 }
 
 
@@ -242,7 +257,7 @@ rdna4_vm_unmap_bo(rdna4_device& device, rdna4_bo& bo)
 	for (uint64 offset = 0; offset < size; offset += RDNA4_VM_PAGE_SIZE) {
 		const uint64 pageVA = bo.gpu + offset;
 		rdna4_vm_table* pteTable = NULL;
-		status_t status = ensure_path(device, pageVA, pteTable);
+		status_t status = lookup_path(device, pageVA, pteTable);
 		if (status != B_OK)
 			return status;
 		pteTable->cpu[vm_index(pageVA, 0)] = 0;

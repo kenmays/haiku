@@ -133,6 +133,10 @@ struct rdna4_device {
 	uint32 gfx_ring_rptr;
 	bool gfx_ring_ready;
 	area_id psp_fw_area;
+	area_id psp_boot_area;
+	void* psp_boot_cpu;
+	phys_addr_t psp_boot_phys;
+	size_t psp_boot_size;
 	void* psp_fw_cpu;
 	phys_addr_t psp_fw_phys;
 	uint32 psp_fw_size;

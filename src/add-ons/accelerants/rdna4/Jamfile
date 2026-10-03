@@ -1,7 +1,11 @@
 SubDir HAIKU_TOP src add-ons accelerants rdna4 ;
+
 UsePrivateHeaders graphics ;
 UsePrivateHeaders [ FDirName graphics rdna4 ] ;
 UsePrivateHeaders shared ;
+
 Addon rdna4.accelerant :
 	accelerant.cpp
+	hooks.cpp
+	engine.cpp
 	: be libaccelerantscommon.a [ TargetLibsupc++ ] ;

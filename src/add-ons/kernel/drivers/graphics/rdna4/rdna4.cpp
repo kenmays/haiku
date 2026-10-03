@@ -211,6 +211,9 @@ rdna4_init(rdna4_device& d)
 
 	d.gfx_ring_area = -1;
 	d.gfx_ring_rptr_area = -1;
+	d.gfx_mqd_area = -1;
+	d.gfx_mqd_cpu = NULL;
+	d.gfx_mqd_phys = 0;
 	d.gfx_ring_rptr_cpu = NULL;
 	d.gfx_ring_wptr_poll_cpu = NULL;
 	d.gfxhub_ready = false;

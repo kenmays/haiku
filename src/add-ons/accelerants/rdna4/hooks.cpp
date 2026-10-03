@@ -42,6 +42,12 @@ get_accelerant_hook(uint32 feature, void* data)
 			return (void*)rdna4_acquire_engine;
 		case B_RELEASE_ENGINE:
 			return (void*)rdna4_release_engine;
+		case B_WAIT_ENGINE_IDLE:
+			return (void*)rdna4_wait_engine_idle;
+		case B_GET_SYNC_TOKEN:
+			return (void*)rdna4_get_sync_token;
+		case B_SYNC_TO_TOKEN:
+			return (void*)rdna4_sync_to_token;
 
 		case B_FILL_RECTANGLE:
 			return (void*)rdna4_fill_rectangle;

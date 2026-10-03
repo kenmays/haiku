@@ -304,7 +304,7 @@ rdna4_sdma_submit_copy(rdna4_device& d, uint32 i, uint64 src, uint64 dst,
 	 * upstream SDMA v6/v7 open packet ABI; the opcode/sub-op live in the
 	 * low 16 bits, not in a type-3 PM4 header. */
 	const uint32 copyWords = 7;
-	const uint32 fenceWords = 5;
+	const uint32 fenceWords = 4;
 	const uint32 trapWords = 2;
 	const uint32 total = copyWords + fenceWords + trapWords;
 	uint32 w = r.wptr & 0x3fff;

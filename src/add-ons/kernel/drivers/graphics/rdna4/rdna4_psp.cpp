@@ -442,7 +442,8 @@ rdna4_psp_load_ip_firmware(rdna4_device& d, uint32 type, uint32 pspType)
 
 	if (cmd->status != 0)
 		return B_ERROR;
-	return B_OK;
+	fw.psp_loaded_gpu = (uint64)cmd->fw_addr_lo | ((uint64)cmd->fw_addr_hi << 32);
+	return fw.psp_loaded_gpu != 0 ? B_OK : B_BAD_DATA;
 }
 
 status_t

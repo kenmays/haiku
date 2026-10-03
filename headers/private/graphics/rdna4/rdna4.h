@@ -1,0 +1,173 @@
+/*
+ * Native AMD RDNA4 Haiku graphics ABI.
+ *
+ * This interface is Haiku-native and intentionally does not copy Linux
+ * amdgpu/DRM structures.  Hardware programming is split between the kernel
+ * driver (ownership, MMIO, interrupts, VM, queues, reset) and the accelerant
+ * (display modes, cursor, command submission ABI).
+ */
+#ifndef RDNA4_H
+#define RDNA4_H
+
+#include <Accelerant.h>
+#include <Drivers.h>
+#include <PCI.h>
+#include <SupportDefs.h>
+
+#define RDNA4_VENDOR_ID 0x1002
+#define RDNA4_DEVICE_NAVI44 0x7550
+#define RDNA4_DEVICE_NAVI48_ALT 0x7551
+#define RDNA4_DEVICE_NAVI44_MOBILE 0x7590
+
+#define RDNA4_GFX12_0 0
+#define RDNA4_GFX12_1 1
+
+#define RDNA4_PRIVATE_DATA_MAGIC 'r4hd'
+
+#define RDNA4_ACCELERANT_NAME "rdna4.accelerant"
+#define RDNA4_DEVICE_NAME "rdna4"
+#define RDNA4_MAX_CARDS 4
+
+/* IP blocks present on RDNA4 dGPUs. */
+enum rdna4_ip_block {
+	RDNA4_IP_COMMON = 0,
+	RDNA4_IP_GMC,
+	RDNA4_IP_IH,
+	RDNA4_IP_PSP,
+	RDNA4_IP_SMU,
+	RDNA4_IP_DISPLAY,
+	RDNA4_IP_GFX,
+	RDNA4_IP_MES,
+	RDNA4_IP_SDMA0,
+	RDNA4_IP_SDMA1,
+	RDNA4_IP_VCN,
+	RDNA4_IP_MAX
+};
+
+/* Kernel/accelerant feature contract. */
+enum rdna4_feature : uint64 {
+	RDNA4_FEATURE_DISPLAY		= 1ull << 0,
+	RDNA4_FEATURE_CURSOR		= 1ull << 1,
+	RDNA4_FEATURE_VRAM		= 1ull << 2,
+	RDNA4_FEATURE_GTT		= 1ull << 3,
+	RDNA4_FEATURE_IOMMU		= 1ull << 4,
+	RDNA4_FEATURE_GFX_QUEUE		= 1ull << 5,
+	RDNA4_FEATURE_COMPUTE_QUEUE	= 1ull << 6,
+	RDNA4_FEATURE_SDMA		= 1ull << 7,
+	RDNA4_FEATURE_MES		= 1ull << 8,
+	RDNA4_FEATURE_HOTPLUG		= 1ull << 9,
+	RDNA4_FEATURE_DP		= 1ull << 10,
+	RDNA4_FEATURE_HDMI		= 1ull << 11,
+	RDNA4_FEATURE_AUDIO		= 1ull << 12,
+	RDNA4_FEATURE_POWER		= 1ull << 13,
+	RDNA4_FEATURE_RESET		= 1ull << 14,
+	RDNA4_FEATURE_RAS		= 1ull << 15,
+	RDNA4_FEATURE_VIDEO_DECODE	= 1ull << 16,
+	RDNA4_FEATURE_VIDEO_ENCODE	= 1ull << 17,
+	RDNA4_FEATURE_3D		= 1ull << 18
+};
+
+struct rdna4_gpu_info {
+	uint32 version;
+	uint32 gfx_ip;
+	uint32 device_id;
+	uint32 revision;
+	uint32 cu_count;
+	uint32 wave_size;
+	uint64 vram_size;
+	uint64 gtt_size;
+	uint64 feature_mask;
+};
+
+struct rdna4_private_data {
+	uint32 magic;
+	area_id shared_area;
+};
+
+struct rdna4_shared_info {
+	uint32 version;
+	uint32 device_id;
+	uint32 revision;
+	uint32 gfx_ip;
+	uint32 dcn_ip;
+	uint32 cu_count;
+	uint32 wave_size;
+
+	uint64 feature_mask;
+	uint64 vram_size;
+	uint64 gtt_size;
+
+	area_id registers_area;
+	area_id framebuffer_area;
+	area_id status_area;
+	area_id command_area;
+
+	phys_addr_t registers_phys;
+	phys_addr_t framebuffer_phys;
+	size_t registers_size;
+	size_t framebuffer_size;
+
+	display_mode current_mode;
+	uint32 bytes_per_row;
+	uint32 bits_per_pixel;
+
+	volatile uint64 gpu_reset_generation;
+
+	/* Synchronizes accelerant state transitions. */
+	struct {
+		int32 semaphore;
+	} sync;
+};
+
+/* Private device ioctls. */
+enum {
+	RDNA4_GET_PRIVATE_DATA = B_DEVICE_OP_CODES_END + 1,
+	RDNA4_GET_GPU_INFO,
+	RDNA4_ALLOCATE_BUFFER,
+	RDNA4_FREE_BUFFER,
+	RDNA4_SUBMIT_GFX,
+	RDNA4_WAIT_FENCE,
+	RDNA4_RESET_GPU
+};
+
+struct rdna4_buffer_request {
+	uint32 magic;
+	uint32 flags;
+	uint64 size;
+	uint64 alignment;
+	uint64 gpu_address;
+	area_id area;
+};
+
+struct rdna4_submit {
+	uint32 magic;
+	uint32 queue;
+	uint32 command_count;
+	uint32 flags;
+	uint64 command_gpu_address;
+	uint64 fence_gpu_address;
+	uint64 fence_value;
+};
+
+struct rdna4_wait_fence {
+	uint32 magic;
+	uint32 reserved;
+	uint64 fence_gpu_address;
+	uint64 fence_value;
+	bigtime_t timeout;
+};
+
+/*
+ * Every accelerated display mode advertises B_PARALLEL_ACCESS.  This is a
+ * hardware property of the mode: the display engine and GPU command
+ * processor can access the framebuffer concurrently.  The driver never
+ * exposes the flag unless its VRAM/cache-coherency and ownership paths are
+ * active.
+ */
+static inline uint32
+rdna4_mode_flags()
+{
+	return B_HARDWARE_CURSOR | B_PARALLEL_ACCESS | B_DPMS;
+}
+
+#endif

@@ -49,6 +49,15 @@ struct rdna4_device {
 	uint32 vm_root_index;
 	phys_addr_t vm_root_phys;
 	uint64 vm_next_va;
+
+	area_id gfx_ring_area;
+	void* gfx_ring_cpu;
+	phys_addr_t gfx_ring_phys;
+	uint64 gfx_ring_gpu;
+	uint32 gfx_ring_dwords;
+	uint32 gfx_ring_wptr;
+	uint32 gfx_ring_rptr;
+	bool gfx_ring_ready;
 	rdna4_vm_table vm_tables[RDNA4_VM_MAX_TABLES];
 	rdna4_bo bos[RDNA4_VM_MAX_BOS];
 };

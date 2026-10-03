@@ -192,6 +192,8 @@ rdna4_init(rdna4_device& d)
 	d.shared->framebuffer_phys = d.fb_phys;
 	d.shared->registers_size = d.mmio_size;
 	d.shared->framebuffer_size = d.fb_size;
+	d.shared->vram_size = d.fb_size;
+	d.shared->gtt_size = 512ull << 20;
 	d.shared->feature_mask = RDNA4_FEATURE_DISPLAY
 		| RDNA4_FEATURE_CURSOR | RDNA4_FEATURE_VRAM | RDNA4_FEATURE_GTT;
 	d.shared->gfx_state = RDNA4_ENGINE_DISCOVERED;

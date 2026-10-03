@@ -217,7 +217,7 @@ program_ring(rdna4_device& d, uint32 i)
 	write32(d, i, RB_RPTR_ADDR_HI, (uint32)(r.rptr_gpu >> 32));
 	write32(d, i, RB_BASE, (uint32)(r.ring_gpu >> 8));
 	write32(d, i, RB_BASE_HI, (uint32)(r.ring_gpu >> 40));
-	write32(d, i, DOORBELL_OFFSET, i * 2);
+	write32(d, i, DOORBELL_OFFSET, i == 0 ? 0x100 : 0x10a);
 	write32(d, i, DOORBELL, 1);
 	write32(d, i, IB_CNTL, read32(d, i, IB_CNTL) | 1u);
 	write32(d, i, RB_CNTL, rb | 1u);

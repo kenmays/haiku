@@ -136,6 +136,7 @@ fill_firmware_info(rdna4_device& d, rdna4_firmware_info& info)
 		strlcpy(info.gfx_me, "amdgpu/gc_12_0_1_me.bin", sizeof(info.gfx_me));
 		strlcpy(info.gfx_mec, "amdgpu/gc_12_0_1_mec.bin", sizeof(info.gfx_mec));
 		strlcpy(info.gfx_rlc, "amdgpu/gc_12_0_1_rlc.bin", sizeof(info.gfx_rlc));
+		strlcpy(info.gfx_rlc_kicker, "amdgpu/gc_12_0_1_rlc_kicker.bin", sizeof(info.gfx_rlc_kicker));
 		strlcpy(info.gfx_toc, "amdgpu/gc_12_0_1_toc.bin", sizeof(info.gfx_toc));
 		strlcpy(info.sdma0, "amdgpu/sdma_7_0_1.bin", sizeof(info.sdma0));
 		strlcpy(info.sdma1, "amdgpu/sdma_7_0_1.bin", sizeof(info.sdma1));
@@ -144,14 +145,15 @@ fill_firmware_info(rdna4_device& d, rdna4_firmware_info& info)
 		strlcpy(info.gfx_me, "amdgpu/gc_12_0_0_me.bin", sizeof(info.gfx_me));
 		strlcpy(info.gfx_mec, "amdgpu/gc_12_0_0_mec.bin", sizeof(info.gfx_mec));
 		strlcpy(info.gfx_rlc, "amdgpu/gc_12_0_0_rlc.bin", sizeof(info.gfx_rlc));
+		strlcpy(info.gfx_rlc_kicker, "", sizeof(info.gfx_rlc_kicker));
 		strlcpy(info.gfx_toc, "amdgpu/gc_12_0_0_toc.bin", sizeof(info.gfx_toc));
 		strlcpy(info.sdma0, "amdgpu/sdma_7_0_0.bin", sizeof(info.sdma0));
 		strlcpy(info.sdma1, "amdgpu/sdma_7_0_0.bin", sizeof(info.sdma1));
 	}
 	if (d.gfx_ip == RDNA4_GFX12_1) {
-		strlcpy(info.mes, "amdgpu/gc_12_1_0_mes.bin", sizeof(info.mes));
-		strlcpy(info.mes1, "amdgpu/gc_12_1_0_mes1.bin", sizeof(info.mes1));
-		strlcpy(info.uni_mes, "amdgpu/gc_12_1_0_uni_mes.bin", sizeof(info.uni_mes));
+		strlcpy(info.mes, "amdgpu/gc_12_0_1_mes.bin", sizeof(info.mes));
+		strlcpy(info.mes1, "amdgpu/gc_12_0_1_mes1.bin", sizeof(info.mes1));
+		strlcpy(info.uni_mes, "amdgpu/gc_12_0_1_uni_mes.bin", sizeof(info.uni_mes));
 	} else {
 		strlcpy(info.mes, "amdgpu/gc_12_0_0_mes.bin", sizeof(info.mes));
 		strlcpy(info.mes1, "amdgpu/gc_12_0_0_mes1.bin", sizeof(info.mes1));

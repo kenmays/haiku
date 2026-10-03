@@ -273,7 +273,7 @@ rdna4_psp_load_ip_firmware(rdna4_device& d, uint32 type, uint32 pspType)
 	if (!d.psp_ring_ready || type >= RDNA4_FW_MAX)
 		return B_NO_INIT;
 	rdna4_firmware_slot& fw = d.firmware[type];
-	if (!fw.staged || fw.gpu == 0 || fw.size == 0)
+	if (!fw.staged || fw.payload_gpu == 0 || fw.payload_size == 0)
 		return B_ENTRY_NOT_FOUND;
 
 	memset(d.psp_cmd_cpu, 0, B_PAGE_SIZE);
@@ -282,9 +282,9 @@ rdna4_psp_load_ip_firmware(rdna4_device& d, uint32 type, uint32 pspType)
 	cmd->buf_version = PSP_GFX_CMD_BUF_VERSION;
 	cmd->cmd_id = GFX_CMD_LOAD_IP_FW;
 	psp_cmd_load_ip_fw load = {};
-	load.fw_lo = (uint32)fw.gpu;
-	load.fw_hi = (uint32)(fw.gpu >> 32);
-	load.fw_size = fw.size;
+	load.fw_lo = (uint32)fw.payload_gpu;
+	load.fw_hi = (uint32)(fw.payload_gpu >> 32);
+	load.fw_size = fw.payload_size;
 	load.fw_type = pspType;
 	memcpy(cmd->command, &load, sizeof(load));
 

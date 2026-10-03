@@ -87,8 +87,18 @@ alloc_resources(rdna4_device& d)
 static void
 free_resources(rdna4_device& d)
 {
-	if (d.mes.status_area >= 0) { physical_entry e; if (get_memory_map((void*)d.mes.status_cpu,B_PAGE_SIZE,&e,1)==B_OK) { rdna4_bo b={}; b.area=d.mes.status_area;b.cpu=(void*)d.mes.status_cpu;b.size=B_PAGE_SIZE;b.physical=e.address;b.gpu=d.mes.status_gpu;b.used=true;rdna4_vm_unmap_bo(d,b); } delete_area(d.mes.status_area); }
-	if (d.mes.ring_area >= 0) { physical_entry e; if (get_memory_map(d.mes.ring_cpu,64*1024,&e,1)==B_OK) { rdna4_bo b={}; b.area=d.mes.ring_area;b.cpu=d.mes.ring_cpu;b.size=64*1024;b.physical=e.address;b.gpu=d.mes.ring_gpu;b.used=true;rdna4_vm_unmap_bo(d,b); } delete_area(d.mes.ring_area); }
+	if (d.mes.status_area >= 0) {
+		rdna4_bo b={}; b.area=d.mes.status_area; b.cpu=(void*)d.mes.status_cpu;
+		b.size=B_PAGE_SIZE; b.physical=d.mes.status_phys; b.gpu=d.mes.status_gpu; b.used=true;
+		if (d.vm_ready && b.gpu) rdna4_vm_unmap_bo(d,b);
+		delete_area(d.mes.status_area);
+	}
+	if (d.mes.ring_area >= 0) {
+		rdna4_bo b={}; b.area=d.mes.ring_area; b.cpu=d.mes.ring_cpu;
+		b.size=64*1024; b.physical=d.mes.ring_phys; b.gpu=d.mes.ring_gpu; b.used=true;
+		if (d.vm_ready && b.gpu) rdna4_vm_unmap_bo(d,b);
+		delete_area(d.mes.ring_area);
+	}
 	d.mes = {};
 	d.mes.ring_area = d.mes.status_area = -1;
 }

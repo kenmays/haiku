@@ -118,10 +118,15 @@ fill_firmware_info(rdna4_device& d, rdna4_firmware_info& info)
 		strlcpy(info.sdma0, "amdgpu/sdma_7_0_0.bin", sizeof(info.sdma0));
 		strlcpy(info.sdma1, "amdgpu/sdma_7_0_0.bin", sizeof(info.sdma1));
 	}
-	strlcpy(info.mes, "amdgpu/gc_12_1_0_mes.bin", sizeof(info.mes));
-	strlcpy(info.mes1, "amdgpu/gc_12_1_0_mes1.bin", sizeof(info.mes1));
-	strlcpy(info.uni_mes, "amdgpu/gc_12_1_0_uni_mes.bin",
-		sizeof(info.uni_mes));
+	if (d.gfx_ip == RDNA4_GFX12_1) {
+		strlcpy(info.mes, "amdgpu/gc_12_1_0_mes.bin", sizeof(info.mes));
+		strlcpy(info.mes1, "amdgpu/gc_12_1_0_mes1.bin", sizeof(info.mes1));
+		strlcpy(info.uni_mes, "amdgpu/gc_12_1_0_uni_mes.bin", sizeof(info.uni_mes));
+	} else {
+		strlcpy(info.mes, "amdgpu/gc_12_0_0_mes.bin", sizeof(info.mes));
+		strlcpy(info.mes1, "amdgpu/gc_12_0_0_mes1.bin", sizeof(info.mes1));
+		strlcpy(info.uni_mes, "amdgpu/gc_12_0_0_uni_mes.bin", sizeof(info.uni_mes));
+	}
 }
 
 status_t

@@ -20,6 +20,7 @@ enum rdna4_firmware_type {
 	RDNA4_FW_SDMA1,
 	RDNA4_FW_SMU,
 	RDNA4_FW_VCN,
+	RDNA4_FW_DISCOVERY,
 	RDNA4_FW_MAX
 };
 

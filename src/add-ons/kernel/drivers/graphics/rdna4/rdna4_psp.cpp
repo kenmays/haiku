@@ -12,11 +12,11 @@ static const uint32 kFrameBytes = 64;
 static const uint32 kFrameDwords = kFrameBytes / 4;
 static const uint32 kRingDwords = kRingBytes / 4;
 
-static const uint32 C2P64 = 0x16080;
-static const uint32 C2P67 = 0x16083;
-static const uint32 C2P69 = 0x16085;
-static const uint32 C2P70 = 0x16086;
-static const uint32 C2P71 = 0x16087;
+static const uint32 C2P64 = 0x16040;
+static const uint32 C2P67 = 0x16043;
+static const uint32 C2P69 = 0x16045;
+static const uint32 C2P70 = 0x16046;
+static const uint32 C2P71 = 0x16047;
 
 static const uint32 PSP_RING_TYPE_KM = 0x00020000u;
 static const uint32 GFX_CTRL_DESTROY_RINGS = 0x00030000;

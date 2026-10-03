@@ -13,6 +13,9 @@ static uint8* sFramebuffer = NULL;
 static display_mode sModes[4];
 static uint32 sModeCount = 0;
 
+rdna4_shared_info* rdna4_shared() { return sShared; }
+uint8* rdna4_framebuffer() { return sFramebuffer; }
+
 static display_mode
 make_mode(uint16 width, uint16 height, uint32 pixelClock,
 	uint16 hStart, uint16 hEnd, uint16 hTotal,

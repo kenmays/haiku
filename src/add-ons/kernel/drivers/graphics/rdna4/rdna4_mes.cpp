@@ -119,7 +119,9 @@ load_pipe0(rdna4_device& d)
 	write_reg(d, MES_CNTL, ctl);
 
 	write_reg(d, MES_IC_BASE_CNTL, 0);
-	uint64 firmwareGPU = f.psp_loaded_gpu != 0 ? f.psp_loaded_gpu : f.gpu;
+	uint64 firmwareGPU = f.psp_loaded_gpu;
+	if (firmwareGPU == 0)
+		return B_NO_INIT;
 	write_reg(d, MES_IC_BASE_LO, (uint32)firmwareGPU);
 	write_reg(d, MES_IC_BASE_HI, (uint32)(firmwareGPU >> 32));
 	write_reg(d, MES_MIBOUND_LO, 0x1fffff);

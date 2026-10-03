@@ -22,6 +22,51 @@ struct rdna4_vm_table {
 	uint64 base;
 };
 
+struct rdna4_firmware_slot {
+	area_id area;
+	void* cpu;
+	phys_addr_t phys;
+	uint32 size;
+	uint32 ucode_offset;
+	uint32 ucode_size;
+	uint32 data_offset;
+	uint32 data_size;
+	uint64 ucode_start;
+	uint64 data_start;
+	uint32 version;
+	bool staged;
+};
+
+struct rdna4_sdma_ring {
+	area_id ring_area;
+	uint32* ring_cpu;
+	phys_addr_t ring_phys;
+	uint64 ring_gpu;
+	area_id rptr_area;
+	volatile uint64* rptr_cpu;
+	phys_addr_t rptr_phys;
+	uint64 rptr_gpu;
+	area_id wptr_area;
+	volatile uint64* wptr_cpu;
+	phys_addr_t wptr_phys;
+	uint64 wptr_gpu;
+	uint32 wptr;
+	bool ready;
+};
+
+struct rdna4_mes_state {
+	area_id ring_area;
+	uint32* ring_cpu;
+	phys_addr_t ring_phys;
+	uint64 ring_gpu;
+	area_id status_area;
+	volatile uint64* status_cpu;
+	phys_addr_t status_phys;
+	uint64 status_gpu;
+	uint32 wptr;
+	bool ready;
+};
+
 struct rdna4_device {
 	int32 id;
 	pci_info* pci;
@@ -78,6 +123,9 @@ struct rdna4_device {
 	sem_id fence_sem;
 	bool irq_installed;
 	volatile uint64 interrupt_count;
+	rdna4_firmware_slot firmware[RDNA4_FW_MAX];
+	rdna4_sdma_ring sdma[2];
+	rdna4_mes_state mes;
 	area_id gfx_mqd_area;
 	void* gfx_mqd_cpu;
 	phys_addr_t gfx_mqd_phys;

@@ -194,7 +194,6 @@ static status_t submit_frame(rdna4_device& d, psp_ring_frame frame)
 	}
 	return B_TIMED_OUT;
 }
-}
 
 status_t
 rdna4_psp_init(rdna4_device& d)

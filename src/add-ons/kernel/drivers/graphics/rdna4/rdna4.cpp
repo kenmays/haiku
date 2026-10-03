@@ -420,6 +420,15 @@ rdna4_ioctl(rdna4_device& d, uint32 op, void* buffer, size_t length)
 				rdna4_sdma_stop(d);
 				return status;
 			}
+			/* VCN5 is independently booted after MMHUB and PSP/IP firmware are live. */
+			if (d.firmware[RDNA4_FW_VCN].staged) {
+				status = rdna4_vcn_start(d);
+				if (status != B_OK) {
+					rdna4_mes_stop(d);
+					rdna4_sdma_stop(d);
+					return status;
+				}
+			}
 			return B_OK;
 		}
 

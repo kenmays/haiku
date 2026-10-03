@@ -53,6 +53,12 @@ struct rdna4_device {
 
 	area_id gfx_ring_area;
 	void* gfx_ring_cpu;
+	area_id gfx_ring_rptr_area;
+	volatile uint32* gfx_ring_rptr_cpu;
+	phys_addr_t gfx_ring_rptr_phys;
+	uint64 gfx_ring_rptr_gpu;
+	volatile uint32* gfx_ring_wptr_poll_cpu;
+	uint64 gfx_ring_wptr_poll_gpu;
 	phys_addr_t gfx_ring_phys;
 	uint64 gfx_ring_gpu;
 	uint32 gfx_ring_dwords;

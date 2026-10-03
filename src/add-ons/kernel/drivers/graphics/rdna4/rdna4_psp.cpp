@@ -18,7 +18,7 @@ static const uint32 C2P69 = 0x16085;
 static const uint32 C2P70 = 0x16086;
 static const uint32 C2P71 = 0x16087;
 
-static const uint32 GFX_CTRL_INIT_GPCOM = 0x00020000;
+static const uint32 PSP_RING_TYPE_KM = 1u;
 static const uint32 GFX_CTRL_DESTROY_RINGS = 0x00030000;
 static const uint32 GFX_CMD_LOAD_IP_FW = 0x00000006;
 static const uint32 GFX_CMD_AUTOLOAD_RLC = 0x00000021;
@@ -255,7 +255,7 @@ rdna4_psp_ring_create(rdna4_device& d)
 	reg_write(d, C2P69, (uint32)d.psp_ring_gpu);
 	reg_write(d, C2P70, (uint32)(d.psp_ring_gpu >> 32));
 	reg_write(d, C2P71, kRingBytes);
-	reg_write(d, C2P64, GFX_CTRL_INIT_GPCOM << 16);
+	reg_write(d, C2P64, PSP_RING_TYPE_KM << 16);
 	snooze(20000);
 	status = wait_reg(d, C2P64, GFX_FLAG_RESPONSE, GFX_FLAG_RESPONSE, 500000);
 	if (status != B_OK) {

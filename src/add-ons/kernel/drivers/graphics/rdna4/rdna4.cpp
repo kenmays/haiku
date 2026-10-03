@@ -12,6 +12,7 @@
 #include "rdna4_cursor.h"
 #include "rdna4_vcn.h"
 #include "rdna4_discovery.h"
+#include "rdna4_nbio.h"
 
 #include <KernelExport.h>
 #include <OS.h>
@@ -191,6 +192,11 @@ rdna4_init(rdna4_device& d)
 		? RDNA4_GFX12_1 : RDNA4_GFX12_0;
 
 	/* IP discovery must run before IP-specific register programming. */
+	status = rdna4_nbio_init(d);
+	if (status != B_OK) {
+		unmap_resources(d);
+		return status;
+	}
 	status = rdna4_discovery_init(d);
 	if (status != B_OK && status != B_ENTRY_NOT_FOUND) {
 		unmap_resources(d);
@@ -328,6 +334,7 @@ rdna4_uninit(rdna4_device& d)
 	rdna4_sdma_uninit(d);
 	rdna4_vcn_uninit(d);
 	rdna4_mmhub_uninit(d);
+	rdna4_nbio_uninit(d);
 	rdna4_psp_uninit(d);
 	rdna4_firmware_uninit(d);
 	rdna4_gfx_ring_free(d);

@@ -138,7 +138,8 @@ enum {
 	RDNA4_WAIT_IDLE,
 	RDNA4_STAGE_FIRMWARE,
 	RDNA4_BOOT_FIRMWARE,
-	RDNA4_GET_BRINGUP_STATUS
+	RDNA4_GET_BRINGUP_STATUS,
+	RDNA4_GET_IP_DISCOVERY
 };
 
 struct rdna4_buffer_request {
@@ -213,6 +214,29 @@ struct rdna4_firmware_info {
 	char sdma0[64];
 	char sdma1[64];
 	char vcn[64];
+};
+
+struct rdna4_ip_discovery_entry {
+	uint16 hw_id;
+	uint8 instance;
+	uint8 harvest;
+	uint8 major;
+	uint8 minor;
+	uint8 revision;
+	uint8 base_count;
+	uint64 base[8];
+};
+
+struct rdna4_ip_discovery_info {
+	uint32 version;
+	uint32 binary_version_major;
+	uint32 binary_version_minor;
+	uint32 table_version;
+	uint32 num_dies;
+	uint32 ip_count;
+	uint32 valid;
+	uint32 reserved;
+	rdna4_ip_discovery_entry ip[96];
 };
 
 struct rdna4_vm_info {

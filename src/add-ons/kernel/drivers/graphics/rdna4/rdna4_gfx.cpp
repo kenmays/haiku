@@ -235,7 +235,7 @@ rdna4_gfx_ring_kick(rdna4_device& d)
 	 * complete and can be inspected before firmware bring-up.
 	 */
 	if (!d.gfx_ring_ready)
-		return B_NOT_READY;
+		return B_NOT_INITIALIZED;
 
 	rdna4_write_reg(d, RDNA4_CP_RB0_WPTR, d.gfx_ring_wptr);
 	rdna4_write_reg(d, RDNA4_CP_RB0_WPTR_HI, 0);
@@ -248,7 +248,7 @@ rdna4_gfx_program_ring(rdna4_device& d)
 	if (!d.gfx_ring_bo.used)
 		return B_NO_INIT;
 	if (d.shared == NULL || d.shared->gfx_state != RDNA4_ENGINE_FIRMWARE_READY)
-		return B_NOT_READY;
+		return B_NOT_INITIALIZED;
 
 	/*
 	 * The CP ring is 64 KiB, expressed to hardware as a 2^n dword

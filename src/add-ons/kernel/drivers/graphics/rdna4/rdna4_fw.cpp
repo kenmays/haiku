@@ -365,7 +365,7 @@ rdna4_stage_firmware(rdna4_device& d, const rdna4_firmware_stage& request)
 	if (status != B_OK) { delete_area(area); slot = {}; slot.area = -1; return status; }
 	slot.gpu = fwbo.gpu;
 	status = stage_payload(d, slot, request.type);
-	if (status != B_OK) { rdna4_vm_unmap_bo(d, fwbo); delete_area(area); slot = {}; slot.area = -1; return status; }
+	if (status != B_OK) { free_slot_payload(d, slot); rdna4_vm_unmap_bo(d, fwbo); delete_area(area); slot = {}; slot.area = -1; return status; }
 
 	if (request.type == RDNA4_FW_PSP) {
 		d.psp_fw_area = area;

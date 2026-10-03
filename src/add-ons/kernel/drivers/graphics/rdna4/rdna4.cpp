@@ -1,5 +1,6 @@
 #include "driver.h"
 #include "rdna4_gfx.h"
+#include "rdna4_gfxhub.h"
 #include "rdna4_vm.h"
 
 #include <KernelExport.h>
@@ -183,7 +184,7 @@ rdna4_init(rdna4_device& d)
 	}
 
 	memset(d.shared, 0, B_PAGE_SIZE);
-	d.shared->version = 2;
+	d.shared->version = 3;
 	d.shared->device_id = d.device_id;
 	d.shared->revision = d.revision;
 	d.shared->gfx_ip = d.gfx_ip;
@@ -197,24 +198,38 @@ rdna4_init(rdna4_device& d)
 	d.shared->vram_size = d.fb_size;
 	d.shared->gtt_size = 512ull << 20;
 	d.shared->feature_mask = RDNA4_FEATURE_DISPLAY
-		| RDNA4_FEATURE_CURSOR | RDNA4_FEATURE_VRAM | RDNA4_FEATURE_GTT;
+		| RDNA4_FEATURE_VRAM | RDNA4_FEATURE_GTT
+		| RDNA4_FEATURE_RESET;
 	d.shared->gfx_state = RDNA4_ENGINE_DISCOVERED;
 	d.shared->display_state = RDNA4_ENGINE_DISCOVERED;
 	d.shared->psp_state = RDNA4_ENGINE_DISCOVERED;
 	d.shared->smu_state = RDNA4_ENGINE_DISCOVERED;
 	d.shared->mes_state = RDNA4_ENGINE_OFF;
 	d.shared->sdma_state = RDNA4_ENGINE_OFF;
+	d.shared->vm_state = RDNA4_ENGINE_DISCOVERED;
 	d.shared->gpu_reset_generation = 0;
 
 	d.gfx_ring_area = -1;
+	d.gfxhub_ready = false;
+
 	status = rdna4_vm_init(d);
 	if (status != B_OK) {
 		rdna4_uninit(d);
 		return status;
 	}
 
-	/* Allocate the native GFX12 ring now that GPUVM exists. CP programming is
-	   intentionally deferred until authenticated firmware is actually ready. */
+	/*
+	 * Program GFXHub VMID0 before exposing any GPU-addressed buffer or ring.
+	 * Mapping/unmapping subsequently performs explicit VMID0 TLB invalidation.
+	 */
+	status = rdna4_gfxhub_init(d);
+	if (status != B_OK) {
+		rdna4_uninit(d);
+		return status;
+	}
+	d.gfxhub_ready = true;
+
+	/* Allocate the native GFX12 ring now that GPUVM and GFXHub exist. */
 	status = rdna4_gfx_ring_alloc(d);
 	if (status != B_OK) {
 		rdna4_uninit(d);
@@ -227,6 +242,9 @@ void
 rdna4_uninit(rdna4_device& d)
 {
 	rdna4_gfx_ring_free(d);
+	if (d.gfxhub_ready)
+		rdna4_gfxhub_uninit(d);
+	d.gfxhub_ready = false;
 	rdna4_vm_uninit(d);
 
 	for (uint32 i = 0; i < RDNA4_VM_MAX_BOS; i++)
@@ -311,14 +329,35 @@ rdna4_ioctl(rdna4_device& d, uint32 op, void* buffer, size_t length)
 		case RDNA4_RESET_GPU: {
 			if (length != 0 && length < sizeof(uint32))
 				return B_BUFFER_OVERFLOW;
+			if (d.shared != NULL)
+				d.shared->gfx_state = RDNA4_ENGINE_RESETTING;
+
 			status_t status = wait_for_gfx_idle(d, 500000);
 			if (status != B_OK)
 				status = pci_function_level_reset(d);
-			if (status == B_OK && d.shared != NULL) {
-				d.shared->gpu_reset_generation++;
-				d.shared->gfx_state = RDNA4_ENGINE_DISCOVERED;
-				d.shared->mes_state = RDNA4_ENGINE_OFF;
-				d.shared->sdma_state = RDNA4_ENGINE_OFF;
+			if (status == B_OK) {
+				d.gfxhub_ready = false;
+				if (d.shared != NULL)
+					d.shared->vm_state = RDNA4_ENGINE_RESETTING;
+
+				/* FLR can invalidate all VM state, so rebuild it. */
+				if (d.shared != NULL)
+					rdna4_gfxhub_uninit(d);
+				status_t vmStatus = rdna4_gfxhub_init(d);
+				if (vmStatus == B_OK) {
+					d.gfxhub_ready = true;
+					rdna4_gfx_ring_ready = false;
+				} else
+					status = vmStatus;
+
+				if (d.shared != NULL) {
+					d.shared->gpu_reset_generation++;
+					d.shared->gfx_state = RDNA4_ENGINE_DISCOVERED;
+					d.shared->vm_state = status == B_OK
+						? RDNA4_ENGINE_VM_READY : RDNA4_ENGINE_FAILED;
+					d.shared->mes_state = RDNA4_ENGINE_OFF;
+					d.shared->sdma_state = RDNA4_ENGINE_OFF;
+				}
 			}
 			return status;
 		}
@@ -342,7 +381,8 @@ rdna4_ioctl(rdna4_device& d, uint32 op, void* buffer, size_t length)
 				return B_BAD_ADDRESS;
 			if (request.size == 0 || request.size > (64ull << 20))
 				return B_BAD_VALUE;
-			if (request.magic != RDNA4_PRIVATE_DATA_MAGIC || !d.vm_ready)
+			if (request.magic != RDNA4_PRIVATE_DATA_MAGIC || !d.vm_ready
+				|| !d.gfxhub_ready)
 				return B_BAD_VALUE;
 
 			uint64 alignment = request.alignment;
@@ -371,7 +411,7 @@ rdna4_ioctl(rdna4_device& d, uint32 op, void* buffer, size_t length)
 				return area;
 
 			physical_entry entry;
-			status_t status = get_memory_map(address, size, &entry, 1);
+			status = get_memory_map(address, size, &entry, 1);
 			if (status != B_OK || entry.size < size) {
 				delete_area(area);
 				return status != B_OK ? status : B_NOT_SUPPORTED;

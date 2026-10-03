@@ -521,6 +521,7 @@ void
 rdna4_psp_uninit(rdna4_device& d)
 {
 	rdna4_psp_ring_destroy(d);
+	psp_free_tmr(d);
 	d.psp_ring_area = d.psp_cmd_area = d.psp_fence_area = -1;
 	d.psp_ring_cpu = d.psp_cmd_cpu = NULL;
 	d.psp_fence_cpu = NULL;

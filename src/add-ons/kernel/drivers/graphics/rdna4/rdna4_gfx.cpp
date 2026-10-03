@@ -343,7 +343,6 @@ rdna4_gfx_program_ring(rdna4_device& d)
 uint64 rbAddr = d.gfx_ring_gpu >> 8;
 	rdna4_write_reg(d, RDNA4_CP_RB0_BASE, (uint32)rbAddr);
 	rdna4_write_reg(d, RDNA4_CP_RB0_BASE_HI, (uint32)(rbAddr >> 32));
-	rdna4_write_reg(d, RDNA4_CP_RB0_BUFSZ_MASK, 0);
 	rdna4_write_reg(d, RDNA4_CP_RB_ACTIVE, 1);
 	rdna4_write_reg(d, RDNA4_CP_RB_DOORBELL_CONTROL, 0);
 

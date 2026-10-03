@@ -9,6 +9,7 @@
 #include "rdna4_irq.h"
 #include "rdna4_fw.h"
 #include "rdna4_psp.h"
+#include "rdna4_mmhub.h"
 #include <KernelExport.h>
 #include <OS.h>
 #include <PCI.h>

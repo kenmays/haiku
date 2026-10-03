@@ -10,6 +10,7 @@
 #include "rdna4_fw.h"
 #include "rdna4_psp.h"
 #include "rdna4_mmhub.h"
+#include "rdna4_nbio.h"
 #include <KernelExport.h>
 #include <OS.h>
 #include <PCI.h>
@@ -60,6 +61,7 @@ status_t rdna4_gpu_recover(rdna4_device& d)
 	rdna4_psp_uninit(d);
 	rdna4_gfx_ring_free(d);
 	rdna4_mmhub_uninit(d);
+	rdna4_nbio_uninit(d);
 	if (d.gfxhub_ready)
 		rdna4_gfxhub_uninit(d);
 	d.gfxhub_ready = false;
@@ -90,6 +92,9 @@ status_t rdna4_gpu_recover(rdna4_device& d)
 	gPCI->write_pci_config(d.pci->bus, d.pci->device, d.pci->function,
 		PCI_command, 2, command);
 
+	status = rdna4_nbio_init(d);
+	if (status != B_OK)
+		goto failed;
 	status = rdna4_vm_init(d);
 	if (status != B_OK)
 		goto failed;
@@ -161,6 +166,7 @@ failed:
 	rdna4_psp_uninit(d);
 	rdna4_gfx_ring_free(d);
 	rdna4_mmhub_uninit(d);
+	rdna4_nbio_uninit(d);
 	if (d.gfxhub_ready) {
 		rdna4_gfxhub_uninit(d);
 		d.gfxhub_ready = false;

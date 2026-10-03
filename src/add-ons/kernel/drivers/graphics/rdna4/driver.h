@@ -68,6 +68,18 @@ struct rdna4_mes_state {
 	bool ready;
 };
 
+struct rdna4_vcn_state {
+	area_id ring_area;
+	uint32* ring_cpu;
+	uint64 ring_gpu;
+	area_id work_area;
+	void* work_cpu;
+	uint64 work_gpu;
+	uint32 wptr;
+	uint32 ring_dwords;
+	bool ready;
+};
+
 struct rdna4_device {
 	int32 id;
 	pci_info* pci;
@@ -128,6 +140,7 @@ struct rdna4_device {
 	rdna4_firmware_slot firmware[RDNA4_FW_MAX];
 	rdna4_sdma_ring sdma[2];
 	rdna4_mes_state mes;
+	rdna4_vcn_state vcn;
 	area_id gfx_mqd_area;
 	void* gfx_mqd_cpu;
 	phys_addr_t gfx_mqd_phys;

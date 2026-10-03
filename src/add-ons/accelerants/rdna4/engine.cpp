@@ -46,13 +46,13 @@ void
 rdna4_fill_rectangle(engine_token*, uint32 color,
 	fill_rect_params* list, uint32 count)
 {
-	if (list == NULL || sShared == NULL || sFramebuffer == NULL)
+	if (list == NULL || rdna4_shared() == NULL || rdna4_framebuffer() == NULL)
 		return;
 
-	const uint32 width = sShared->current_mode.virtual_width;
-	const uint32 height = sShared->current_mode.virtual_height;
-	const uint32 stride = sShared->bytes_per_row;
-	if (sShared->bits_per_pixel != 32)
+	const uint32 width = rdna4_shared()->current_mode.virtual_width;
+	const uint32 height = rdna4_shared()->current_mode.virtual_height;
+	const uint32 stride = rdna4_shared()->bytes_per_row;
+	if (rdna4_shared()->bits_per_pixel != 32)
 		return;
 
 	while (count-- != 0) {
@@ -66,7 +66,7 @@ rdna4_fill_rectangle(engine_token*, uint32 color,
 		if (bottom >= (int)height) bottom = height - 1;
 		if (left <= right && top <= bottom) {
 			for (int y = top; y <= bottom; y++) {
-				uint32* row = (uint32*)(sFramebuffer + y * stride
+				uint32* row = (uint32*)(rdna4_framebuffer() + y * stride
 					+ left * 4);
 				for (int x = left; x <= right; x++)
 					row[x - left] = color;
@@ -79,13 +79,13 @@ rdna4_fill_rectangle(engine_token*, uint32 color,
 void
 rdna4_screen_to_screen_blit(engine_token*, blit_params* list, uint32 count)
 {
-	if (list == NULL || sShared == NULL || sFramebuffer == NULL)
+	if (list == NULL || rdna4_shared() == NULL || rdna4_framebuffer() == NULL)
 		return;
 
-	const uint32 width = sShared->current_mode.virtual_width;
-	const uint32 height = sShared->current_mode.virtual_height;
-	const uint32 stride = sShared->bytes_per_row;
-	if (sShared->bits_per_pixel != 32)
+	const uint32 width = rdna4_shared()->current_mode.virtual_width;
+	const uint32 height = rdna4_shared()->current_mode.virtual_height;
+	const uint32 stride = rdna4_shared()->bytes_per_row;
+	if (rdna4_shared()->bits_per_pixel != 32)
 		return;
 
 	while (count-- != 0) {
@@ -112,13 +112,13 @@ rdna4_screen_to_screen_blit(engine_token*, blit_params* list, uint32 count)
 		if (w > 0 && h > 0) {
 			if (dy > sy) {
 				for (int y = h - 1; y >= 0; y--)
-					memmove(sFramebuffer + (dy + y) * stride + dx * 4,
-						sFramebuffer + (sy + y) * stride + sx * 4,
+					memmove(rdna4_framebuffer() + (dy + y) * stride + dx * 4,
+						rdna4_framebuffer() + (sy + y) * stride + sx * 4,
 						w * 4);
 			} else {
 				for (int y = 0; y < h; y++)
-					memmove(sFramebuffer + (dy + y) * stride + dx * 4,
-						sFramebuffer + (sy + y) * stride + sx * 4,
+					memmove(rdna4_framebuffer() + (dy + y) * stride + dx * 4,
+						rdna4_framebuffer() + (sy + y) * stride + sx * 4,
 						w * 4);
 			}
 		}

@@ -51,7 +51,7 @@ static status_t setup_ih(rdna4_device&d)
  wr(d,IH_RB_RPTR,0);wr(d,IH_RB_WPTR,0);wr(d,IH_RB_WPTR_ADDR_LO,(uint32)e.address);wr(d,IH_RB_WPTR_ADDR_HI,(uint32)(e.address>>32)&0xffff);
  /* Keep IH RPTR MMIO-driven until the NBIO CAM doorbell route is enabled.
   * This is the same hardware ring, with no dependency on doorbell aperture. */
- wr(d,IH_DOORBELL_RPTR,0);
+ wr(d,IH_DOORBELL_RPTR,0x178);
  wr(d,IH_RB_CNTL,c|IH_RB_ENABLE|IH_RB_ENABLE_INTR);d.ih_rptr=0;d.ih_enabled=true;return B_OK;
 }
 static void process_ih(rdna4_device&d)

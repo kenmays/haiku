@@ -577,7 +577,17 @@ rdna4_ioctl(rdna4_device& d, uint32 op, void* buffer, size_t length)
 			do {
 				if (*fence >= request.fence_value)
 					return B_OK;
-				snooze(50);
+
+				bigtime_t remaining = deadline - system_time();
+				if (remaining <= 0)
+					break;
+				if (d.irq_installed) {
+					status_t event = rdna4_wait_fence_event(d,
+						remaining > 5000 ? 5000 : remaining);
+					if (event != B_OK && event != B_TIMED_OUT)
+						return event;
+				} else
+					snooze(50);
 			} while (request.timeout < 0 || system_time() < deadline);
 			return B_TIMED_OUT;
 		}

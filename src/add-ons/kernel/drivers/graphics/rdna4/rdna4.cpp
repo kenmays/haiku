@@ -19,52 +19,45 @@
 static status_t
 map_resources(rdna4_device& d)
 {
-	uint32 mmio = 2;
-	uint32 framebuffer = 0;
-
-	/* RDNA4 uses the standard AMD PCI memory layout: a small MMIO BAR and
-	   a prefetchable framebuffer/VRAM aperture. Prefer BAR2 for MMIO and
-	   BAR0 for the framebuffer aperture, but reject empty resources. */
-	if (d.pci->u.h0.base_register_sizes[mmio] == 0) {
-		mmio = 0;
-		if (d.pci->u.h0.base_register_sizes[mmio] == 0)
-			return B_BAD_VALUE;
-	}
-	if (d.pci->u.h0.base_register_sizes[framebuffer] == 0)
+	/* AMD discrete GPUs use BAR0 for the VRAM aperture, BAR2 for the
+	 * doorbell aperture and BAR4 for the register/MMIO aperture. */
+	const uint32 framebuffer = 0;
+	const uint32 doorbell = 2;
+	const uint32 mmio = 4;
+	if (d.pci->u.h0.base_register_sizes[framebuffer] == 0
+		|| d.pci->u.h0.base_register_sizes[doorbell] == 0
+		|| d.pci->u.h0.base_register_sizes[mmio] == 0)
 		return B_BAD_VALUE;
-
 	d.mmio_phys = d.pci->u.h0.base_registers_pci[mmio];
 	d.mmio_size = d.pci->u.h0.base_register_sizes[mmio];
+	d.doorbell_phys = d.pci->u.h0.base_registers_pci[doorbell];
+	d.doorbell_size = d.pci->u.h0.base_register_sizes[doorbell];
 	d.fb_phys = d.pci->u.h0.base_registers_pci[framebuffer];
 	d.fb_size = d.pci->u.h0.base_register_sizes[framebuffer];
-
 	d.mmio_area = map_physical_memory("rdna4 MMIO", d.mmio_phys, d.mmio_size,
 		B_ANY_KERNEL_BLOCK_ADDRESS, B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA,
 		(void**)&d.mmio);
-	if (d.mmio_area < 0)
-		return d.mmio_area;
-
+	if (d.mmio_area < 0) return d.mmio_area;
+	d.doorbell_area = map_physical_memory("rdna4 doorbell", d.doorbell_phys,
+		d.doorbell_size, B_ANY_KERNEL_BLOCK_ADDRESS,
+		B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA, (void**)&d.doorbell);
+	if (d.doorbell_area < 0) { delete_area(d.mmio_area); d.mmio_area=-1; return d.doorbell_area; }
 	d.framebuffer_area = map_physical_memory("rdna4 framebuffer aperture",
 		d.fb_phys, d.fb_size, B_ANY_KERNEL_BLOCK_ADDRESS,
 		B_READ_AREA | B_WRITE_AREA | B_CLONEABLE_AREA | B_WRITE_COMBINING_MEMORY,
 		(void**)&d.framebuffer);
-	if (d.framebuffer_area < 0) {
-		delete_area(d.mmio_area);
-		d.mmio_area = -1;
-		return d.framebuffer_area;
-	}
+	if (d.framebuffer_area < 0) { delete_area(d.doorbell_area); delete_area(d.mmio_area);
+		d.doorbell_area=d.mmio_area=-1; return d.framebuffer_area; }
 	return B_OK;
 }
-
 static void
 unmap_resources(rdna4_device& d)
 {
-	if (d.framebuffer_area >= 0)
-		delete_area(d.framebuffer_area);
-	if (d.mmio_area >= 0)
-		delete_area(d.mmio_area);
-	d.framebuffer_area = d.mmio_area = -1;
-	d.framebuffer = d.mmio = NULL;
+	if (d.framebuffer_area >= 0) delete_area(d.framebuffer_area);
+	if (d.doorbell_area >= 0) delete_area(d.doorbell_area);
+	if (d.mmio_area >= 0) delete_area(d.mmio_area);
+	d.framebuffer_area=d.doorbell_area=d.mmio_area=-1;
+	d.framebuffer=NULL; d.doorbell=NULL; d.mmio=NULL;
 }
 
 static void

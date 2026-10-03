@@ -88,13 +88,18 @@ range_valid(uint32 offset, uint32 size, uint32 total)
 }
 
 static status_t
-stage_payload(rdna4_device& d, rdna4_firmware_slot& slot)
+stage_payload(rdna4_device& d, rdna4_firmware_slot& slot, uint32 type)
 {
 	slot.payload_area = -1;
 	slot.payload_cpu = NULL;
 	slot.payload_phys = 0;
 	slot.payload_gpu = 0;
 	slot.payload_size = 0;
+	slot.payload2_area = -1;
+	slot.payload2_cpu = NULL;
+	slot.payload2_phys = 0;
+	slot.payload2_gpu = 0;
+	slot.payload2_size = 0;
 	if (slot.ucode_size == 0)
 		return B_OK;
 
@@ -135,12 +140,74 @@ stage_payload(rdna4_device& d, rdna4_firmware_slot& slot)
 	slot.payload_phys = entry.address;
 	slot.payload_gpu = bo.gpu;
 	slot.payload_size = slot.ucode_size;
+
+	if (type == RDNA4_FW_GFX_IMU) {
+		/* IMU v1.0 contains separate IRAM and DRAM payloads. PSP expects
+		 * two authenticated LOAD_IP_FW commands (types 68 and 69). */
+		const uint8* image = (const uint8*)slot.cpu;
+		if (slot.size < 48)
+			return B_BAD_DATA;
+		uint32 iramSize = *(const uint32*)(image + 32);
+		uint32 iramOffset = *(const uint32*)(image + 36);
+		uint32 dramSize = *(const uint32*)(image + 40);
+		uint32 dramOffset = *(const uint32*)(image + 44);
+		if (!range_valid(iramOffset, iramSize, slot.size)
+			|| !range_valid(dramOffset, dramSize, slot.size)
+			|| iramSize == 0 || dramSize == 0)
+			return B_BAD_DATA;
+
+		size_t dramAlloc = (dramSize + B_PAGE_SIZE - 1) & ~(size_t)(B_PAGE_SIZE - 1);
+		void* dramCpu = NULL;
+		area_id dramArea = create_area("rdna4 IMU DRAM", &dramCpu,
+			B_ANY_KERNEL_ADDRESS, dramAlloc, B_CONTIGUOUS,
+			B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA);
+		if (dramArea < 0)
+			return dramArea;
+		physical_entry de;
+		status_t ds = get_memory_map(dramCpu, dramAlloc, &de, 1);
+		if (ds != B_OK || de.size < dramAlloc) {
+			delete_area(dramArea);
+			return ds != B_OK ? ds : B_NOT_SUPPORTED;
+		}
+		memcpy(dramCpu, image + dramOffset, dramSize);
+		if (dramAlloc > dramSize)
+			memset((uint8*)dramCpu + dramSize, 0, dramAlloc - dramSize);
+		rdna4_bo dbo = {};
+		dbo.area = dramArea; dbo.cpu = dramCpu; dbo.size = dramAlloc;
+		dbo.alignment = B_PAGE_SIZE; dbo.physical = de.address; dbo.used = true;
+		ds = rdna4_vm_map_bo(d, dbo, B_PAGE_SIZE);
+		if (ds != B_OK) {
+			delete_area(dramArea);
+			return ds;
+		}
+		slot.payload2_area = dramArea;
+		slot.payload2_cpu = dramCpu;
+		slot.payload2_phys = de.address;
+		slot.payload2_gpu = dbo.gpu;
+		slot.payload2_size = dramSize;
+		slot.payload_size = iramSize;
+		/* Replace the first payload with IRAM data. */
+		memcpy(slot.payload_cpu, image + iramOffset, iramSize);
+		if (((slot.ucode_size + B_PAGE_SIZE - 1) & ~(uint32)(B_PAGE_SIZE - 1)) > iramSize)
+			memset((uint8*)slot.payload_cpu + iramSize, 0,
+				((slot.ucode_size + B_PAGE_SIZE - 1) & ~(uint32)(B_PAGE_SIZE - 1)) - iramSize);
+	}
 	return B_OK;
 }
 
 static void
 free_slot_payload(rdna4_device& d, rdna4_firmware_slot& slot)
 {
+	if (slot.payload2_area >= 0) {
+		rdna4_bo b2 = {};
+		b2.area = slot.payload2_area; b2.cpu = slot.payload2_cpu;
+		b2.size = (slot.payload2_size + B_PAGE_SIZE - 1) & ~(uint32)(B_PAGE_SIZE - 1);
+		b2.physical = slot.payload2_phys; b2.gpu = slot.payload2_gpu; b2.used = true;
+		if (d.vm_ready && b2.gpu) rdna4_vm_unmap_bo(d, b2);
+		delete_area(slot.payload2_area);
+		slot.payload2_area = -1; slot.payload2_cpu = NULL; slot.payload2_phys = 0;
+		slot.payload2_gpu = 0; slot.payload2_size = 0;
+	}
 	if (slot.payload_area < 0)
 		return;
 	rdna4_bo bo = {};
@@ -297,7 +364,7 @@ rdna4_stage_firmware(rdna4_device& d, const rdna4_firmware_stage& request)
 	status = rdna4_vm_map_bo(d, fwbo, B_PAGE_SIZE);
 	if (status != B_OK) { delete_area(area); slot = {}; slot.area = -1; return status; }
 	slot.gpu = fwbo.gpu;
-	status = stage_payload(d, slot);
+	status = stage_payload(d, slot, request.type);
 	if (status != B_OK) { rdna4_vm_unmap_bo(d, fwbo); delete_area(area); slot = {}; slot.area = -1; return status; }
 
 	if (request.type == RDNA4_FW_PSP) {
@@ -399,6 +466,15 @@ rdna4_firmware_remap(rdna4_device& d)
 			if (status != B_OK)
 				return status;
 			f.gpu = b.gpu;
+		}
+		if (f.payload2_area >= 0 && f.payload2_size != 0 && f.payload2_gpu == 0) {
+			rdna4_bo b = {};
+			b.area = f.payload2_area; b.cpu = f.payload2_cpu;
+			b.size = (f.payload2_size + B_PAGE_SIZE - 1) & ~(uint32)(B_PAGE_SIZE - 1);
+			b.physical = f.payload2_phys; b.used = true;
+			status_t status = rdna4_vm_map_bo(d, b, B_PAGE_SIZE);
+			if (status != B_OK) return status;
+			f.payload2_gpu = b.gpu;
 		}
 		if (f.payload_area >= 0 && f.payload_size != 0 && f.payload_gpu == 0) {
 			rdna4_bo b = {};

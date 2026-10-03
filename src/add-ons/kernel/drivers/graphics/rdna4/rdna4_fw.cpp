@@ -151,9 +151,6 @@ rdna4_stage_firmware(rdna4_device& d, const rdna4_firmware_stage& request)
 	d.psp_fw_version_major = pspMajor;
 	d.psp_fw_version_minor = pspMinor;
 
-	if (request.type == RDNA4_FW_PSP && d.shared != NULL)
-		d.shared->psp_state = RDNA4_ENGINE_FIRMWARE_READY;
-
 	return B_OK;
 }
 

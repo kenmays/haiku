@@ -58,6 +58,7 @@ status_t rdna4_gpu_recover(rdna4_device& d)
 	rdna4_irq_uninit(d);
 	rdna4_psp_uninit(d);
 	rdna4_gfx_ring_free(d);
+	rdna4_mmhub_uninit(d);
 	if (d.gfxhub_ready)
 		rdna4_gfxhub_uninit(d);
 	d.gfxhub_ready = false;
@@ -94,6 +95,9 @@ status_t rdna4_gpu_recover(rdna4_device& d)
 	if (status != B_OK)
 		goto failed;
 	d.gfxhub_ready = true;
+	status = rdna4_mmhub_init(d);
+	if (status != B_OK)
+		goto failed;
 
 	/* PSP SOS must be alive before any authenticated IP image is submitted. */
 	status = rdna4_firmware_boot(d);
@@ -151,6 +155,7 @@ failed:
 	rdna4_irq_uninit(d);
 	rdna4_psp_uninit(d);
 	rdna4_gfx_ring_free(d);
+	rdna4_mmhub_uninit(d);
 	if (d.gfxhub_ready) {
 		rdna4_gfxhub_uninit(d);
 		d.gfxhub_ready = false;

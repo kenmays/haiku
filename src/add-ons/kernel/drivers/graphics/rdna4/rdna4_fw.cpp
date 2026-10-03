@@ -182,6 +182,8 @@ rdna4_stage_firmware(rdna4_device& d, const rdna4_firmware_stage& request)
 		status = parse_psp_container((const uint8*)address, request.size,
 			sosOffset, sosSize, pspMajor, pspMinor);
 		if (status != B_OK) { delete_area(area); return status; }
+	} else if (request.type == RDNA4_FW_DISCOVERY) {
+		/* Discovery is a table, not an IP microcode image. */
 	} else {
 		status = parse_ip_firmware((const uint8*)address, request.size,
 			request.type, parsed);
@@ -215,37 +217,85 @@ rdna4_stage_firmware(rdna4_device& d, const rdna4_firmware_stage& request)
 	if (status != B_OK) { delete_area(area); slot = {}; slot.area = -1; return status; }
 	slot.gpu = fwbo.gpu;
 
-	d.psp_fw_area = area;
-	d.psp_fw_cpu = address;
-	d.psp_fw_phys = entry.address;
-	d.psp_fw_size = request.size;
-	d.psp_sos_offset = sosOffset;
-	d.psp_sos_size = sosSize;
-	d.psp_fw_type = request.type;
-	d.psp_fw_version_major = pspMajor;
-	d.psp_fw_version_minor = pspMinor;
+	if (request.type == RDNA4_FW_PSP) {
+		d.psp_fw_area = area;
+		d.psp_fw_cpu = address;
+		d.psp_fw_phys = entry.address;
+		d.psp_fw_size = request.size;
+		d.psp_sos_offset = sosOffset;
+		d.psp_sos_size = sosSize;
+		d.psp_fw_type = request.type;
+		d.psp_fw_version_major = pspMajor;
+		d.psp_fw_version_minor = pspMinor;
+	} else if (request.type == RDNA4_FW_DISCOVERY) {
+		status = rdna4_discovery_parse(d, address, request.size);
+		if (status != B_OK) { rdna4_vm_unmap_bo(d, fwbo); delete_area(area); slot = {}; slot.area = -1; return status; }
+	}
 
 	return B_OK;
+}
+
+static status_t
+psp_wait(rdna4_device& d, uint32 reg, uint32 mask, uint32 value, bigtime_t timeout)
+{
+	bigtime_t deadline=system_time()+timeout;
+	while(system_time()<deadline){
+		uint32 v=*(volatile uint32*)(d.mmio+((size_t)reg<<2));
+		if((v&mask)==value)return B_OK;
+		snooze(100);
+	}
+	return B_TIMED_OUT;
 }
 
 status_t
 rdna4_firmware_boot(rdna4_device& d)
 {
-	/*
-	 * PSP 14.x is the authentication root. We deliberately do not parse,
-	 * replace, or bypass AMD signatures here. The staged image is passed to
-	 * the PSP boot protocol once the IP-discovery code supplies the MP0
-	 * register base and the remaining PSP boot components (KDB/SPL/SYS)
-	 * are available.
-	 *
-	 * Returning B_NOT_SUPPORTED here is intentional until those hardware
-	 * discovery inputs exist; pretending that a raw SOS upload is a complete
-	 * PSP boot would be unsafe and would not constitute authenticated boot.
-	 */
-	if (d.psp_fw_area < 0 || d.psp_fw_type != RDNA4_FW_PSP
-		|| d.psp_sos_size == 0)
+	if(d.mmio==NULL||d.psp_fw_area<0||d.psp_fw_type!=RDNA4_FW_PSP||d.psp_sos_size==0)
 		return B_NO_INIT;
-	return B_NOT_SUPPORTED;
+
+	/* PSP 14.x C2P registers. The Linux PSP v14 implementation uses the
+	 * same MP0 SMN C2PMSG handshake: wait for the bootloader-ready bit,
+	 * provide the SOS physical address in C2PMSG_36, issue LOAD_SOSDRV,
+	 * then wait for the tOS sign-of-life response. */
+	const uint32 C2P35=0x16063;
+	const uint32 C2P36=0x16064;
+	const uint32 C2P81=0x16091;
+	const uint32 LOAD_SOSDRV=0x20000;
+
+	uint32 alive=*(volatile uint32*)(d.mmio+((size_t)C2P81<<2));
+	if(alive!=0){
+		if(d.shared)d.shared->psp_state=RDNA4_ENGINE_RUNNING;
+		return B_OK;
+	}
+	status_t s=psp_wait(d,C2P35,0x80000000u,0x80000000u,500000);
+	if(s!=B_OK)return s;
+
+	if(d.psp_boot_area>=0)delete_area(d.psp_boot_area);
+	d.psp_boot_area=-1;d.psp_boot_cpu=NULL;d.psp_boot_phys=0;d.psp_boot_size=0;
+	void*cpu=NULL;
+	size_t size=(d.psp_sos_size+B_PAGE_SIZE-1)&~(size_t)(B_PAGE_SIZE-1);
+	d.psp_boot_area=create_area("rdna4 PSP SOS",&cpu,B_ANY_KERNEL_ADDRESS,size,
+		B_CONTIGUOUS,B_KERNEL_READ_AREA|B_KERNEL_WRITE_AREA);
+	if(d.psp_boot_area<0)return d.psp_boot_area;
+	d.psp_boot_cpu=cpu;d.psp_boot_size=size;
+	physical_entry e;
+	s=get_memory_map(cpu,size,&e,1);
+	if(s!=B_OK||e.size<size){delete_area(d.psp_boot_area);d.psp_boot_area=-1;return s!=B_OK?s:B_NOT_SUPPORTED;}
+	d.psp_boot_phys=e.address;
+	memset(cpu,0,size);
+	memcpy(cpu,(uint8*)d.psp_fw_cpu+d.psp_sos_offset,d.psp_sos_size);
+	*(volatile uint32*)(d.mmio+((size_t)C2P36<<2))=(uint32)(d.psp_boot_phys>>20);
+	*(volatile uint32*)(d.mmio+((size_t)C2P35<<2))=LOAD_SOSDRV;
+	(void)*(volatile uint32*)(d.mmio+((size_t)C2P35<<2));
+	s=snooze(20000),s=B_OK;
+	uint32 before=*(volatile uint32*)(d.mmio+((size_t)C2P81<<2));
+	bigtime_t deadline=system_time()+5000000;
+	while(system_time()<deadline){
+		uint32 now=*(volatile uint32*)(d.mmio+((size_t)C2P81<<2));
+		if(now!=before){if(d.shared){d.shared->psp_state=RDNA4_ENGINE_RUNNING;d.shared->gfx_state=RDNA4_ENGINE_FIRMWARE_READY;d.shared->smu_state=RDNA4_ENGINE_FIRMWARE_READY;}return B_OK;}
+		snooze(100);
+	}
+	return B_TIMED_OUT;
 }
 
 void
@@ -264,6 +314,10 @@ rdna4_firmware_uninit(rdna4_device& d)
 		d.firmware[i].area = -1;
 	}
 	d.psp_fw_area = -1;
+	d.psp_boot_area = -1;
+	d.psp_boot_cpu = NULL;
+	d.psp_boot_phys = 0;
+	d.psp_boot_size = 0;
 	d.psp_fw_cpu = NULL;
 	d.psp_fw_phys = 0;
 	d.psp_fw_size = 0;

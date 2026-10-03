@@ -409,6 +409,7 @@ uint64 rbAddr = d.gfx_ring_gpu >> 8;
 		RDNA4_GFX_DOORBELL_INDEX << RDNA4_CP_RB_DOORBELL_OFFSET_SHIFT);
 	rdna4_write_reg(d, RDNA4_CP_RB_DOORBELL_RANGE_UPPER, 0x0000fffc);
 
+	rdna4_write_reg(d, RDNA4_CP_GFX_HQD_ACTIVE, 1);
 	d.gfx_ring_rptr = 0;
 	d.gfx_ring_wptr = 0;
 	d.gfx_ring_ready = true;

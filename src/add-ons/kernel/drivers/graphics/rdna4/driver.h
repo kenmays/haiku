@@ -37,6 +37,11 @@ struct rdna4_firmware_slot {
 	uint32 version;
 	bool staged;
 	uint64 gpu;
+	area_id payload_area;
+	void* payload_cpu;
+	phys_addr_t payload_phys;
+	uint64 payload_gpu;
+	uint32 payload_size;
 };
 
 struct rdna4_sdma_ring {

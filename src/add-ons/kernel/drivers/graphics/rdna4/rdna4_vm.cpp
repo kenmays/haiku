@@ -1,4 +1,5 @@
 #include "rdna4_vm.h"
+#include "rdna4_gfxhub.h"
 #include "driver.h"
 
 #include <KernelExport.h>
@@ -18,12 +19,14 @@ vm_index(uint64 va, uint8 level)
 	return (uint32)((va >> (12 + level * 9)) & 0x1ff);
 }
 
+
 static uint64
 table_base(uint64 va, uint8 level)
 {
 	const uint32 bits = 12 + (level + 1) * 9;
 	return va & (~0ull << bits);
 }
+
 
 static status_t
 allocate_table(rdna4_device& device, uint8 level, uint64 base,
@@ -70,6 +73,7 @@ allocate_table(rdna4_device& device, uint8 level, uint64 base,
 	return B_NO_MEMORY;
 }
 
+
 static rdna4_vm_table*
 find_table_by_phys(rdna4_device& device, phys_addr_t phys)
 {
@@ -80,6 +84,7 @@ find_table_by_phys(rdna4_device& device, phys_addr_t phys)
 	}
 	return NULL;
 }
+
 
 static status_t
 ensure_path(rdna4_device& device, uint64 va, rdna4_vm_table*& _pte)
@@ -112,6 +117,7 @@ ensure_path(rdna4_device& device, uint64 va, rdna4_vm_table*& _pte)
 	return B_OK;
 }
 
+
 bool
 rdna4_vm_validate_pte(uint64 entry)
 {
@@ -122,6 +128,7 @@ rdna4_vm_validate_pte(uint64 entry)
 	return (entry & RDNA4_PTE_IS_PTE) != 0;
 }
 
+
 bool
 rdna4_vm_validate_pde(uint64 entry)
 {
@@ -130,6 +137,7 @@ rdna4_vm_validate_pde(uint64 entry)
 	return (entry & (RDNA4_PTE_VALID | RDNA4_PTE_SYSTEM))
 		== (RDNA4_PTE_VALID | RDNA4_PTE_SYSTEM);
 }
+
 
 status_t
 rdna4_vm_init(rdna4_device& device)
@@ -149,6 +157,7 @@ rdna4_vm_init(rdna4_device& device)
 	return B_OK;
 }
 
+
 void
 rdna4_vm_uninit(rdna4_device& device)
 {
@@ -165,11 +174,13 @@ rdna4_vm_uninit(rdna4_device& device)
 	device.vm_next_va = 0;
 }
 
+
 static uint64
 align_up(uint64 value, uint64 alignment)
 {
 	return (value + alignment - 1) & ~(alignment - 1);
 }
+
 
 status_t
 rdna4_vm_map_bo(rdna4_device& device, rdna4_bo& bo, uint64 alignment)
@@ -204,8 +215,21 @@ rdna4_vm_map_bo(rdna4_device& device, rdna4_bo& bo, uint64 alignment)
 
 	bo.gpu = va;
 	device.vm_next_va = va + size;
+
+	/*
+	 * Page-table writes are CPU stores and therefore require an explicit
+	 * GFXHub invalidation before the GPU can consume the new mappings.
+	 */
+	if (device.gfxhub_ready) {
+		status_t status = rdna4_gfxhub_flush_tlb(device, 0, 0);
+		if (status != B_OK) {
+			/* Leave the mapping installed; the caller can retry the flush. */
+			return status;
+		}
+	}
 	return B_OK;
 }
+
 
 status_t
 rdna4_vm_unmap_bo(rdna4_device& device, rdna4_bo& bo)
@@ -222,6 +246,13 @@ rdna4_vm_unmap_bo(rdna4_device& device, rdna4_bo& bo)
 			return status;
 		pteTable->cpu[vm_index(pageVA, 0)] = 0;
 	}
+
+	if (device.gfxhub_ready) {
+		status_t status = rdna4_gfxhub_flush_tlb(device, 0, 0);
+		if (status != B_OK)
+			return status;
+	}
+
 	bo.gpu = 0;
 	return B_OK;
 }

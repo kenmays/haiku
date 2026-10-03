@@ -63,7 +63,7 @@ rdna4_nbio_init(rdna4_device& d)
 	wr(d, GDC_ENTRY2, sdma);
 
 	/* IH ring doorbell is client port 1, AWID 0 and address nibble 0. */
-	uint32 ih = range_value(rd(d, GDC_ENTRY1), 1, 0, 0x178, 2, 0);
+	uint32 ih = range_value(rd(d, GDC_ENTRY1), 1, 0, 0x1a0, 2, 0);
 	wr(d, GDC_ENTRY1, ih);
 
 	/* VCN5 ring 0 uses the 0x310 doorbell assignment. */

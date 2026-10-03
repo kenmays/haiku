@@ -346,7 +346,7 @@ rdna4_ioctl(rdna4_device& d, uint32 op, void* buffer, size_t length)
 				status_t vmStatus = rdna4_gfxhub_init(d);
 				if (vmStatus == B_OK) {
 					d.gfxhub_ready = true;
-					rdna4_gfx_ring_ready = false;
+					d.gfx_ring_ready = false;
 				} else
 					status = vmStatus;
 

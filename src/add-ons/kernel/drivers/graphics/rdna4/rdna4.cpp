@@ -68,6 +68,28 @@ set_pci_master(rdna4_device& d)
 		PCI_command, 2, command);
 }
 
+static status_t
+wait_for_gfx_idle(rdna4_device& d, bigtime_t timeout)
+{
+	if (d.mmio == NULL)
+		return B_NO_INIT;
+
+	/* GFX12 regGRBM_STATUS is register 0x0da4; Haiku MMIO access is
+	   byte-addressed while AMD register tables are dword-indexed. */
+	const uint32 statusOffset = 0x0da4u * 4;
+	const uint32 guiActive = 0x80000000u;
+	bigtime_t deadline = system_time() + timeout;
+
+	do {
+		uint32 status = *(volatile uint32*)(d.mmio + statusOffset);
+		if ((status & guiActive) == 0)
+			return B_OK;
+		snooze(1);
+	} while (timeout < 0 || system_time() < deadline);
+
+	return B_TIMED_OUT;
+}
+
 static void
 fill_firmware_info(rdna4_device& d, rdna4_firmware_info& info)
 {
@@ -228,6 +250,17 @@ rdna4_ioctl(rdna4_device& d, uint32 op, void* buffer, size_t length)
 				| RDNA4_PTE_DCC | RDNA4_PTE_BUS_ATOMICS
 				| RDNA4_PTE_IS_PTE;
 			return user_memcpy(buffer, &info, sizeof(info));
+		}
+
+		case RDNA4_WAIT_IDLE: {
+			if (length < sizeof(rdna4_wait_idle))
+				return B_BUFFER_OVERFLOW;
+			rdna4_wait_idle request;
+			if (user_memcpy(&request, buffer, sizeof(request)) != B_OK)
+				return B_BAD_ADDRESS;
+			if (request.timeout < 0 || request.timeout > 10000000)
+				return B_BAD_VALUE;
+			return wait_for_gfx_idle(d, request.timeout);
 		}
 
 		case RDNA4_ALLOCATE_BUFFER: {

@@ -84,7 +84,12 @@ alloc_ring(rdna4_device& d, uint32 i)
 		delete_area(r.area); r.area = -1; return s != B_OK ? s : B_NOT_SUPPORTED;
 	}
 	r.ring_phys = e.address;
-	r.ring_gpu = e.address;
+	rdna4_bo ringBO = {};
+	ringBO.area = r.area; ringBO.cpu = r.ring_cpu; ringBO.size = ringSize;
+	ringBO.physical = e.address; ringBO.used = true;
+	s = rdna4_vm_map_bo(d, ringBO, B_PAGE_SIZE);
+	if (s != B_OK) { delete_area(r.area); r.area = -1; return s; }
+	r.ring_gpu = ringBO.gpu;
 
 	volatile uint64* ptr = NULL;
 	r.rptr_area = create_area("rdna4 sdma rptr", (void**)&ptr, B_ANY_KERNEL_ADDRESS,
@@ -94,7 +99,12 @@ alloc_ring(rdna4_device& d, uint32 i)
 	s = get_memory_map((void*)ptr, B_PAGE_SIZE, &e, 1);
 	if (s != B_OK) return s;
 	r.rptr_phys = e.address;
-	r.rptr_gpu = e.address;
+	rdna4_bo rptrBO = {};
+	rptrBO.area = r.rptr_area; rptrBO.cpu = (void*)r.rptr_cpu; rptrBO.size = B_PAGE_SIZE;
+	rptrBO.physical = e.address; rptrBO.used = true;
+	s = rdna4_vm_map_bo(d, rptrBO, B_PAGE_SIZE);
+	if (s != B_OK) { delete_area(r.rptr_area); r.rptr_area = -1; return s; }
+	r.rptr_gpu = rptrBO.gpu;
 
 	ptr = NULL;
 	r.wptr_area = create_area("rdna4 sdma wptr", (void**)&ptr, B_ANY_KERNEL_ADDRESS,
@@ -104,7 +114,12 @@ alloc_ring(rdna4_device& d, uint32 i)
 	s = get_memory_map((void*)ptr, B_PAGE_SIZE, &e, 1);
 	if (s != B_OK) return s;
 	r.wptr_phys = e.address;
-	r.wptr_gpu = e.address;
+	rdna4_bo wptrBO = {};
+	wptrBO.area = r.wptr_area; wptrBO.cpu = (void*)r.wptr_cpu; wptrBO.size = B_PAGE_SIZE;
+	wptrBO.physical = e.address; wptrBO.used = true;
+	s = rdna4_vm_map_bo(d, wptrBO, B_PAGE_SIZE);
+	if (s != B_OK) { delete_area(r.wptr_area); r.wptr_area = -1; return s; }
+	r.wptr_gpu = wptrBO.gpu;
 	memset(r.ring_cpu, 0, ringSize);
 	*r.rptr_cpu = 0;
 	*r.wptr_cpu = 0;
@@ -113,11 +128,29 @@ alloc_ring(rdna4_device& d, uint32 i)
 }
 
 static void
-free_ring(rdna4_sdma_ring& r)
+free_ring(rdna4_device& d, rdna4_sdma_ring& r)
 {
-	if (r.wptr_area >= 0) delete_area(r.wptr_area);
-	if (r.rptr_area >= 0) delete_area(r.rptr_area);
-	if (r.area >= 0) delete_area(r.area);
+	if (r.wptr_area >= 0) {
+		rdna4_bo bo = {};
+		bo.area = r.wptr_area; bo.cpu = (void*)r.wptr_cpu; bo.size = B_PAGE_SIZE;
+		bo.physical = r.wptr_phys; bo.gpu = r.wptr_gpu; bo.used = true;
+		if (d.vm_ready && bo.gpu) rdna4_vm_unmap_bo(d, bo);
+		delete_area(r.wptr_area);
+	}
+	if (r.rptr_area >= 0) {
+		rdna4_bo bo = {};
+		bo.area = r.rptr_area; bo.cpu = (void*)r.rptr_cpu; bo.size = B_PAGE_SIZE;
+		bo.physical = r.rptr_phys; bo.gpu = r.rptr_gpu; bo.used = true;
+		if (d.vm_ready && bo.gpu) rdna4_vm_unmap_bo(d, bo);
+		delete_area(r.rptr_area);
+	}
+	if (r.area >= 0) {
+		rdna4_bo bo = {};
+		bo.area = r.area; bo.cpu = r.ring_cpu; bo.size = 64 * 1024;
+		bo.physical = r.ring_phys; bo.gpu = r.ring_gpu; bo.used = true;
+		if (d.vm_ready && bo.gpu) rdna4_vm_unmap_bo(d, bo);
+		delete_area(r.area);
+	}
 	r = {};
 	r.area = r.rptr_area = r.wptr_area = -1;
 }
@@ -238,8 +271,8 @@ void
 rdna4_sdma_uninit(rdna4_device& d)
 {
 	rdna4_sdma_stop(d);
-	free_ring(d.sdma[0]);
-	free_ring(d.sdma[1]);
+	free_ring(d, d.sdma[0]);
+	free_ring(d, d.sdma[1]);
 }
 
 status_t

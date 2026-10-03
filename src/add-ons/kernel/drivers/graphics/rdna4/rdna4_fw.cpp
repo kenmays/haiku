@@ -381,6 +381,39 @@ rdna4_firmware_boot(rdna4_device& d)
 	return B_TIMED_OUT;
 }
 
+status_t
+rdna4_firmware_remap(rdna4_device& d)
+{
+	if (!d.vm_ready)
+		return B_NO_INIT;
+	for (uint32 i = 0; i < RDNA4_FW_MAX; i++) {
+		rdna4_firmware_slot& f = d.firmware[i];
+		if (!f.staged)
+			continue;
+		if (f.area >= 0 && f.size != 0 && f.gpu == 0) {
+			rdna4_bo b = {};
+			b.area = f.area; b.cpu = f.cpu;
+			b.size = (f.size + B_PAGE_SIZE - 1) & ~(uint32)(B_PAGE_SIZE - 1);
+			b.physical = f.phys; b.used = true;
+			status_t status = rdna4_vm_map_bo(d, b, B_PAGE_SIZE);
+			if (status != B_OK)
+				return status;
+			f.gpu = b.gpu;
+		}
+		if (f.payload_area >= 0 && f.payload_size != 0 && f.payload_gpu == 0) {
+			rdna4_bo b = {};
+			b.area = f.payload_area; b.cpu = f.payload_cpu;
+			b.size = (f.payload_size + B_PAGE_SIZE - 1) & ~(uint32)(B_PAGE_SIZE - 1);
+			b.physical = f.payload_phys; b.used = true;
+			status_t status = rdna4_vm_map_bo(d, b, B_PAGE_SIZE);
+			if (status != B_OK)
+				return status;
+			f.payload_gpu = b.gpu;
+		}
+	}
+	return B_OK;
+}
+
 void
 rdna4_firmware_uninit(rdna4_device& d)
 {

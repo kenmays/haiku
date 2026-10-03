@@ -35,6 +35,7 @@ struct rdna4_firmware_slot {
 	uint64 data_start;
 	uint32 version;
 	bool staged;
+	uint64 gpu;
 };
 
 struct rdna4_sdma_ring {
@@ -93,6 +94,7 @@ struct rdna4_device {
 
 	bool vm_ready;
 	bool gfxhub_ready;
+	bool mmhub_ready;
 	uint32 vm_root_index;
 	phys_addr_t vm_root_phys;
 	uint64 vm_next_va;

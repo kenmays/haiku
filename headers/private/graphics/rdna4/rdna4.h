@@ -133,7 +133,8 @@ enum {
 	RDNA4_WAIT_FENCE,
 	RDNA4_RESET_GPU,
 	RDNA4_GET_FIRMWARE_INFO,
-	RDNA4_GET_VM_INFO
+	RDNA4_GET_VM_INFO,
+	RDNA4_WAIT_IDLE
 };
 
 struct rdna4_buffer_request {
@@ -154,6 +155,10 @@ struct rdna4_submit {
 	uint64 command_gpu_address;
 	uint64 fence_gpu_address;
 	uint64 fence_value;
+};
+
+struct rdna4_wait_idle {
+	bigtime_t timeout;
 };
 
 struct rdna4_wait_fence {

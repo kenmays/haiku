@@ -104,12 +104,12 @@ load_pipe0(rdna4_device& d)
 	write_reg(d, MES_CNTL, ctl);
 
 	write_reg(d, MES_IC_BASE_CNTL, 0);
-	write_reg(d, MES_IC_BASE_LO, (uint32)f.phys);
-	write_reg(d, MES_IC_BASE_HI, (uint32)(f.phys >> 32));
+	write_reg(d, MES_IC_BASE_LO, (uint32)f.gpu);
+	write_reg(d, MES_IC_BASE_HI, (uint32)(f.gpu >> 32));
 	write_reg(d, MES_MIBOUND_LO, 0x1fffff);
-	write_reg(d, MES_DC_BASE_LO, (uint32)(f.phys + f.data_offset));
+	write_reg(d, MES_DC_BASE_LO, (uint32)(f.gpu + f.data_offset));
 	write_reg(d, MES_DC_BASE_HI,
-		(uint32)((f.phys + f.data_offset) >> 32));
+		(uint32)((f.gpu + f.data_offset) >> 32));
 	write_reg(d, MES_MDBOUND_LO, 0x7ffff);
 
 	uint32 ic = read_reg(d, MES_IC_OP_CNTL);
@@ -122,7 +122,7 @@ load_pipe0(rdna4_device& d)
 
 	uint64 start = f.ucode_start;
 	if (start == 0)
-		start = f.phys + f.ucode_offset;
+		start = f.gpu + f.ucode_offset;
 	start >>= 2;
 	write_reg(d, MES_PRGRM_START, (uint32)start);
 	write_reg(d, 0x289d, (uint32)(start >> 32));

@@ -63,6 +63,11 @@ status_t rdna4_gpu_recover(rdna4_device& d)
 	d.gfxhub_ready = false;
 	rdna4_vm_uninit(d);
 	d.vm_ready = false;
+	for (uint32 i = 0; i < RDNA4_FW_MAX; i++) {
+		d.firmware[i].gpu = 0;
+		d.firmware[i].payload_gpu = 0;
+		d.firmware[i].psp_loaded_gpu = 0;
+	}
 
 	status_t status = do_flr(d);
 	if (status != B_OK) {

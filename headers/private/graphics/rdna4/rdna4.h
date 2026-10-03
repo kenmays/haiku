@@ -185,6 +185,8 @@ struct rdna4_firmware_info {
 	char gfx_toc[64];
 	char psp_sos[64];
 	char psp_toc[64];
+	char psp_ta[64];
+	char psp_sos_kicker[64];
 	char smu[64];
 	char gfx_imu[64];
 	char mes[64];

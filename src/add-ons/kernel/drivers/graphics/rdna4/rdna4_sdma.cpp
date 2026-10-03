@@ -296,30 +296,45 @@ rdna4_sdma_submit_copy(rdna4_device& d, uint32 i, uint64 src, uint64 dst,
 	if (i >= 2 || !d.sdma[i].ready || bytes == 0)
 		return B_BAD_VALUE;
 	rdna4_sdma_ring& r = d.sdma[i];
-	if (bytes > 0x3fffff || (src & 3) || (dst & 3))
+	if (bytes > 0x3fffffff || (src & 3) || (dst & 3) || (fence & 3))
 		return B_BAD_VALUE;
 
-	/* SDMA linear COPY packet followed by a 64-bit fence and TRAP. */
-	uint32* p = r.ring_cpu;
+	/* SDMA7 COPY_LINEAR: header, byte count, parameters, source and
+	 * destination addresses.  The packet format is defined by the
+	 * upstream SDMA v6/v7 open packet ABI; the opcode/sub-op live in the
+	 * low 16 bits, not in a type-3 PM4 header. */
+	const uint32 copyWords = 7;
+	const uint32 fenceWords = 5;
+	const uint32 trapWords = 2;
+	const uint32 total = copyWords + fenceWords + trapWords;
 	uint32 w = r.wptr & 0x3fff;
-	p[w++] = (3u << 28) | (0u << 24) | (0u << 16) | 0x2; /* COPY */
-	p[w++] = bytes - 1;
-	p[w++] = 0;
-	p[w++] = (uint32)src;
-	p[w++] = (uint32)(src >> 32);
-	p[w++] = (uint32)dst;
-	p[w++] = (uint32)(dst >> 32);
-	p[w++] = 0;
-	p[w++] = (3u << 28) | 0x0a; /* FENCE */
-	p[w++] = (uint32)fence;
-	p[w++] = (uint32)(fence >> 32);
-	p[w++] = (uint32)fenceValue;
-	p[w++] = (uint32)(fenceValue >> 32);
-	p[w++] = (3u << 28) | 0x0b; /* TRAP */
-	r.wptr = w;
+	if (w + total >= 0x4000)
+		w = 0;
+
+	uint32* p = r.ring_cpu;
+	uint32 n = w;
+
+	p[n++] = 1u | (0u << 8); /* SDMA_OP_COPY | SDMA_SUBOP_COPY_LINEAR */
+	p[n++] = bytes;
+	p[n++] = 0; /* default swizzle/cache policy */
+	p[n++] = (uint32)src;
+	p[n++] = (uint32)(src >> 32);
+	p[n++] = (uint32)dst;
+	p[n++] = (uint32)(dst >> 32);
+
+	p[n++] = 5u | (3u << 16); /* SDMA_OP_FENCE, MTYPE=UC */
+	p[n++] = (uint32)fence;
+	p[n++] = (uint32)(fence >> 32);
+	p[n++] = (uint32)fenceValue;
+
+	p[n++] = 6u; /* SDMA_OP_TRAP */
+	p[n++] = 0;  /* interrupt context 0 */
+
+	r.wptr = n & 0x3fff;
+	__sync_synchronize();
 	*r.wptr_cpu = (uint64)r.wptr << 2;
 	write32(d, i, RB_WPTR, (uint32)r.wptr << 2);
-	write32(d, i, RB_WPTR_HI, (uint32)((uint64)r.wptr << 2 >> 32));
+	write32(d, i, RB_WPTR_HI, 0);
 	rdna4_doorbell_write(d, 0x100 + i * 2, (uint64)r.wptr << 2);
 	return B_OK;
 }

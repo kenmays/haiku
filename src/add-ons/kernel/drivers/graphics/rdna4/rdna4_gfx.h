@@ -37,3 +37,4 @@ status_t rdna4_gfx_ring_write(rdna4_device& device, const uint32* packets,
 	size_t dwords);
 status_t rdna4_gfx_ring_kick(rdna4_device& device);
 status_t rdna4_gfx_program_ring(rdna4_device& device);
+status_t rdna4_gfx_program_mqd(rdna4_device& device);

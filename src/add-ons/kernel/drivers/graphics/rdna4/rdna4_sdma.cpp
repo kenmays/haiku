@@ -167,7 +167,6 @@ program_ring(rdna4_device& d, uint32 i)
 	rb = field(rb, 1, 0x7e, 14);
 	rb |= 1u << 23;       /* RB_PRIV */
 	rb |= 1u << 12;       /* RPTR_WRITEBACK_ENABLE */
-	rb |= 1u << 9;        /* WPTR_POLL is disabled on bare metal below */
 	rb &= ~(1u << 8);
 	rb |= 1u << 16;       /* RPTR writeback timer */
 	write32(d, i, RB_CNTL, rb);

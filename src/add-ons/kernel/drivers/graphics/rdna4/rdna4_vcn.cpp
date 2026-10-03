@@ -81,6 +81,7 @@ status_t rdna4_vcn_submit(rdna4_device&d,const rdna4_vcn_job&j){
     deliberately not rewritten by the kernel; codec-specific packet framing
     remains userspace/VA-API ABI. */
  wr(d,UVD_RB_WPTR,d.vcn.wptr);
+	rdna4_doorbell_write(d, 0x1b0 + 8 * 0, d.vcn.wptr);
  return B_OK;
 }
 status_t rdna4_vcn_wait(rdna4_device&d,uint64 gpu,bigtime_t timeout){

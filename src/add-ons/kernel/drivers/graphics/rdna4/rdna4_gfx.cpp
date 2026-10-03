@@ -286,11 +286,16 @@ rdna4_gfx_ring_free(rdna4_device& d)
 		rdna4_vm_unmap_bo(d, d.gfx_ring_bo);
 	if (d.gfx_ring_area >= 0)
 		delete_area(d.gfx_ring_area);
+	if (d.gfx_mqd_bo.used) {
+		rdna4_vm_unmap_bo(d, d.gfx_mqd_bo);
+		d.gfx_mqd_bo = {};
+	}
 	if (d.gfx_mqd_area >= 0)
 		delete_area(d.gfx_mqd_area);
 	d.gfx_mqd_area = -1;
 	d.gfx_mqd_cpu = NULL;
 	d.gfx_mqd_phys = 0;
+	d.gfx_mqd_gpu = 0;
 
 	memset(&d.gfx_ring_bo, 0, sizeof(d.gfx_ring_bo));
 	d.gfx_ring_area = -1;
@@ -424,13 +429,29 @@ rdna4_gfx_program_mqd(rdna4_device& d)
 		memset(address, 0, B_PAGE_SIZE);
 		d.gfx_mqd_cpu = address;
 		d.gfx_mqd_phys = entry.address;
+		d.gfx_mqd_bo = {};
+		d.gfx_mqd_bo.area = d.gfx_mqd_area;
+		d.gfx_mqd_bo.cpu = address;
+		d.gfx_mqd_bo.size = B_PAGE_SIZE;
+		d.gfx_mqd_bo.physical = entry.address;
+		d.gfx_mqd_bo.alignment = B_PAGE_SIZE;
+		d.gfx_mqd_bo.used = true;
+		status_t mapStatus = rdna4_vm_map_bo(d, d.gfx_mqd_bo, B_PAGE_SIZE);
+		if (mapStatus != B_OK) {
+			delete_area(d.gfx_mqd_area);
+			d.gfx_mqd_area = -1;
+			d.gfx_mqd_cpu = NULL;
+			d.gfx_mqd_phys = 0;
+			return mapStatus;
+		}
+		d.gfx_mqd_gpu = d.gfx_mqd_bo.gpu;
 	}
 
 	/* Program the GFX12 single graphics queue's MQD/HQD defaults. */
 	rdna4_write_reg(d, RDNA4_CP_GFX_MQD_BASE_ADDR,
-		(uint32)(d.gfx_mqd_phys >> 8));
+		(uint32)(d.gfx_mqd_gpu >> 8));
 	rdna4_write_reg(d, RDNA4_CP_GFX_MQD_BASE_ADDR_HI,
-		(uint32)(d.gfx_mqd_phys >> 40));
+		(uint32)(d.gfx_mqd_gpu >> 40));
 	rdna4_write_reg(d, RDNA4_CP_GFX_HQD_ACTIVE, 0);
 	rdna4_write_reg(d, RDNA4_CP_GFX_HQD_VMID,
 		RDNA4_CP_GFX_HQD_VMID_DEFAULT);

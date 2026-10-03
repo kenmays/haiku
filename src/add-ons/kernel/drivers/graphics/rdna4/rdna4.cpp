@@ -69,6 +69,36 @@ set_pci_master(rdna4_device& d)
 }
 
 static status_t
+pci_function_level_reset(rdna4_device& d)
+{
+	if (d.pci == NULL || gPCI == NULL)
+		return B_NO_INIT;
+
+	uint8 cap = (uint8)gPCI->read_pci_config(d.pci->bus, d.pci->device,
+		d.pci->function, 0x34, 1);
+
+	for (uint32 i = 0; i < 48 && cap >= 0x40; i++) {
+		uint8 id = (uint8)gPCI->read_pci_config(d.pci->bus, d.pci->device,
+			d.pci->function, cap, 1);
+		uint8 next = (uint8)gPCI->read_pci_config(d.pci->bus, d.pci->device,
+			d.pci->function, cap + 1, 1);
+		if (id == 0x10) {
+			uint16 control = (uint16)gPCI->read_pci_config(d.pci->bus,
+				d.pci->device, d.pci->function, cap + 8, 2);
+			control |= (1u << 15);
+			gPCI->write_pci_config(d.pci->bus, d.pci->device,
+				d.pci->function, cap + 8, 2, control);
+			snooze(100000);
+			return B_OK;
+		}
+		if (next == 0 || next == cap)
+			break;
+		cap = next;
+	}
+	return B_NOT_SUPPORTED;
+}
+
+static status_t
 wait_for_gfx_idle(rdna4_device& d, bigtime_t timeout)
 {
 	if (d.mmio == NULL)
@@ -255,6 +285,21 @@ rdna4_ioctl(rdna4_device& d, uint32 op, void* buffer, size_t length)
 				| RDNA4_PTE_DCC | RDNA4_PTE_BUS_ATOMICS
 				| RDNA4_PTE_IS_PTE;
 			return user_memcpy(buffer, &info, sizeof(info));
+		}
+
+		case RDNA4_RESET_GPU: {
+			if (length != 0 && length < sizeof(uint32))
+				return B_BUFFER_OVERFLOW;
+			status_t status = wait_for_gfx_idle(d, 500000);
+			if (status != B_OK)
+				status = pci_function_level_reset(d);
+			if (status == B_OK && d.shared != NULL) {
+				d.shared->gpu_reset_generation++;
+				d.shared->gfx_state = RDNA4_ENGINE_DISCOVERED;
+				d.shared->mes_state = RDNA4_ENGINE_OFF;
+				d.shared->sdma_state = RDNA4_ENGINE_OFF;
+			}
+			return status;
 		}
 
 		case RDNA4_WAIT_IDLE: {

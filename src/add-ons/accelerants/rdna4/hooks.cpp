@@ -1,8 +1,9 @@
 #include "accelerant_protos.h"
 
 extern "C" void*
-get_accelerant_hook(uint32 feature)
+get_accelerant_hook(uint32 feature, void* data)
 {
+	(void)data;
 	switch (feature) {
 		case B_INIT_ACCELERANT:
 			return (void*)rdna4_init_accelerant;

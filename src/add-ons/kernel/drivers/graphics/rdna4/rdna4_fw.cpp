@@ -287,7 +287,7 @@ rdna4_firmware_boot(rdna4_device& d)
 	*(volatile uint32*)(d.mmio+((size_t)C2P36<<2))=(uint32)(d.psp_boot_phys>>20);
 	*(volatile uint32*)(d.mmio+((size_t)C2P35<<2))=LOAD_SOSDRV;
 	(void)*(volatile uint32*)(d.mmio+((size_t)C2P35<<2));
-	s=snooze(20000),s=B_OK;
+	snooze(20000);
 	uint32 before=*(volatile uint32*)(d.mmio+((size_t)C2P81<<2));
 	bigtime_t deadline=system_time()+5000000;
 	while(system_time()<deadline){
@@ -313,6 +313,7 @@ rdna4_firmware_uninit(rdna4_device& d)
 		d.firmware[i] = {};
 		d.firmware[i].area = -1;
 	}
+	if (d.psp_boot_area >= 0) delete_area(d.psp_boot_area);
 	d.psp_fw_area = -1;
 	d.psp_boot_area = -1;
 	d.psp_boot_cpu = NULL;

@@ -174,7 +174,9 @@ load_ucode(rdna4_device& d, uint32 i)
 	uint32 v = read32(d, i, IC_CNTL);
 	v &= ~(1u << 0);
 	write32(d, i, IC_CNTL, v);
-	uint64 firmwareGPU = f.psp_loaded_gpu != 0 ? f.psp_loaded_gpu : f.gpu;
+	uint64 firmwareGPU = f.psp_loaded_gpu;
+	if (firmwareGPU == 0)
+		return B_NO_INIT;
 	write32(d, i, IC_BASE_LO, (uint32)firmwareGPU);
 	write32(d, i, IC_BASE_HI, (uint32)(firmwareGPU >> 32));
 	v = read32(d, i, IC_OP_CNTL);

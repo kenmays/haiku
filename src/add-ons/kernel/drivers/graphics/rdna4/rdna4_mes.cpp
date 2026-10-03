@@ -173,6 +173,17 @@ rdna4_mes_start(rdna4_device& d)
 	if (api != B_OK) { rdna4_mes_stop(d); return api; }
 	api = rdna4_mes_set_scheduling_config(d, 1000, 100, 10);
 	if (api != B_OK) { rdna4_mes_stop(d); return api; }
+	memset(&d.gfx_mes_queue, 0, sizeof(d.gfx_mes_queue));
+	d.gfx_mes_queue.id = 0;
+	d.gfx_mes_queue.doorbell = 0x08b;
+	d.gfx_mes_queue.type = RDNA4_MES_GFX;
+	d.gfx_mes_queue.mqd = d.gfx_mqd_gpu;
+	d.gfx_mes_queue.wptr = d.gfx_ring_wptr_poll_gpu;
+	d.gfx_mes_queue.h_context = 0x100;
+	d.gfx_mes_queue.h_queue = 0x101;
+	api = rdna4_mes_add_queue(d, d.gfx_mes_queue, 0,
+		(uint64)d.vm_root_phys, 0x0000000100000000ull, 0x0000ffffffffffffull);
+	if (api != B_OK) { rdna4_mes_stop(d); return api; }
 	if (d.shared) {
 		d.shared->mes_state = RDNA4_ENGINE_SCHEDULER_READY;
 		d.shared->feature_mask |= RDNA4_FEATURE_MES;
@@ -185,6 +196,8 @@ rdna4_mes_stop(rdna4_device& d)
 {
 	if (d.mes.ring_area < 0)
 		return B_OK;
+	if (d.gfx_mes_queue.active)
+		(void)rdna4_mes_remove_queue(d, d.gfx_mes_queue);
 	uint32 ctl = read_reg(d, MES_CNTL);
 	ctl &= ~(MES_PIPE0_ACTIVE | MES_PIPE1_ACTIVE);
 	ctl |= MES_INVALIDATE_ICACHE | MES_PIPE0_RESET | MES_PIPE1_RESET | MES_HALT;

@@ -1,0 +1,12 @@
+SubDir HAIKU_TOP src add-ons kernel drivers graphics rdna4 ;
+
+UsePrivateHeaders [ FDirName graphics rdna4 ] ;
+UsePrivateHeaders graphics kernel ;
+UsePrivateHeaders shared ;
+UsePrivateKernelHeaders ;
+
+KernelAddon rdna4 :
+	driver.cpp
+	device.cpp
+	rdna4.cpp
+	: libgraphicscommon.a ;

@@ -539,7 +539,7 @@ rdna4_ioctl(rdna4_device& d, uint32 op, void* buffer, size_t length)
 			uint32 words = rdna4_pm4_indirect_buffer(packets,
 				request.command_gpu_address, request.command_count);
 			uint32 releaseWords = rdna4_pm4_release_mem(
-				packets + words, request.fence_gpu_address, request.fence_value);
+				packets + words, request.fence_gpu_address, request.fence_value, d.gfx_ip);
 			words += releaseWords;
 
 			status = rdna4_gfx_ring_write(d, packets, words);

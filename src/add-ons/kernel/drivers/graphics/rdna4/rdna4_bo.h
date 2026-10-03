@@ -6,6 +6,7 @@
 
 struct rdna4_bo {
 	area_id area;
+	void* cpu;
 	uint64 size;
 	uint64 alignment;
 	phys_addr_t physical;

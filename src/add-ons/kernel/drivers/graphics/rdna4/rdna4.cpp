@@ -371,7 +371,7 @@ rdna4_ioctl(rdna4_device& d, uint32 op, void* buffer, size_t length)
 			rdna4_firmware_stage request;
 			if (user_memcpy(&request, buffer, sizeof(request)) != B_OK)
 				return B_BAD_ADDRESS;
-			status_t status = rdna4_firmware_stage(d, request);
+			status_t status = rdna4_stage_firmware(d, request);
 			if (status != B_OK)
 				return status;
 			request.psp_sos_offset = d.psp_sos_offset;

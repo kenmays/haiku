@@ -212,6 +212,7 @@ struct rdna4_firmware_info {
 	char uni_mes[64];
 	char sdma0[64];
 	char sdma1[64];
+	char vcn[64];
 };
 
 struct rdna4_vm_info {

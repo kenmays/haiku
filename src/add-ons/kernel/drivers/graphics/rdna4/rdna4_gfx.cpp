@@ -120,6 +120,29 @@ rdna4_validate_command_buffer(const rdna4_command_buffer& command)
 #define RDNA4_CP_RB_WPTR_POLL_ADDR_LO     0x1e8b
 #define RDNA4_CP_RB_WPTR_POLL_ADDR_HI     0x1e8c
 #define RDNA4_CP_RB_VMID                  0x1df1
+/* GFX12 CP MQD/HQD registers (dword indices). */
+#define RDNA4_CP_GFX_MQD_BASE_ADDR        0x1e7e
+#define RDNA4_CP_GFX_MQD_BASE_ADDR_HI     0x1e7f
+#define RDNA4_CP_GFX_HQD_ACTIVE            0x1e80
+#define RDNA4_CP_GFX_HQD_VMID              0x1e81
+#define RDNA4_CP_GFX_HQD_BASE              0x1e86
+#define RDNA4_CP_GFX_HQD_BASE_HI           0x1e87
+#define RDNA4_CP_GFX_HQD_RPTR              0x1e88
+#define RDNA4_CP_GFX_HQD_RPTR_ADDR         0x1e89
+#define RDNA4_CP_GFX_HQD_RPTR_ADDR_HI      0x1e8a
+#define RDNA4_CP_GFX_HQD_CNTL              0x1e8f
+#define RDNA4_CP_GFX_HQD_WPTR              0x1e91
+#define RDNA4_CP_GFX_HQD_WPTR_HI           0x1e92
+#define RDNA4_CP_GFX_MQD_CONTROL_DEFAULT   0x00000100u
+#define RDNA4_CP_GFX_HQD_VMID_DEFAULT      0x00000000u
+#define RDNA4_CP_GFX_HQD_PRIORITY_DEFAULT  0x00000000u
+#define RDNA4_CP_GFX_HQD_QUANTUM_DEFAULT   0x00000a01u
+#define RDNA4_CP_GFX_HQD_CNTL_DEFAULT      0x00f00000u
+#define RDNA4_CP_HQD_EOP_CONTROL_DEFAULT  0x00000006u
+#define RDNA4_CP_HQD_PQ_CONTROL_DEFAULT    0x00308509u
+#define RDNA4_CP_HQD_PERSISTENT_DEFAULT    0x0be05501u
+#define RDNA4_CP_HQD_IB_CONTROL_DEFAULT    0x00300000u
+
 
 static inline void
 rdna4_write_reg(rdna4_device& d, uint32 reg, uint32 value)
@@ -349,5 +372,69 @@ uint64 rbAddr = d.gfx_ring_gpu >> 8;
 	d.gfx_ring_rptr = 0;
 	d.gfx_ring_wptr = 0;
 	d.gfx_ring_ready = true;
+	return B_OK;
+}
+
+status_t
+rdna4_gfx_program_mqd(rdna4_device& d)
+{
+	if (!d.gfx_ring_bo.used || d.mmio == NULL)
+		return B_NO_INIT;
+	if (d.shared == NULL || d.shared->gfx_state != RDNA4_ENGINE_FIRMWARE_READY)
+		return B_NOT_INITIALIZED;
+
+	if (d.gfx_mqd_area < 0) {
+		void* address = NULL;
+		d.gfx_mqd_area = create_area("rdna4 gfx mqd", &address,
+			B_ANY_KERNEL_ADDRESS, B_PAGE_SIZE, B_CONTIGUOUS,
+			B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA);
+		if (d.gfx_mqd_area < 0)
+			return d.gfx_mqd_area;
+		physical_entry entry;
+		status_t status = get_memory_map(address, B_PAGE_SIZE, &entry, 1);
+		if (status != B_OK || entry.size < B_PAGE_SIZE) {
+			delete_area(d.gfx_mqd_area);
+			d.gfx_mqd_area = -1;
+			return status != B_OK ? status : B_NOT_SUPPORTED;
+		}
+		memset(address, 0, B_PAGE_SIZE);
+		d.gfx_mqd_cpu = address;
+		d.gfx_mqd_phys = entry.address;
+	}
+
+	/* Program the GFX12 single graphics queue's MQD/HQD defaults. */
+	rdna4_write_reg(d, RDNA4_CP_GFX_MQD_BASE_ADDR,
+		(uint32)(d.gfx_mqd_phys >> 8));
+	rdna4_write_reg(d, RDNA4_CP_GFX_MQD_BASE_ADDR_HI,
+		(uint32)(d.gfx_mqd_phys >> 40));
+	rdna4_write_reg(d, RDNA4_CP_GFX_HQD_ACTIVE, 0);
+	rdna4_write_reg(d, RDNA4_CP_GFX_HQD_VMID,
+		RDNA4_CP_GFX_HQD_VMID_DEFAULT);
+	rdna4_write_reg(d, RDNA4_CP_GFX_HQD_CNTL,
+		RDNA4_CP_GFX_HQD_CNTL_DEFAULT);
+	rdna4_write_reg(d, RDNA4_CP_GFX_HQD_RPTR, 0);
+	rdna4_write_reg(d, RDNA4_CP_GFX_HQD_RPTR_ADDR,
+		(uint32)d.gfx_ring_rptr_gpu);
+	rdna4_write_reg(d, RDNA4_CP_GFX_HQD_RPTR_ADDR_HI,
+		(uint32)(d.gfx_ring_rptr_gpu >> 32));
+	rdna4_write_reg(d, RDNA4_CP_GFX_HQD_WPTR, 0);
+	rdna4_write_reg(d, RDNA4_CP_GFX_HQD_WPTR_HI, 0);
+	rdna4_write_reg(d, RDNA4_CP_GFX_HQD_BASE,
+		(uint32)(d.gfx_ring_gpu >> 8));
+	rdna4_write_reg(d, RDNA4_CP_GFX_HQD_BASE_HI,
+		(uint32)(d.gfx_ring_gpu >> 40));
+
+	/* These defaults are represented in the MQD image for firmware/HQD load. */
+	uint32* mqd = (uint32*)d.gfx_mqd_cpu;
+	mqd[0] = RDNA4_CP_GFX_MQD_CONTROL_DEFAULT;
+	mqd[1] = RDNA4_CP_GFX_HQD_VMID_DEFAULT;
+	mqd[2] = RDNA4_CP_GFX_HQD_PRIORITY_DEFAULT;
+	mqd[3] = RDNA4_CP_GFX_HQD_QUANTUM_DEFAULT;
+	mqd[4] = RDNA4_CP_HQD_EOP_CONTROL_DEFAULT;
+	mqd[5] = RDNA4_CP_HQD_PQ_CONTROL_DEFAULT;
+	mqd[6] = RDNA4_CP_HQD_PERSISTENT_DEFAULT;
+	mqd[7] = RDNA4_CP_HQD_IB_CONTROL_DEFAULT;
+	__sync_synchronize();
+
 	return B_OK;
 }

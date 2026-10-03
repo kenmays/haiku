@@ -87,7 +87,7 @@ find_table_by_phys(rdna4_device& device, phys_addr_t phys)
 
 
 static status_t
-ensure_path(rdna4_device& device, uint64 va, rdna4_vm_table*& _pte)
+allocate_path(rdna4_device& device, uint64 va, rdna4_vm_table*& _pte)
 {
 	rdna4_vm_table* current = &device.vm_tables[device.vm_root_index];
 
@@ -102,6 +102,7 @@ ensure_path(rdna4_device& device, uint64 va, rdna4_vm_table*& _pte)
 			if (next == NULL)
 				return B_BAD_DATA;
 		} else {
+			return B_ENTRY_NOT_FOUND;
 			status_t status = allocate_table(device, (uint8)level,
 				table_base(va, (uint8)level), next);
 			if (status != B_OK)
@@ -201,7 +202,7 @@ rdna4_vm_map_bo(rdna4_device& device, rdna4_bo& bo, uint64 alignment)
 	for (uint64 offset = 0; offset < size; offset += RDNA4_VM_PAGE_SIZE) {
 		const uint64 pageVA = va + offset;
 		rdna4_vm_table* pteTable = NULL;
-		status_t status = ensure_path(device, pageVA, pteTable);
+		status_t status = allocate_path(device, pageVA, pteTable);
 		if (status != B_OK)
 			return status;
 

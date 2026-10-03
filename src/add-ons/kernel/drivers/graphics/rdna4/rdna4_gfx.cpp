@@ -130,6 +130,11 @@ rdna4_validate_command_buffer(const rdna4_command_buffer& command)
 #define RDNA4_CP_RB0_RPTR_ADDR_HI         0x1de4
 #define RDNA4_CP_RB0_BUFSZ_MASK           0x1de5
 #define RDNA4_CP_RB_DOORBELL_CONTROL      0x1e8d
+#define RDNA4_CP_RB_DOORBELL_RANGE_LOWER    0x1e8f
+#define RDNA4_CP_RB_DOORBELL_RANGE_UPPER    0x1e90
+#define RDNA4_GFX_DOORBELL_INDEX            0x08b
+#define RDNA4_CP_RB_DOORBELL_OFFSET_SHIFT   2
+#define RDNA4_CP_RB_DOORBELL_ENABLE        (1u << 30)
 #define RDNA4_CP_RB_ACTIVE                 0x1e8e
 #define RDNA4_CP_RB0_BASE_HI              0x1e51
 #define RDNA4_CP_RB_WPTR_POLL_ADDR_LO     0x1e8b
@@ -396,7 +401,12 @@ uint64 rbAddr = d.gfx_ring_gpu >> 8;
 	rdna4_write_reg(d, RDNA4_CP_RB0_BASE, (uint32)rbAddr);
 	rdna4_write_reg(d, RDNA4_CP_RB0_BASE_HI, (uint32)(rbAddr >> 32));
 	rdna4_write_reg(d, RDNA4_CP_RB_ACTIVE, 1);
-	rdna4_write_reg(d, RDNA4_CP_RB_DOORBELL_CONTROL, 0);
+	rdna4_write_reg(d, RDNA4_CP_RB_DOORBELL_CONTROL,
+		(RDNA4_GFX_DOORBELL_INDEX << RDNA4_CP_RB_DOORBELL_OFFSET_SHIFT)
+		| RDNA4_CP_RB_DOORBELL_ENABLE);
+	rdna4_write_reg(d, RDNA4_CP_RB_DOORBELL_RANGE_LOWER,
+		RDNA4_GFX_DOORBELL_INDEX << RDNA4_CP_RB_DOORBELL_OFFSET_SHIFT);
+	rdna4_write_reg(d, RDNA4_CP_RB_DOORBELL_RANGE_UPPER, 0x0000fffc);
 
 	d.gfx_ring_rptr = 0;
 	d.gfx_ring_wptr = 0;

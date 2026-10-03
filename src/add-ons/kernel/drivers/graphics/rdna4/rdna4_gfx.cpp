@@ -115,6 +115,11 @@ rdna4_validate_command_buffer(const rdna4_command_buffer& command)
 #define RDNA4_CP_RB0_RPTR_ADDR_HI         0x1de4
 #define RDNA4_CP_RB0_BUFSZ_MASK           0x1de5
 #define RDNA4_CP_RB_DOORBELL_CONTROL      0x1e8d
+#define RDNA4_CP_RB_ACTIVE                 0x1e8e
+#define RDNA4_CP_RB0_BASE_HI              0x1e51
+#define RDNA4_CP_RB_WPTR_POLL_ADDR_LO     0x1e8b
+#define RDNA4_CP_RB_WPTR_POLL_ADDR_HI     0x1e8c
+#define RDNA4_CP_RB_VMID                  0x1df1
 
 static inline void
 rdna4_write_reg(rdna4_device& d, uint32 reg, uint32 value)
@@ -168,21 +173,81 @@ rdna4_gfx_ring_alloc(rdna4_device& d)
 		return status;
 	}
 
+	void* wbAddress = NULL;
+	area_id wbArea = create_area("rdna4 gfx ring writeback", &wbAddress,
+		B_ANY_KERNEL_ADDRESS, B_PAGE_SIZE, B_CONTIGUOUS,
+		B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA);
+	if (wbArea < 0) {
+		rdna4_vm_unmap_bo(d, d.gfx_ring_bo);
+		d.gfx_ring_bo.used = false;
+		delete_area(area);
+		return wbArea;
+	}
+
+	physical_entry wbEntry;
+	status = get_memory_map(wbAddress, B_PAGE_SIZE, &wbEntry, 1);
+	if (status != B_OK || wbEntry.size < B_PAGE_SIZE) {
+		delete_area(wbArea);
+		rdna4_vm_unmap_bo(d, d.gfx_ring_bo);
+		d.gfx_ring_bo.used = false;
+		delete_area(area);
+		return status != B_OK ? status : B_NOT_SUPPORTED;
+	}
+	memset(wbAddress, 0, B_PAGE_SIZE);
+
+	rdna4_bo wbBO = {};
+	wbBO.area = wbArea;
+	wbBO.cpu = wbAddress;
+	wbBO.size = B_PAGE_SIZE;
+	wbBO.alignment = B_PAGE_SIZE;
+	wbBO.physical = wbEntry.address;
+	wbBO.used = true;
+	status = rdna4_vm_map_bo(d, wbBO, B_PAGE_SIZE);
+	if (status != B_OK) {
+		delete_area(wbArea);
+		rdna4_vm_unmap_bo(d, d.gfx_ring_bo);
+		d.gfx_ring_bo.used = false;
+		delete_area(area);
+		return status;
+	}
+
 	d.gfx_ring_area = area;
 	d.gfx_ring_cpu = address;
 	d.gfx_ring_phys = entry.address;
 	d.gfx_ring_gpu = d.gfx_ring_bo.gpu;
 	d.gfx_ring_dwords = (uint32)(size / sizeof(uint32));
+	d.gfx_ring_rptr_area = wbArea;
+	d.gfx_ring_rptr_cpu = (volatile uint32*)wbAddress;
+	d.gfx_ring_rptr_phys = wbEntry.address;
+	d.gfx_ring_rptr_gpu = wbBO.gpu;
+	d.gfx_ring_wptr_poll_cpu = (volatile uint32*)((uint8*)wbAddress + 4);
+	d.gfx_ring_wptr_poll_gpu = wbBO.gpu + 4;
 	d.gfx_ring_wptr = 0;
 	d.gfx_ring_rptr = 0;
 	d.gfx_ring_ready = false;
 
+	/*
+	 * Keep the writeback BO alive through its area and GPUVA. It is not
+	 * exposed as a userspace BO; it is private to the kernel ring.
+	 */
+	d.bos[0].used = d.bos[0].used;
 	return B_OK;
 }
 
 void
 rdna4_gfx_ring_free(rdna4_device& d)
 {
+	if (d.gfx_ring_rptr_cpu != NULL && d.gfx_ring_rptr_area >= 0) {
+		rdna4_bo wb = {};
+		wb.area = d.gfx_ring_rptr_area;
+		wb.cpu = (void*)d.gfx_ring_rptr_cpu;
+		wb.size = B_PAGE_SIZE;
+		wb.gpu = d.gfx_ring_rptr_gpu;
+		wb.physical = d.gfx_ring_rptr_phys;
+		wb.used = true;
+		rdna4_vm_unmap_bo(d, wb);
+		delete_area(d.gfx_ring_rptr_area);
+	}
 	if (d.gfx_ring_bo.used)
 		rdna4_vm_unmap_bo(d, d.gfx_ring_bo);
 	if (d.gfx_ring_area >= 0)
@@ -193,6 +258,12 @@ rdna4_gfx_ring_free(rdna4_device& d)
 	d.gfx_ring_cpu = NULL;
 	d.gfx_ring_phys = 0;
 	d.gfx_ring_gpu = 0;
+	d.gfx_ring_rptr_area = -1;
+	d.gfx_ring_rptr_cpu = NULL;
+	d.gfx_ring_rptr_phys = 0;
+	d.gfx_ring_rptr_gpu = 0;
+	d.gfx_ring_wptr_poll_cpu = NULL;
+	d.gfx_ring_wptr_poll_gpu = 0;
 	d.gfx_ring_dwords = 0;
 	d.gfx_ring_wptr = d.gfx_ring_rptr = 0;
 	d.gfx_ring_ready = false;
@@ -204,6 +275,10 @@ rdna4_gfx_ring_write(rdna4_device& d, const uint32* packets, size_t dwords)
 	if (!d.gfx_ring_bo.used || packets == NULL || dwords == 0
 		|| dwords >= d.gfx_ring_dwords)
 		return B_BAD_VALUE;
+
+	/* Refresh the hardware read pointer from the kernel-only writeback page. */
+	if (d.gfx_ring_rptr_cpu != NULL)
+		d.gfx_ring_rptr = *d.gfx_ring_rptr_cpu & (d.gfx_ring_dwords - 1);
 
 	/* Ring management deliberately refuses to overwrite unread commands. */
 	uint32 next = (d.gfx_ring_wptr + (uint32)dwords) & (d.gfx_ring_dwords - 1);
@@ -254,16 +329,26 @@ rdna4_gfx_program_ring(rdna4_device& d)
 	 * The CP ring is 64 KiB, expressed to hardware as a 2^n dword
 	 * buffer-size mask. Ring 0 is the sole GFX12 graphics ring.
 	 */
-	rdna4_write_reg(d, RDNA4_CP_RB0_BASE,
-		(uint32)(d.gfx_ring_gpu >> 8));
-	rdna4_write_reg(d, RDNA4_CP_RB0_CNTL, 0x0000003f);
-	rdna4_write_reg(d, RDNA4_CP_RB0_RPTR_ADDR,
-		(uint32)(d.gfx_ring_gpu >> 2));
-	rdna4_write_reg(d, RDNA4_CP_RB0_RPTR_ADDR_HI,
-		(uint32)(d.gfx_ring_gpu >> 34));
-	rdna4_write_reg(d, RDNA4_CP_RB0_BUFSZ_MASK, 0x3f);
+	const uint32 rbBufSize = 13; /* log2(64 KiB / 8) */
+	const uint32 rbBlockSize = rbBufSize - 2;
+	rdna4_write_reg(d, RDNA4_CP_RB_VMID, 0);
+	rdna4_write_reg(d, RDNA4_CP_RB0_CNTL,
+		rbBufSize | (rbBlockSize << 8));
 	rdna4_write_reg(d, RDNA4_CP_RB0_WPTR, 0);
 	rdna4_write_reg(d, RDNA4_CP_RB0_WPTR_HI, 0);
+	rdna4_write_reg(d, RDNA4_CP_RB0_RPTR_ADDR,
+		(uint32)d.gfx_ring_rptr_gpu);
+	rdna4_write_reg(d, RDNA4_CP_RB0_RPTR_ADDR_HI,
+		(uint32)(d.gfx_ring_rptr_gpu >> 32) & 0xffff);
+	rdna4_write_reg(d, RDNA4_CP_RB_WPTR_POLL_ADDR_LO,
+		(uint32)d.gfx_ring_wptr_poll_gpu);
+	rdna4_write_reg(d, RDNA4_CP_RB_WPTR_POLL_ADDR_HI,
+		(uint32)(d.gfx_ring_wptr_poll_gpu >> 32));
+uint64 rbAddr = d.gfx_ring_gpu >> 8;
+	rdna4_write_reg(d, RDNA4_CP_RB0_BASE, (uint32)rbAddr);
+	rdna4_write_reg(d, RDNA4_CP_RB0_BASE_HI, (uint32)(rbAddr >> 32));
+	rdna4_write_reg(d, RDNA4_CP_RB0_BUFSZ_MASK, 0);
+	rdna4_write_reg(d, RDNA4_CP_RB_ACTIVE, 1);
 	rdna4_write_reg(d, RDNA4_CP_RB_DOORBELL_CONTROL, 0);
 
 	d.gfx_ring_rptr = 0;

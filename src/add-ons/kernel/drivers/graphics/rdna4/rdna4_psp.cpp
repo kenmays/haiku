@@ -447,6 +447,24 @@ rdna4_psp_load_ip_firmware(rdna4_device& d, uint32 type, uint32 pspType)
 }
 
 status_t
+rdna4_psp_mode1_reset(rdna4_device& d)
+{
+	if (d.mmio == NULL)
+		return B_NO_INIT;
+	const uint32 C2P33 = 0x16061;
+	const uint32 C2P64 = 0x16080;
+	const uint32 MODE1_RESET = 0x00070000;
+	/* PSP must be alive and idle before accepting the reset request. */
+	status_t status = wait_reg(d, C2P64, 0x80000000u, 0, 500000);
+	if (status != B_OK)
+		return status;
+	reg_write(d, C2P64, MODE1_RESET);
+	snooze(500000);
+	/* PSP v12+ reports completion by clearing the response flag in C2PMSG_33. */
+	return wait_reg(d, C2P33, 0x80000000u, 0, 1000000);
+}
+
+status_t
 rdna4_psp_load_firmware(rdna4_device& d)
 {
 	status_t status = rdna4_psp_ring_create(d);

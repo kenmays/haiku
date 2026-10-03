@@ -43,13 +43,27 @@ rdna4_pm4_write_data(uint32* out, uint64 address, uint32 value)
 }
 
 uint32
-rdna4_pm4_release_mem(uint32* out, uint64 address, uint64 value)
+rdna4_pm4_release_mem(uint32* out, uint64 address, uint64 value, uint32 gfx_ip)
 {
 	if (out == NULL)
 		return 0;
-	out[0] = RDNA4_PM4_PACKET3(RDNA4_PM4_RELEASE_MEM, 7);
-	out[1] = 0;
-	out[2] = 0;
+
+	/* GFX12 RELEASE_MEM is a type-3 packet with seven payload dwords. */
+	out[0] = RDNA4_PM4_PACKET3(RDNA4_PM4_RELEASE_MEM, 6);
+
+	const uint32 eventType = 0x14; /* CACHE_FLUSH_AND_INV_TS_EVENT */
+	const uint32 eventIndex = 5;   /* end-of-pipe timestamp */
+	if (gfx_ip == RDNA4_GFX12_1) {
+		/* GFX12.1 uses the revised GCR/temporal encoding. */
+		out[1] = (1u << 22) | (1u << 24) | (2u << 12)
+			| (3u << 25) | eventType | (eventIndex << 8);
+	} else {
+		/* GFX12.0 encoding used by gc_12_0_0. */
+		out[1] = (1u << 22) | (1u << 21) | (3u << 25)
+			| eventType | (eventIndex << 8);
+	}
+	/* 64-bit fence write + interrupt when the write is confirmed. */
+	out[2] = (2u << 29) | (2u << 24);
 	out[3] = (uint32)address;
 	out[4] = (uint32)(address >> 32);
 	out[5] = (uint32)value;

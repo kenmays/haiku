@@ -141,8 +141,8 @@ load_ucode(rdna4_device& d, uint32 i)
 	uint32 v = read32(d, i, IC_CNTL);
 	v &= ~(1u << 0);
 	write32(d, i, IC_CNTL, v);
-	write32(d, i, IC_BASE_LO, (uint32)f.phys);
-	write32(d, i, IC_BASE_HI, (uint32)(f.phys >> 32));
+	write32(d, i, IC_BASE_LO, (uint32)f.gpu);
+	write32(d, i, IC_BASE_HI, (uint32)(f.gpu >> 32));
 	v = read32(d, i, IC_OP_CNTL);
 	v |= 1u;
 	write32(d, i, IC_OP_CNTL, v);

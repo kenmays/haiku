@@ -8,20 +8,9 @@
 #define RDNA4_VM_PAGE_SIZE 4096ull
 #define RDNA4_VM_LEVELS 4
 #define RDNA4_VM_ENTRIES 512
-#define RDNA4_VM_MAX_TABLES 1024
-#define RDNA4_VM_MAX_BOS 256
 #define RDNA4_VM_START 0x0000000100000000ull
 #define RDNA4_VM_END   0x0000fffffffff000ull
 
-struct rdna4_vm_table {
-	area_id area;
-	uint64* cpu;
-	phys_addr_t phys;
-	uint8 level;
-	uint8 used;
-	uint16 reserved;
-	uint64 base;
-};
 
 static uint32
 vm_index(uint64 va, uint8 level)

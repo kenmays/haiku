@@ -257,16 +257,16 @@ rdna4_discovery_parse(rdna4_device& d, const void* data, size_t size)
 	return B_OK;
 }
 
-status_t
-rdna4_discovery_scan_vram(rdna4_device& d)
+static status_t
+scan_region(rdna4_device& d, size_t start, size_t length)
 {
-	if (d.framebuffer == NULL || d.fb_size < 4096)
-		return B_NO_INIT;
+	if (start >= d.fb_size)
+		return B_ENTRY_NOT_FOUND;
+	if (length > d.fb_size - start)
+		length = d.fb_size - start;
 
-	size_t scan = d.fb_size < (16u << 20) ? d.fb_size : (16u << 20);
-	size_t start = d.fb_size - scan;
-
-	for (size_t off = start; off + sizeof(binary_header) <= d.fb_size; off += 256) {
+	for (size_t off = start; off + sizeof(binary_header) <= start + length;
+		off += 256) {
 		const binary_header* h = (const binary_header*)(d.framebuffer + off);
 		if (h->signature != 0x28211407u)
 			continue;
@@ -277,6 +277,35 @@ rdna4_discovery_scan_vram(rdna4_device& d)
 			return B_OK;
 	}
 	return B_ENTRY_NOT_FOUND;
+}
+
+status_t
+rdna4_discovery_scan_vram(rdna4_device& d)
+{
+	if (d.framebuffer == NULL || d.fb_size < 4096)
+		return B_NO_INIT;
+
+	/* AMDGPU publishes the discovery TMR VRAM offset/size through the
+	 * driver-scratch registers. Prefer that exact location when it lies
+	 * in the BAR0-visible aperture, then retain the legacy top-of-VRAM
+	 * scan as a fallback. */
+	if (d.mmio != NULL) {
+		uint32 scratchLo = *(volatile uint32*)(d.mmio + (0x94u << 2));
+		uint32 scratchHi = *(volatile uint32*)(d.mmio + (0x95u << 2));
+		uint32 scratchSize = *(volatile uint32*)(d.mmio + (0x96u << 2));
+		uint64 tmrOffset = ((uint64)scratchHi << 32) | scratchLo;
+		if (scratchSize != 0 && tmrOffset < d.fb_size) {
+			size_t length = scratchSize;
+			if (length > d.fb_size - (size_t)tmrOffset)
+				length = d.fb_size - (size_t)tmrOffset;
+			if (scan_region(d, (size_t)tmrOffset, length) == B_OK)
+				return B_OK;
+		}
+	}
+
+	size_t scan = d.fb_size < (16u << 20) ? d.fb_size : (16u << 20);
+	size_t start = d.fb_size - scan;
+	return scan_region(d, start, scan);
 }
 
 status_t

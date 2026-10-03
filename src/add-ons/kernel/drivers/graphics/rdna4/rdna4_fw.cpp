@@ -84,6 +84,79 @@ range_valid(uint32 offset, uint32 size, uint32 total)
 }
 
 static status_t
+stage_payload(rdna4_device& d, rdna4_firmware_slot& slot)
+{
+	slot.payload_area = -1;
+	slot.payload_cpu = NULL;
+	slot.payload_phys = 0;
+	slot.payload_gpu = 0;
+	slot.payload_size = 0;
+	if (slot.ucode_size == 0)
+		return B_OK;
+
+	size_t size = (slot.ucode_size + B_PAGE_SIZE - 1) & ~(size_t)(B_PAGE_SIZE - 1);
+	void* cpu = NULL;
+	area_id area = create_area("rdna4 firmware payload", &cpu,
+		B_ANY_KERNEL_ADDRESS, size, B_CONTIGUOUS,
+		B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA);
+	if (area < 0)
+		return area;
+
+	physical_entry entry;
+	status_t status = get_memory_map(cpu, size, &entry, 1);
+	if (status != B_OK || entry.size < size) {
+		delete_area(area);
+		return status != B_OK ? status : B_NOT_SUPPORTED;
+	}
+
+	memcpy(cpu, (uint8*)slot.cpu + slot.ucode_offset, slot.ucode_size);
+	if (size > slot.ucode_size)
+		memset((uint8*)cpu + slot.ucode_size, 0, size - slot.ucode_size);
+
+	rdna4_bo bo = {};
+	bo.area = area;
+	bo.cpu = cpu;
+	bo.size = size;
+	bo.alignment = B_PAGE_SIZE;
+	bo.physical = entry.address;
+	bo.used = true;
+	status = rdna4_vm_map_bo(d, bo, B_PAGE_SIZE);
+	if (status != B_OK) {
+		delete_area(area);
+		return status;
+	}
+
+	slot.payload_area = area;
+	slot.payload_cpu = cpu;
+	slot.payload_phys = entry.address;
+	slot.payload_gpu = bo.gpu;
+	slot.payload_size = slot.ucode_size;
+	return B_OK;
+}
+
+static void
+free_slot_payload(rdna4_device& d, rdna4_firmware_slot& slot)
+{
+	if (slot.payload_area < 0)
+		return;
+	rdna4_bo bo = {};
+	bo.area = slot.payload_area;
+	bo.cpu = slot.payload_cpu;
+	bo.size = (slot.payload_size + B_PAGE_SIZE - 1) & ~(uint32)(B_PAGE_SIZE - 1);
+	bo.physical = slot.payload_phys;
+	bo.gpu = slot.payload_gpu;
+	bo.used = true;
+	if (d.vm_ready && bo.gpu)
+		rdna4_vm_unmap_bo(d, bo);
+	delete_area(slot.payload_area);
+	slot.payload_area = -1;
+	slot.payload_cpu = NULL;
+	slot.payload_phys = 0;
+	slot.payload_gpu = 0;
+	slot.payload_size = 0;
+}
+
+static status_t
 parse_psp_container(const uint8* data, uint32 size, uint32& sosOffset,
 	uint32& sosSize, uint32& major, uint32& minor)
 {
@@ -192,7 +265,11 @@ rdna4_stage_firmware(rdna4_device& d, const rdna4_firmware_stage& request)
 
 	/* Replace only the selected IP image. */
 	rdna4_firmware_slot& slot = d.firmware[request.type];
-	if (slot.staged && slot.area >= 0) delete_area(slot.area);
+	if (slot.staged) {
+		free_slot_payload(d, slot);
+		if (slot.area >= 0)
+			delete_area(slot.area);
+	}
 	slot = {};
 	slot.area = area;
 	slot.cpu = address;
@@ -216,6 +293,8 @@ rdna4_stage_firmware(rdna4_device& d, const rdna4_firmware_stage& request)
 	status = rdna4_vm_map_bo(d, fwbo, B_PAGE_SIZE);
 	if (status != B_OK) { delete_area(area); slot = {}; slot.area = -1; return status; }
 	slot.gpu = fwbo.gpu;
+	status = stage_payload(d, slot);
+	if (status != B_OK) { rdna4_vm_unmap_bo(d, fwbo); delete_area(area); slot = {}; slot.area = -1; return status; }
 
 	if (request.type == RDNA4_FW_PSP) {
 		d.psp_fw_area = area;
@@ -303,6 +382,7 @@ rdna4_firmware_uninit(rdna4_device& d)
 {
 	for (uint32 i = 0; i < RDNA4_FW_MAX; i++) {
 		if (d.firmware[i].staged && d.firmware[i].area >= 0) {
+			free_slot_payload(d, d.firmware[i]);
 			rdna4_bo fwbo = {};
 			fwbo.area = d.firmware[i].area; fwbo.cpu = d.firmware[i].cpu;
 			fwbo.size = (d.firmware[i].size + B_PAGE_SIZE - 1) & ~(uint32)(B_PAGE_SIZE - 1);

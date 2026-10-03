@@ -71,7 +71,11 @@ status_t rdna4_gpu_recover(rdna4_device& d)
 		d.firmware[i].psp_loaded_gpu = 0;
 	}
 
-	status_t status = do_flr(d);
+	/* Prefer the PSP Mode 1 reset when the authenticated PSP is alive;
+	 * fall back to PCIe FLR if PSP cannot service the request. */
+	status_t status = rdna4_psp_mode1_reset(d);
+	if (status != B_OK)
+		status = do_flr(d);
 	if (status != B_OK) {
 		d.shared->gfx_state = RDNA4_ENGINE_FAILED;
 		d.shared->vm_state = RDNA4_ENGINE_FAILED;

@@ -231,8 +231,7 @@ rdna4_init(rdna4_device& d)
 	}
 	d.shared->vram_size = vramSize;
 	d.shared->gtt_size = 512ull << 20;
-	d.shared->feature_mask = RDNA4_FEATURE_DISPLAY
-		| RDNA4_FEATURE_VRAM | RDNA4_FEATURE_GTT
+	d.shared->feature_mask = RDNA4_FEATURE_VRAM | RDNA4_FEATURE_GTT
 		| RDNA4_FEATURE_RESET;
 	d.shared->gfx_state = RDNA4_ENGINE_DISCOVERED;
 	d.shared->display_state = RDNA4_ENGINE_DISCOVERED;

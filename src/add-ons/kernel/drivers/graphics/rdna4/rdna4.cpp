@@ -411,7 +411,7 @@ rdna4_ioctl(rdna4_device& d, uint32 op, void* buffer, size_t length)
 				return area;
 
 			physical_entry entry;
-			status = get_memory_map(address, size, &entry, 1);
+			status_t status = get_memory_map(address, size, &entry, 1);
 			if (status != B_OK || entry.size < size) {
 				delete_area(area);
 				return status != B_OK ? status : B_NOT_SUPPORTED;

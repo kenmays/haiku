@@ -9,6 +9,7 @@ static int32 rdna4_gpu_interrupt(void* cookie)
 	rdna4_device* d = (rdna4_device*)cookie;
 	if (d == NULL || d->mmio == NULL)
 		return B_UNHANDLED_INTERRUPT;
+	d->interrupt_count++;
 	if (d->fence_sem >= 0) {
 		release_sem(d->fence_sem);
 		return B_INVOKE_SCHEDULER;

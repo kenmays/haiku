@@ -213,6 +213,13 @@ extern char* gDeviceNames[RDNA4_MAX_CARDS + 1];
 extern device_hooks gDeviceHooks;
 
 
+static inline void rdna4_doorbell_write32(rdna4_device& d, uint32 index, uint32 value)
+{
+	if (d.doorbell == NULL || ((uint64)index * 4 + 4) > d.doorbell_size)
+		return;
+	*((volatile uint32*)((uint8*)d.doorbell + (uint64)index * 4)) = value;
+}
+
 static inline void rdna4_doorbell_write(rdna4_device& d, uint32 index, uint64 value)
 {
 	if (d.doorbell == NULL || ((uint64)index * 8 + 8) > d.doorbell_size)

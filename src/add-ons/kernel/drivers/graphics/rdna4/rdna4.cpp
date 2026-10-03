@@ -7,6 +7,9 @@
 #include "rdna4_recovery.h"
 #include "rdna4_sdma.h"
 #include "rdna4_mes.h"
+#include "rdna4_mmhub.h"
+#include "rdna4_cursor.h"
+#include "rdna4_vcn.h"
 
 #include <KernelExport.h>
 #include <OS.h>
@@ -240,6 +243,7 @@ rdna4_init(rdna4_device& d)
 	d.gfx_ring_rptr_cpu = NULL;
 	d.gfx_ring_wptr_poll_cpu = NULL;
 	d.gfxhub_ready = false;
+	d.mmhub_ready = false;
 
 	status = rdna4_vm_init(d);
 	if (status != B_OK) {
@@ -257,6 +261,8 @@ rdna4_init(rdna4_device& d)
 		return status;
 	}
 	d.gfxhub_ready = true;
+	status = rdna4_mmhub_init(d);
+	if (status != B_OK) { rdna4_uninit(d); return status; }
 
 	/* Allocate the native GFX12 ring now that GPUVM and GFXHub exist. */
 	status = rdna4_gfx_ring_alloc(d);
@@ -275,6 +281,8 @@ rdna4_init(rdna4_device& d)
 		rdna4_uninit(d);
 		return status;
 	}
+	rdna4_cursor_init(d);
+	rdna4_vcn_init(d);
 
 	status = rdna4_irq_init(d);
 	if (status != B_OK) {
@@ -290,6 +298,8 @@ rdna4_uninit(rdna4_device& d)
 	rdna4_irq_uninit(d);
 	rdna4_mes_uninit(d);
 	rdna4_sdma_uninit(d);
+	rdna4_vcn_uninit(d);
+	rdna4_mmhub_uninit(d);
 	rdna4_firmware_uninit(d);
 	rdna4_gfx_ring_free(d);
 	if (d.gfxhub_ready)

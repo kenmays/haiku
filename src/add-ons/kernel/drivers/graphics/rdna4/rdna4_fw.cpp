@@ -28,6 +28,52 @@ struct psp_fw_bin_desc {
 	uint32 size_bytes;
 } __attribute__((packed));
 
+struct fw_parsed {
+	uint32 ucodeOffset;
+	uint32 ucodeSize;
+	uint32 dataOffset;
+	uint32 dataSize;
+	uint64 ucodeStart;
+	uint64 dataStart;
+	uint32 version;
+};
+
+static status_t parse_ip_firmware(const uint8* data, uint32 size,
+	uint32 type, fw_parsed& out)
+{
+	memset(&out, 0, sizeof(out));
+	if (size < sizeof(common_fw_header))
+		return B_BAD_DATA;
+	const common_fw_header* h = (const common_fw_header*)data;
+	if (h->size_bytes > size || h->header_size_bytes < sizeof(common_fw_header)
+		|| h->header_size_bytes > h->size_bytes)
+		return B_BAD_DATA;
+	out.version = h->ucode_version;
+	if (type == RDNA4_FW_SDMA0 || type == RDNA4_FW_SDMA1) {
+		if (h->header_version_major != 3 || h->header_size_bytes < sizeof(common_fw_header) + 12)
+			return B_BAD_DATA;
+		out.ucodeOffset = *(const uint32*)(data + sizeof(common_fw_header) + 4);
+		out.ucodeSize = *(const uint32*)(data + sizeof(common_fw_header) + 8);
+		if (!range_valid(out.ucodeOffset, out.ucodeSize, h->size_bytes))
+			return B_BAD_DATA;
+		return B_OK;
+	}
+	if (type == RDNA4_FW_MES || type == RDNA4_FW_MES1 || type == RDNA4_FW_UNI_MES) {
+		if (h->header_version_major != 1 || h->header_size_bytes < sizeof(common_fw_header) + 40)
+			return B_BAD_DATA;
+		const uint32* p = (const uint32*)(data + sizeof(common_fw_header));
+		out.ucodeSize = p[1]; out.ucodeOffset = p[2];
+		out.dataSize = p[4]; out.dataOffset = p[5];
+		out.ucodeStart = (uint64)p[7] << 32 | p[6];
+		out.dataStart = (uint64)p[9] << 32 | p[8];
+		if (!range_valid(out.ucodeOffset, out.ucodeSize, h->size_bytes)
+			|| !range_valid(out.dataOffset, out.dataSize, h->size_bytes))
+			return B_BAD_DATA;
+		return B_OK;
+	}
+	return B_OK;
+}
+
 static bool
 range_valid(uint32 offset, uint32 size, uint32 total)
 {
@@ -128,18 +174,33 @@ rdna4_stage_firmware(rdna4_device& d, const rdna4_firmware_stage& request)
 	}
 
 	uint32 sosOffset = 0, sosSize = 0, pspMajor = 0, pspMinor = 0;
+	fw_parsed parsed = {};
 	if (request.type == RDNA4_FW_PSP) {
 		status = parse_psp_container((const uint8*)address, request.size,
 			sosOffset, sosSize, pspMajor, pspMinor);
-		if (status != B_OK) {
-			delete_area(area);
-			return status;
-		}
+		if (status != B_OK) { delete_area(area); return status; }
+	} else {
+		status = parse_ip_firmware((const uint8*)address, request.size,
+			request.type, parsed);
+		if (status != B_OK) { delete_area(area); return status; }
 	}
 
-	/* Replace the previous image only after the new image passed validation. */
-	if (d.psp_fw_area >= 0)
-		rdna4_firmware_uninit(d);
+	/* Replace only the selected IP image. */
+	rdna4_firmware_slot& slot = d.firmware[request.type];
+	if (slot.staged && slot.area >= 0) delete_area(slot.area);
+	slot = {};
+	slot.area = area;
+	slot.cpu = address;
+	slot.phys = entry.address;
+	slot.size = request.size;
+	slot.ucode_offset = parsed.ucodeOffset;
+	slot.ucode_size = parsed.ucodeSize;
+	slot.data_offset = parsed.dataOffset;
+	slot.data_size = parsed.dataSize;
+	slot.ucode_start = parsed.ucodeStart;
+	slot.data_start = parsed.dataStart;
+	slot.version = parsed.version;
+	slot.staged = true;
 
 	d.psp_fw_area = area;
 	d.psp_fw_cpu = address;
@@ -177,8 +238,12 @@ rdna4_firmware_boot(rdna4_device& d)
 void
 rdna4_firmware_uninit(rdna4_device& d)
 {
-	if (d.psp_fw_area >= 0)
-		delete_area(d.psp_fw_area);
+	for (uint32 i = 0; i < RDNA4_FW_MAX; i++) {
+		if (d.firmware[i].staged && d.firmware[i].area >= 0)
+			delete_area(d.firmware[i].area);
+		d.firmware[i] = {};
+		d.firmware[i].area = -1;
+	}
 	d.psp_fw_area = -1;
 	d.psp_fw_cpu = NULL;
 	d.psp_fw_phys = 0;

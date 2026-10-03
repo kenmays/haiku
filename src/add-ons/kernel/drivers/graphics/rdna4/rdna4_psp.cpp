@@ -407,6 +407,38 @@ psp_free_tmr(rdna4_device& d)
 	d.psp_tmr_size = 0;
 }
 
+static status_t
+load_ip_payload(rdna4_device& d, rdna4_firmware_slot& fw, uint64 gpu, uint32 size, uint32 pspType)
+{
+	if (gpu == 0 || size == 0)
+		return B_BAD_VALUE;
+	memset(d.psp_cmd_cpu, 0, B_PAGE_SIZE);
+	psp_cmd_buffer* cmd = (psp_cmd_buffer*)d.psp_cmd_cpu;
+	cmd->buf_size = sizeof(psp_cmd_buffer);
+	cmd->buf_version = PSP_GFX_CMD_BUF_VERSION;
+	cmd->cmd_id = GFX_CMD_LOAD_IP_FW;
+	psp_cmd_load_ip_fw load = {};
+	load.fw_lo = (uint32)gpu;
+	load.fw_hi = (uint32)(gpu >> 32);
+	load.fw_size = size;
+	load.fw_type = pspType;
+	memcpy(cmd->command, &load, sizeof(load));
+	psp_ring_frame frame = {};
+	frame.cmd_lo = (uint32)d.psp_cmd_gpu;
+	frame.cmd_hi = (uint32)(d.psp_cmd_gpu >> 32);
+	frame.cmd_size = sizeof(psp_cmd_buffer);
+	frame.fence_lo = (uint32)d.psp_fence_gpu;
+	frame.fence_hi = (uint32)(d.psp_fence_gpu >> 32);
+	frame.vmid = 0;
+	status_t status = submit_frame(d, frame);
+	if (status != B_OK)
+		return status;
+	if (cmd->status != 0)
+		return B_ERROR;
+	fw.psp_loaded_gpu = (uint64)cmd->fw_addr_lo | ((uint64)cmd->fw_addr_hi << 32);
+	return fw.psp_loaded_gpu != 0 ? B_OK : B_BAD_DATA;
+}
+
 status_t
 rdna4_psp_load_ip_firmware(rdna4_device& d, uint32 type, uint32 pspType)
 {
@@ -415,53 +447,17 @@ rdna4_psp_load_ip_firmware(rdna4_device& d, uint32 type, uint32 pspType)
 	rdna4_firmware_slot& fw = d.firmware[type];
 	if (!fw.staged || fw.payload_gpu == 0 || fw.payload_size == 0)
 		return B_ENTRY_NOT_FOUND;
-
-	memset(d.psp_cmd_cpu, 0, B_PAGE_SIZE);
-	psp_cmd_buffer* cmd = (psp_cmd_buffer*)d.psp_cmd_cpu;
-	cmd->buf_size = sizeof(psp_cmd_buffer);
-	cmd->buf_version = PSP_GFX_CMD_BUF_VERSION;
-	cmd->cmd_id = GFX_CMD_LOAD_IP_FW;
-	psp_cmd_load_ip_fw load = {};
-	load.fw_lo = (uint32)fw.payload_gpu;
-	load.fw_hi = (uint32)(fw.payload_gpu >> 32);
-	load.fw_size = fw.payload_size;
-	load.fw_type = pspType;
-	memcpy(cmd->command, &load, sizeof(load));
-
-	psp_ring_frame frame = {};
-	frame.cmd_lo = (uint32)d.psp_cmd_gpu;
-	frame.cmd_hi = (uint32)(d.psp_cmd_gpu >> 32);
-	frame.cmd_size = sizeof(psp_cmd_buffer);
-	frame.fence_lo = (uint32)d.psp_fence_gpu;
-	frame.fence_hi = (uint32)(d.psp_fence_gpu >> 32);
-	frame.vmid = 0;
-
-	status_t status = submit_frame(d, frame);
-	if (status != B_OK)
-		return status;
-
-	if (cmd->status != 0)
-		return B_ERROR;
-	fw.psp_loaded_gpu = (uint64)cmd->fw_addr_lo | ((uint64)cmd->fw_addr_hi << 32);
-	return fw.psp_loaded_gpu != 0 ? B_OK : B_BAD_DATA;
-}
-
-status_t
-rdna4_psp_mode1_reset(rdna4_device& d)
-{
-	if (d.mmio == NULL)
-		return B_NO_INIT;
-	const uint32 C2P33 = 0x16061;
-	const uint32 C2P64 = 0x16080;
-	const uint32 MODE1_RESET = 0x00070000;
-	/* PSP must be alive and idle before accepting the reset request. */
-	status_t status = wait_reg(d, C2P64, 0x80000000u, 0, 500000);
-	if (status != B_OK)
-		return status;
-	reg_write(d, C2P64, MODE1_RESET);
-	snooze(500000);
-	/* PSP v12+ reports completion by clearing the response flag in C2PMSG_33. */
-	return wait_reg(d, C2P33, 0x80000000u, 0, 1000000);
+	if (type == RDNA4_FW_GFX_IMU) {
+		status_t status = load_ip_payload(d, fw, fw.payload_gpu,
+			fw.payload_size, 68);
+		if (status != B_OK)
+			return status;
+		if (fw.payload2_gpu == 0 || fw.payload2_size == 0)
+			return B_BAD_DATA;
+		return load_ip_payload(d, fw, fw.payload2_gpu,
+			fw.payload2_size, 69);
+	}
+	return load_ip_payload(d, fw, fw.payload_gpu, fw.payload_size, pspType);
 }
 
 status_t
@@ -495,6 +491,7 @@ rdna4_psp_load_firmware(rdna4_device& d)
 		{RDNA4_FW_SDMA0, 9},
 		{RDNA4_FW_SDMA1, 10},
 		{RDNA4_FW_VCN, 13},
+		{RDNA4_FW_GFX_IMU, 68},
 		{RDNA4_FW_MES, 33},
 		{RDNA4_FW_MES1, 81},
 	};

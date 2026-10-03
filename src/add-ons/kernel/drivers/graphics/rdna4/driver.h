@@ -7,6 +7,7 @@
 
 #include "rdna4.h"
 #include "rdna4_bo.h"
+#include "rdna4_fw.h"
 
 #define RDNA4_VM_MAX_TABLES 1024
 #define RDNA4_VM_MAX_BOS 256
@@ -65,6 +66,17 @@ struct rdna4_device {
 	uint32 gfx_ring_wptr;
 	uint32 gfx_ring_rptr;
 	bool gfx_ring_ready;
+	area_id psp_fw_area;
+	void* psp_fw_cpu;
+	phys_addr_t psp_fw_phys;
+	uint32 psp_fw_size;
+	uint32 psp_sos_offset;
+	uint32 psp_sos_size;
+	uint32 psp_fw_type;
+	uint32 psp_fw_version_major;
+	uint32 psp_fw_version_minor;
+	sem_id fence_sem;
+	bool irq_installed;
 	area_id gfx_mqd_area;
 	void* gfx_mqd_cpu;
 	phys_addr_t gfx_mqd_phys;

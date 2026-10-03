@@ -35,7 +35,7 @@ struct rdna4_firmware_stage {
 	uint32 reserved;
 };
 
-status_t rdna4_firmware_stage(rdna4_device& device,
+status_t rdna4_stage_firmware(rdna4_device& device,
 	const rdna4_firmware_stage& request);
 status_t rdna4_firmware_boot(rdna4_device& device);
 void rdna4_firmware_uninit(rdna4_device& device);

@@ -167,6 +167,7 @@ static status_t submit_frame(rdna4_device& d, psp_ring_frame frame)
 	d.psp_fence_value++;
 	frame.fence_value = d.psp_fence_value;
 	((psp_ring_frame*)d.psp_ring_cpu)[index] = frame;
+	__sync_synchronize();
 	uint32 next = (wptr + kFrameDwords) % kRingDwords;
 	reg_write(d, C2P67, next);
 

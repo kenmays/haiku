@@ -238,6 +238,10 @@ rdna4_init(rdna4_device& d)
 	d.gfx_mqd_cpu = NULL;
 	d.gfx_mqd_phys = 0;
 	d.psp_fw_area = -1;
+	d.psp_boot_area = -1;
+	d.psp_boot_cpu = NULL;
+	d.psp_boot_phys = 0;
+	d.psp_boot_size = 0;
 	d.fence_sem = -1;
 	d.ih_area = -1;
 	d.ih_cpu = NULL;

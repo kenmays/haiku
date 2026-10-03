@@ -74,6 +74,10 @@ static status_t parse_ip_firmware(const uint8* data, uint32 size,
 			return B_BAD_DATA;
 		return B_OK;
 	}
+	out.ucodeOffset = h->ucode_array_offset_bytes;
+	out.ucodeSize = h->ucode_size_bytes;
+	if (!range_valid(out.ucodeOffset, out.ucodeSize, h->size_bytes))
+		return B_BAD_DATA;
 	return B_OK;
 }
 

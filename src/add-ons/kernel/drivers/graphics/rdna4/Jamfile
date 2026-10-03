@@ -17,4 +17,7 @@ KernelAddon rdna4 :
 	rdna4_recovery.cpp
 	rdna4_sdma.cpp
 	rdna4_mes.cpp
+	rdna4_mes_api.cpp
+	rdna4_cursor.cpp
+	rdna4_vcn.cpp
 	: libgraphicscommon.a ;

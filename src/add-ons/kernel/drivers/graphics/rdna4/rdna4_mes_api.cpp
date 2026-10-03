@@ -30,6 +30,7 @@ static status_t submit(rdna4_device& d,uint32 base,uint64 fence,uint64 value,big
  r[base+60]=(uint32)fence; r[base+61]=(uint32)(fence>>32);
  r[base+62]=(uint32)value; r[base+63]=(uint32)(value>>32);
  d.mes.wptr=base+MES_FRAME_DWORDS;
+ rdna4_doorbell_write(d, 0x0b << 1, d.mes.wptr);
  if(d.mes.wptr >= 64*1024/4) d.mes.wptr=0;
  return rdna4_mes_wait_api(d,fence,value?timeout:timeout);
 }

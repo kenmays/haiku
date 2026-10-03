@@ -39,7 +39,7 @@ struct rdna4_firmware_slot {
 };
 
 struct rdna4_sdma_ring {
-	area_id ring_area;
+	area_id area;
 	uint32* ring_cpu;
 	phys_addr_t ring_phys;
 	uint64 ring_gpu;

@@ -87,6 +87,8 @@ range_valid(uint32 offset, uint32 size, uint32 total)
 	return offset <= total && size <= total - offset;
 }
 
+static void free_slot_payload(rdna4_device& d, rdna4_firmware_slot& slot);
+
 static status_t
 stage_payload(rdna4_device& d, rdna4_firmware_slot& slot, uint32 type)
 {

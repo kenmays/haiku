@@ -26,13 +26,21 @@ static status_t submit(rdna4_device&d,uint32 base,uint32 statusDw,bigtime_t time
   if(v==seq)return B_OK;
   if((v>>32)&0x80000000u)return B_ERROR;
   if(timeout>=0&&system_time()>=end)return B_TIMED_OUT;
-  snooze(10);
+  if(d.irq_installed){
+   bigtime_t left=end-system_time();
+   if(left>0)rdna4_wait_fence_event(d,left>5000?5000:left);
+  } else snooze(10);
  }
 }
 status_t rdna4_mes_wait_api(rdna4_device&d,uint64 fence,bigtime_t timeout){
  if(!d.mes.ready||fence!=d.mes.status_gpu)return B_BAD_VALUE;
  bigtime_t end=system_time()+timeout;
- for(;;){if(*d.mes.status_cpu!=0)return B_OK;if(timeout>=0&&system_time()>=end)return B_TIMED_OUT;snooze(10);}
+ for(;;){
+  if(*d.mes.status_cpu!=0)return B_OK;
+  if(timeout>=0&&system_time()>=end)return B_TIMED_OUT;
+  if(d.irq_installed){bigtime_t left=end-system_time();if(left>0)rdna4_wait_fence_event(d,left>5000?5000:left);}
+  else snooze(10);
+ }
 }
 status_t rdna4_mes_set_hw_resources(rdna4_device&d,uint32 vmidMM,uint32 vmidGFX,uint32 gfxMask,uint32 computeMask,uint32 sdmaMask){
  if(!d.mes.ready)return B_NO_INIT;uint32 b=alloc_frame(d);uint32*p=d.mes.ring_cpu+b;p[0]=header(OP_SET_HW);

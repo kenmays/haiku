@@ -96,7 +96,7 @@ parse_psp_container(const uint8* data, uint32 size, uint32& sosOffset,
 }
 
 status_t
-rdna4_firmware_stage(rdna4_device& d, const rdna4_firmware_stage& request)
+rdna4_stage_firmware(rdna4_device& d, const rdna4_firmware_stage& request)
 {
 	if (request.magic != kFirmwareMagic || request.size == 0
 		|| request.size > kMaxFirmwareSize || request.user_address == 0)

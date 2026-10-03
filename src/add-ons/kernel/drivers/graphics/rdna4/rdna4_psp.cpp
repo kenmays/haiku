@@ -25,6 +25,21 @@ static const uint32 GFX_CMD_AUTOLOAD_RLC = 0x00000021;
 static const uint32 PSP_GFX_CMD_BUF_VERSION = 1;
 static const uint32 GFX_FLAG_RESPONSE = 0x80000000;
 
+struct psp_cmd_setup_tmr {
+	uint32 buf_lo;
+	uint32 buf_hi;
+	uint32 buf_size;
+	uint32 flags;
+	uint32 system_lo;
+	uint32 system_hi;
+};
+
+struct psp_cmd_load_toc {
+	uint32 toc_lo;
+	uint32 toc_hi;
+	uint32 toc_size;
+};
+
 struct psp_cmd_load_ip_fw {
 	uint32 fw_lo;
 	uint32 fw_hi;
@@ -194,6 +209,11 @@ rdna4_psp_init(rdna4_device& d)
 	d.psp_ring_gpu = d.psp_cmd_gpu = d.psp_fence_gpu = 0;
 	d.psp_fence_value = 0;
 	d.psp_ring_ready = false;
+	d.psp_tmr_area = -1;
+	d.psp_tmr_cpu = NULL;
+	d.psp_tmr_phys = 0;
+	d.psp_tmr_gpu = 0;
+	d.psp_tmr_size = 0;
 	return B_OK;
 }
 
@@ -267,6 +287,126 @@ rdna4_psp_ring_destroy(rdna4_device& d)
 	d.psp_fence_cpu = NULL;
 }
 
+static status_t
+psp_load_toc(rdna4_device& d, uint32& tmrSize)
+{
+	if (!d.firmware[RDNA4_FW_GFX_TOC].staged)
+		return B_ENTRY_NOT_FOUND;
+	psp_cmd_buffer* cmd = (psp_cmd_buffer*)d.psp_cmd_cpu;
+	memset(cmd, 0, B_PAGE_SIZE);
+	cmd->buf_size = sizeof(psp_cmd_buffer);
+	cmd->buf_version = PSP_GFX_CMD_BUF_VERSION;
+	cmd->cmd_id = 0x20;
+	psp_cmd_load_toc toc = {};
+	const rdna4_firmware_slot& fw = d.firmware[RDNA4_FW_GFX_TOC];
+	toc.toc_lo = (uint32)fw.payload_gpu;
+	toc.toc_hi = (uint32)(fw.payload_gpu >> 32);
+	toc.toc_size = fw.payload_size;
+	memcpy(cmd->command, &toc, sizeof(toc));
+	psp_ring_frame frame = {};
+	frame.cmd_lo = (uint32)d.psp_cmd_gpu;
+	frame.cmd_hi = (uint32)(d.psp_cmd_gpu >> 32);
+	frame.cmd_size = sizeof(psp_cmd_buffer);
+	frame.fence_lo = (uint32)d.psp_fence_gpu;
+	frame.fence_hi = (uint32)(d.psp_fence_gpu >> 32);
+	frame.vmid = 0;
+	status_t status = submit_frame(d, frame);
+	if (status != B_OK)
+		return status;
+	if (cmd->status != 0)
+		return B_ERROR;
+	tmrSize = cmd->tmr_size;
+	return tmrSize != 0 ? B_OK : B_BAD_DATA;
+}
+
+static status_t
+psp_setup_tmr(rdna4_device& d, uint32 size)
+{
+	if (size == 0)
+		return B_BAD_VALUE;
+	size = (size + 0xfffff) & ~0xfffffu;
+	size_t allocSize = (size_t)size + 0x100000;
+	void* base = NULL;
+	area_id area = create_area("rdna4 PSP TMR", &base, B_ANY_KERNEL_ADDRESS,
+		allocSize, B_CONTIGUOUS, B_KERNEL_READ_AREA | B_KERNEL_WRITE_AREA);
+	if (area < 0)
+		return area;
+	physical_entry entry;
+	status_t status = get_memory_map(base, allocSize, &entry, 1);
+	if (status != B_OK || entry.size < allocSize) {
+		delete_area(area);
+		return status != B_OK ? status : B_NOT_SUPPORTED;
+	}
+	phys_addr_t aligned = (entry.address + 0xfffff) & ~(phys_addr_t)0xfffff;
+	size_t offset = (size_t)(aligned - entry.address);
+	void* cpu = (uint8*)base + offset;
+	rdna4_bo bo = {};
+	bo.area = area;
+	bo.cpu = cpu;
+	bo.size = size;
+	bo.alignment = 0x100000;
+	bo.physical = aligned;
+	bo.used = true;
+	status = rdna4_vm_map_bo(d, bo, 0x100000);
+	if (status != B_OK) {
+		delete_area(area);
+		return status;
+	}
+	memset(cpu, 0, size);
+	d.psp_tmr_area = area;
+	d.psp_tmr_cpu = cpu;
+	d.psp_tmr_phys = aligned;
+	d.psp_tmr_gpu = bo.gpu;
+	d.psp_tmr_size = size;
+
+	psp_cmd_buffer* cmd = (psp_cmd_buffer*)d.psp_cmd_cpu;
+	memset(cmd, 0, B_PAGE_SIZE);
+	cmd->buf_size = sizeof(psp_cmd_buffer);
+	cmd->buf_version = PSP_GFX_CMD_BUF_VERSION;
+	cmd->cmd_id = 0x05;
+	psp_cmd_setup_tmr setup = {};
+	setup.buf_lo = (uint32)d.psp_tmr_gpu;
+	setup.buf_hi = (uint32)(d.psp_tmr_gpu >> 32);
+	setup.buf_size = size;
+	setup.flags = 0x2; /* virt_phy_addr */
+	setup.system_lo = (uint32)d.psp_tmr_phys;
+	setup.system_hi = (uint32)(d.psp_tmr_phys >> 32);
+	memcpy(cmd->command, &setup, sizeof(setup));
+	psp_ring_frame frame = {};
+	frame.cmd_lo = (uint32)d.psp_cmd_gpu;
+	frame.cmd_hi = (uint32)(d.psp_cmd_gpu >> 32);
+	frame.cmd_size = sizeof(psp_cmd_buffer);
+	frame.fence_lo = (uint32)d.psp_fence_gpu;
+	frame.fence_hi = (uint32)(d.psp_fence_gpu >> 32);
+	frame.vmid = 0;
+	status = submit_frame(d, frame);
+	if (status != B_OK || cmd->status != 0)
+		return status != B_OK ? status : B_ERROR;
+	return B_OK;
+}
+
+static void
+psp_free_tmr(rdna4_device& d)
+{
+	if (d.psp_tmr_area < 0)
+		return;
+	rdna4_bo bo = {};
+	bo.area = d.psp_tmr_area;
+	bo.cpu = d.psp_tmr_cpu;
+	bo.size = d.psp_tmr_size;
+	bo.physical = d.psp_tmr_phys;
+	bo.gpu = d.psp_tmr_gpu;
+	bo.used = true;
+	if (d.vm_ready && bo.gpu)
+		rdna4_vm_unmap_bo(d, bo);
+	delete_area(d.psp_tmr_area);
+	d.psp_tmr_area = -1;
+	d.psp_tmr_cpu = NULL;
+	d.psp_tmr_phys = 0;
+	d.psp_tmr_gpu = 0;
+	d.psp_tmr_size = 0;
+}
+
 status_t
 rdna4_psp_load_ip_firmware(rdna4_device& d, uint32 type, uint32 pspType)
 {
@@ -312,6 +452,21 @@ rdna4_psp_load_firmware(rdna4_device& d)
 	if (status != B_OK)
 		return status;
 
+	/* PMFW is loaded before TMR on Navi4, matching the PSP v14 sequence. */
+	if (d.firmware[RDNA4_FW_SMU].staged) {
+		status = rdna4_psp_load_ip_firmware(d, RDNA4_FW_SMU, 18);
+		if (status != B_OK)
+			return status;
+	}
+	if (d.firmware[RDNA4_FW_GFX_TOC].staged) {
+		uint32 tmrSize = 0;
+		status = psp_load_toc(d, tmrSize);
+		if (status != B_OK)
+			return status;
+		status = psp_setup_tmr(d, tmrSize);
+		if (status != B_OK)
+			return status;
+	}
 	struct Mapping { uint32 type; uint32 psp; };
 	static const Mapping map[] = {
 		{RDNA4_FW_GFX_PFP, 2},
@@ -321,7 +476,6 @@ rdna4_psp_load_firmware(rdna4_device& d)
 		{RDNA4_FW_SDMA0, 9},
 		{RDNA4_FW_SDMA1, 10},
 		{RDNA4_FW_VCN, 13},
-		{RDNA4_FW_SMU, 18},
 		{RDNA4_FW_MES, 33},
 		{RDNA4_FW_MES1, 81},
 	};

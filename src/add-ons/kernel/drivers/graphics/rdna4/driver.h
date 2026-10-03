@@ -9,6 +9,7 @@
 #include "rdna4_bo.h"
 #include "rdna4_fw.h"
 #include "rdna4_discovery.h"
+#include "rdna4_mes_api.h"
 
 #define RDNA4_VM_MAX_TABLES 1024
 #define RDNA4_VM_MAX_BOS 256
@@ -193,6 +194,7 @@ struct rdna4_device {
 	rdna4_firmware_slot firmware[RDNA4_FW_MAX];
 	rdna4_sdma_ring sdma[2];
 	rdna4_mes_state mes;
+	rdna4_mes_queue gfx_mes_queue;
 	rdna4_vcn_state vcn;
 	area_id gfx_mqd_area;
 	void* gfx_mqd_cpu;

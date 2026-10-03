@@ -1,5 +1,6 @@
 #include "rdna4_fw.h"
 #include "driver.h"
+#include "rdna4_vm.h"
 
 #include <KernelExport.h>
 #include <OS.h>
@@ -202,7 +203,17 @@ rdna4_stage_firmware(rdna4_device& d, const rdna4_firmware_stage& request)
 	slot.ucode_start = parsed.ucodeStart;
 	slot.data_start = parsed.dataStart;
 	slot.version = parsed.version;
+	slot.gpu = 0;
 	slot.staged = true;
+	/* Firmware is no longer consumed through a raw physical address. Map the
+	 * staged system pages into VMID0 so GFX/SDMA/MES/VCN can reach them through
+	 * the same GPUVM/GART translation used by normal buffers. */
+	rdna4_bo fwbo = {};
+	fwbo.area = area; fwbo.cpu = address; fwbo.size = (request.size + B_PAGE_SIZE - 1) & ~(uint32)(B_PAGE_SIZE - 1);
+	fwbo.alignment = B_PAGE_SIZE; fwbo.physical = entry.address; fwbo.flags = 0; fwbo.used = true;
+	status = rdna4_vm_map_bo(d, fwbo, B_PAGE_SIZE);
+	if (status != B_OK) { delete_area(area); slot = {}; slot.area = -1; return status; }
+	slot.gpu = fwbo.gpu;
 
 	d.psp_fw_area = area;
 	d.psp_fw_cpu = address;
@@ -241,8 +252,14 @@ void
 rdna4_firmware_uninit(rdna4_device& d)
 {
 	for (uint32 i = 0; i < RDNA4_FW_MAX; i++) {
-		if (d.firmware[i].staged && d.firmware[i].area >= 0)
+		if (d.firmware[i].staged && d.firmware[i].area >= 0) {
+			rdna4_bo fwbo = {};
+			fwbo.area = d.firmware[i].area; fwbo.cpu = d.firmware[i].cpu;
+			fwbo.size = (d.firmware[i].size + B_PAGE_SIZE - 1) & ~(uint32)(B_PAGE_SIZE - 1);
+			fwbo.physical = d.firmware[i].phys; fwbo.gpu = d.firmware[i].gpu; fwbo.used = true;
+			if (d.vm_ready && fwbo.gpu) rdna4_vm_unmap_bo(d, fwbo);
 			delete_area(d.firmware[i].area);
+		}
 		d.firmware[i] = {};
 		d.firmware[i].area = -1;
 	}

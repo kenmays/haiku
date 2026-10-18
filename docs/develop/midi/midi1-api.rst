@@ -80,9 +80,10 @@ Reserved wire statuses F4, F5, F9, and FD are rejected by the parser.
 Regression tests
 ----------------
 
-The midi1_codec_test target covers channel message lengths, split input,
-running status, System Common transitions, Real-Time interleaving, SysEx
-callbacks, malformed input, the channel encoder, partial transport writes,
+The midi1_codec_test target covers all Channel Voice message-length
+families, split input, running status, System Common transitions, defined
+System Real-Time statuses, Real-Time interleaving, SysEx callbacks, malformed
+input, channel encoder argument and capacity errors, partial transport writes,
 and USB-MIDI event packet round trips. These tests have been added but have
 not yet been compiled or executed in a Haiku build environment.
 

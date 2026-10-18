@@ -38,13 +38,22 @@ bytes from the receive side.
 
 A DIN/UART backend carries MIDI bytes over the serial link and is responsible
 for the electrical interface and serial configuration. USB-MIDI 1.0 uses four-byte event packets carrying a cable number, Code Index
-Number (CIN), and up to three MIDI bytes. Midi1USBPacketCodec encodes one
-complete MIDI message into event packets and decodes individual event packets
-back into MIDI bytes. USB-MIDI does not use MIDI running status on the USB
-packet stream. The codec does not perform USB device discovery, endpoint I/O,
-transfer scheduling, or cable lifecycle management; those belong to a USB
-backend. Bluetooth MIDI has its own packetization and timing rules and needs
+Number (CIN), and up to three MIDI bytes. Include
+<midi2/Midi1USBTransport.h> and use Midi1USBPacketCodec to encode a complete
+MIDI message into event packets or decode individual event packets back into
+MIDI bytes. USB-MIDI does not use MIDI running status on the USB packet stream.
+The codec does not perform USB device discovery, endpoint I/O, transfer
+scheduling, or cable lifecycle management; those belong to a USB backend. Bluetooth MIDI has its own packetization and timing rules and needs
 a distinct backend.
+
+Regression tests
+----------------
+
+The midi1_codec_test target covers channel message lengths, split input,
+running status, System Common transitions, Real-Time interleaving, SysEx
+callbacks, malformed input, the channel encoder, partial transport writes,
+and USB-MIDI event packet round trips. These tests have been added but have
+not yet been compiled or executed in a Haiku build environment.
 
 Scope and validation status
 ---------------------------

@@ -296,6 +296,15 @@ TestUSBPacketCodec()
 		&& decodedSize == 1 && decoded[0] == 0xf8,
 		"Real-Time round trip");
 
+	const uint8 eox[] = {0xf7};
+	CHECK(name, Midi1USBPacketCodec::EncodeMessage(eox, sizeof(eox), 0,
+		packets, sizeof(packets), &written) == B_OK, "encode standalone EOX");
+	CHECK(name, written == 4 && (packets[0] & 0x0f) == 0x05
+		&& packets[1] == 0xf7, "standalone EOX uses CIN 5");
+	CHECK(name, Midi1USBPacketCodec::DecodeEventPacket(packets, decoded,
+		sizeof(decoded), &decodedSize, &cable) == B_OK
+		&& decodedSize == 1 && decoded[0] == 0xf7, "decode standalone EOX");
+
 	const uint8 sysex[] = {0xf0, 0x01, 0x02, 0x03, 0x04, 0xf7};
 	uint8 shortPackets[4] = {0xaa, 0xaa, 0xaa, 0xaa};
 	written = 99;

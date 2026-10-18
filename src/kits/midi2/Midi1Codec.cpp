@@ -41,7 +41,7 @@ uint8 Midi1Codec::SystemMessageLength(uint8 status)
 void Midi1Receiver::_Dispatch(uint8 status, uint8 d1, uint8 d2, uint8 length)
 {
 	if (fListener == NULL) return;
-	midi1_message message = {status, d1, d2, length, false};
+	midi1_message message = {status, d1, d2, length};
 	fListener->MessageReceived(message);
 }
 

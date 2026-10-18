@@ -1,20 +1,53 @@
-MIDI 1.0 byte-stream API for libmidi2
-=====================================
+MIDI 1.0 protocol and transport API
+====================================
 
-Midi1Receiver incrementally parses MIDI 1.0 bytes independently of transport.
-Include <midi2/Midi1Codec.h>; feed UART/USB bytes in arrival order and route
-Listener callbacks to libmidi2 endpoints/consumers.
+Normative references
+--------------------
 
-Implemented protocol behavior:
-* Correct channel message lengths and channel running status.
-* System Common cancels running status.
-* System Real-Time messages are dispatched immediately and do not disturb
-  running status or SysEx.
-* SysEx uses start/data/end callbacks and does not buffer the entire payload.
-* Reserved status bytes and malformed data report B_BAD_DATA.
-* EncodeChannelMessage validates channel status, data values and capacity.
+The protocol review uses the MIDI Association's MIDI 1.0 Detailed
+Specification (version 4.2.1 / 96-1-4) and the MIDI 1.0 Addenda:
 
-This codec is a protocol component, not an end-to-end certification claim.
-Before claiming complete MIDI 1.0 compliance, add and run conformance tests
-covering every status, split input chunks, running status, real-time
-interleaving, SysEx termination/errors, and transport integration.
+* https://midi.org/midi-1-0-detailed-specification
+* https://midi.org/midi-1-0-addenda
+* https://midi.org/specs
+
+Protocol parser
+---------------
+
+Include <midi2/Midi1Codec.h>. Midi1Receiver incrementally parses a byte stream
+and emits Listener callbacks. It supports channel voice messages, channel
+running status, System Common messages, Real-Time messages, and streaming
+SysEx callbacks.
+
+Channel Voice message lengths include the status byte: Program Change and
+Channel Pressure are two bytes; the other Channel Voice message families are
+three bytes. System Common cancels channel running status. F1 and F3 have one
+data byte; F2 has two data bytes; F6 is a single-byte message. Real-Time
+messages may be interleaved between bytes without changing the in-progress
+message or running status. SysEx begins with F0 and ends with F7.
+
+Transport boundary
+------------------
+
+Include <midi2/Midi1Transport.h> to implement a Midi1ByteTransport backend and
+use Midi1TransportWriter for complete Channel Voice messages. The transport
+implementation owns device discovery/lifecycle, write scheduling, and
+transport-specific framing. Midi1Receiver::Feed() accepts reconstructed MIDI
+bytes from the receive side.
+
+A DIN/UART backend carries MIDI bytes over the serial link and is responsible
+for the electrical interface and serial configuration. USB-MIDI 1.0 uses USB
+event packets, so a USB backend must translate between those packets and the
+MIDI byte stream before calling Midi1Receiver::Feed(). Bluetooth MIDI has its
+own packetization and timing rules and needs a distinct backend.
+
+Scope and validation status
+---------------------------
+
+The codec and writer are protocol/adapter components. This branch does not yet
+provide physical DIN, USB-MIDI, or Bluetooth device drivers, nor does it claim
+end-to-end transport compliance. The code has not been built or run against a
+conformance suite. Before claiming complete compliance, add automated tests
+for every status family, System Common lengths, running status transitions,
+Real-Time interleaving, malformed/reserved statuses, split input chunks,
+SysEx termination, partial writes, and each concrete transport backend.

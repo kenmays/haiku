@@ -76,6 +76,8 @@ Midi1USBPacketCodec::DecodeEventPacket(const uint8 packet[4], uint8* output,
 			break;
 	}
 
+	// Validate the complete packet before touching caller output, so malformed
+	// packets never leave a partially decoded MIDI message behind.
 	for (uint8 i = 0; i < length; i++) {
 		bool isStatus = i == 0 && (cin == 0x2 || cin == 0x3
 			|| (cin >= 0x8 && cin <= 0xe) || cin == 0xf
@@ -86,8 +88,8 @@ Midi1USBPacketCodec::DecodeEventPacket(const uint8 packet[4], uint8* output,
 			&& i == length - 1 && midi[i] == 0xf7;
 		if (!isStatus && !isSysExStart && midi[i] > 0x7f && !isEOX)
 			return B_BAD_DATA;
-		output[i] = midi[i];
 	}
+	memcpy(output, midi, length);
 	*cable = packet[0] >> 4;
 	*written = length;
 	return B_OK;
@@ -148,7 +150,10 @@ Midi1USBPacketCodec::EncodeMessage(const uint8* message, size_t messageSize,
 		*written += 4;
 		return B_OK;
 	} else {
-		uint8 expected = Midi1Codec::SystemMessageLength(status);
+		// EOX is a valid one-byte USB-MIDI CIN 5 event even when used as a
+		// standalone message rather than as the final byte of a SysEx buffer.
+		uint8 expected = status == 0xf7 ? 1
+			: Midi1Codec::SystemMessageLength(status);
 		if (expected == 0 || messageSize != expected)
 			return B_BAD_DATA;
 		for (size_t i = 1; i < messageSize; i++) {

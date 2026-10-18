@@ -37,10 +37,14 @@ transport-specific framing. Midi1Receiver::Feed() accepts reconstructed MIDI
 bytes from the receive side.
 
 A DIN/UART backend carries MIDI bytes over the serial link and is responsible
-for the electrical interface and serial configuration. USB-MIDI 1.0 uses USB
-event packets, so a USB backend must translate between those packets and the
-MIDI byte stream before calling Midi1Receiver::Feed(). Bluetooth MIDI has its
-own packetization and timing rules and needs a distinct backend.
+for the electrical interface and serial configuration. USB-MIDI 1.0 uses four-byte event packets carrying a cable number, Code Index
+Number (CIN), and up to three MIDI bytes. Midi1USBPacketCodec encodes one
+complete MIDI message into event packets and decodes individual event packets
+back into MIDI bytes. USB-MIDI does not use MIDI running status on the USB
+packet stream. The codec does not perform USB device discovery, endpoint I/O,
+transfer scheduling, or cable lifecycle management; those belong to a USB
+backend. Bluetooth MIDI has its own packetization and timing rules and needs
+a distinct backend.
 
 Scope and validation status
 ---------------------------

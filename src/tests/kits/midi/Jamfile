@@ -4,3 +4,7 @@ SimpleTest miditest1 : test1.cpp : libmidi.so be stdc++.r4 ;
 
 SubInclude HAIKU_TOP src tests kits midi synth_file_reader ;
 
+
+UsePrivateHeaders midi ;
+
+SimpleTest midi1_codec_test : midi1_codec_test.cpp : libmidi2.so be stdc++.r4 ;

@@ -217,6 +217,16 @@ TestUSBPacketCodec()
 	CHECK(name, cable == 3 && decodedSize == 3
 		&& memcmp(message, decoded, 3) == 0, "channel round trip");
 
+	const uint8 program[] = {0xc2, 0x07};
+	CHECK(name, Midi1USBPacketCodec::EncodeMessage(program, sizeof(program),
+		0, packets, sizeof(packets), &written) == B_OK, "encode Program Change");
+	CHECK(name, written == 4 && (packets[0] & 0x0f) == 0x0c,
+		"Program Change CIN");
+	CHECK(name, Midi1USBPacketCodec::DecodeEventPacket(packets, decoded,
+		sizeof(decoded), &decodedSize, &cable) == B_OK, "decode Program Change");
+	CHECK(name, decodedSize == 2 && decoded[0] == 0xc2 && decoded[1] == 7,
+		"Program Change round trip");
+
 	const uint8 sysex[] = {0xf0, 0x01, 0x02, 0x03, 0x04, 0xf7};
 	CHECK(name, Midi1USBPacketCodec::EncodeMessage(sysex, sizeof(sysex),
 		0, packets, sizeof(packets), &written) == B_OK, "encode SysEx");

@@ -197,6 +197,15 @@ TestEncoder()
 		sizeof(bytes), &written) == B_BAD_VALUE, "reject 8-bit data byte");
 	CHECK(name, Midi1Codec::EncodeChannelMessage(0xf8, 0, 0, bytes,
 		sizeof(bytes), &written) == B_BAD_VALUE, "reject system status");
+
+	uint8 shortBytes[2] = {0xaa, 0xbb};
+	written = 99;
+	CHECK(name, Midi1Codec::EncodeChannelMessage(0x90, 60, 100, shortBytes,
+		sizeof(shortBytes), &written) == B_BUFFER_OVERFLOW,
+		"report insufficient output capacity");
+	CHECK(name, written == 0 && shortBytes[0] == 0xaa
+		&& shortBytes[1] == 0xbb,
+		"capacity failure must not modify output");
 	return 0;
 }
 

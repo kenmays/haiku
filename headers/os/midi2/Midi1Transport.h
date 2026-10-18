@@ -33,6 +33,9 @@ public:
 	explicit Midi1TransportWriter(Midi1ByteTransport* transport);
 	status_t SendChannelMessage(uint8 status, uint8 data1, uint8 data2,
 		size_t* written);
+	// For System Common, Real-Time, and chunked SysEx data. The caller must
+	// provide valid MIDI 1.0 bytes; SysEx chunks may span multiple calls.
+	status_t SendRawBytes(const uint8* bytes, size_t size, size_t* written);
 
 private:
 	Midi1ByteTransport* fTransport;

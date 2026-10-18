@@ -37,20 +37,45 @@ transport-specific framing. Midi1Receiver::Feed() accepts reconstructed MIDI
 bytes from the receive side.
 
 A DIN/UART backend carries MIDI bytes over the serial link and is responsible
-for the electrical interface and serial configuration. USB-MIDI 1.0 uses four-byte event packets carrying a cable number, Code Index
-Number (CIN), and up to three MIDI bytes. Include
-<midi2/Midi1USBTransport.h> and use Midi1USBPacketCodec to encode a complete
-MIDI message into event packets or decode individual event packets back into
-MIDI bytes. USB-MIDI does not use MIDI running status on the USB packet stream.
-SysEx encoding checks the full packet-buffer requirement before writing, so a
-short output buffer returns B_BUFFER_OVERFLOW without emitting a partial
-SysEx stream. Packet decoding validates the complete event before copying MIDI
-bytes to caller output, and standalone EOX is represented using CIN 5. The
-channel-message encoder reports insufficient output capacity separately from
-invalid message arguments. The codec does not perform USB device discovery, endpoint I/O,
-transfer scheduling, or cable lifecycle management; those belong to a USB
-backend. Bluetooth MIDI has its own packetization and timing rules and needs a
-distinct backend.
+for the electrical interface and serial configuration. USB-MIDI 1.0 uses
+four-byte event packets carrying a cable number, Code Index Number (CIN), and
+up to three MIDI bytes. Include <midi2/Midi1USBTransport.h> and use
+Midi1USBPacketCodec to encode a complete MIDI message into event packets or
+decode individual event packets back into MIDI bytes. USB-MIDI does not use
+MIDI running status on the USB packet stream. SysEx encoding checks the full
+packet-buffer requirement before writing, so a short output buffer returns
+B_BUFFER_OVERFLOW without emitting a partial SysEx stream. Packet decoding
+validates the complete event before copying MIDI bytes to caller output, and
+standalone EOX is represented using CIN 5. The channel-message encoder reports
+insufficient output capacity separately from invalid message arguments. The
+codec does not perform USB device discovery, endpoint I/O, transfer scheduling,
+or cable lifecycle management; those belong to a USB backend. Bluetooth MIDI
+has its own packetization and timing rules and needs a distinct backend.
+
+Haiku MIDI Kit header compatibility
+-----------------------------------
+
+Haiku already provides the legacy Midi Kit API in headers such as <Midi.h>,
+<MidiPort.h>, and <MidiDefs.h>, as well as the endpoint/producer/consumer API
+under <midi2/>. These interfaces are not interchangeable with the new byte
+codec: the existing kit provides higher-level event callbacks and timestamps,
+while Midi1Receiver exposes decoded wire messages and streamed SysEx bytes.
+A production integration needs an explicit adapter for event conversion,
+timestamp units, scheduling, and endpoint lifecycle. This change does not
+replace the existing public classes or claim source/binary compatibility
+between the legacy kit and the new private codec.
+
+The new Midi1Codec, Midi1Transport, and Midi1USBTransport declarations are in
+namespace BPrivate. They are internal implementation interfaces, not a stable
+public application API. Promoting them to public API requires a separate
+review of exported symbols, installed-header conventions, ABI/reserved fields,
+threading contracts, error semantics, and integration with BMidiEndpoint and
+the MIDI roster.
+
+The existing MIDI constants include the historical B_CABLE_MESSAGE symbol
+with value 0xF5. F5 is reserved in the MIDI 1.0 wire protocol; the legacy
+symbol must not be interpreted as a valid MIDI 1.0 message by the new codec.
+Reserved wire statuses F4, F5, F9, and FD are rejected by the parser.
 
 Regression tests
 ----------------

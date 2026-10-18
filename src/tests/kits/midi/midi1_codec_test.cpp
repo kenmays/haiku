@@ -275,6 +275,27 @@ TestUSBPacketCodec()
 	CHECK(name, decodedSize == 2 && decoded[0] == 0xc2 && decoded[1] == 7,
 		"Program Change round trip");
 
+	const uint8 quarterFrame[] = {0xf1, 0x03};
+	CHECK(name, Midi1USBPacketCodec::EncodeMessage(quarterFrame,
+		sizeof(quarterFrame), 2, packets, sizeof(packets), &written) == B_OK,
+		"encode System Common");
+	CHECK(name, written == 4 && (packets[0] & 0x0f) == 0x02,
+		"System Common CIN");
+	CHECK(name, Midi1USBPacketCodec::DecodeEventPacket(packets, decoded,
+		sizeof(decoded), &decodedSize, &cable) == B_OK
+		&& decodedSize == 2 && decoded[0] == 0xf1 && decoded[1] == 3,
+		"System Common round trip");
+
+	const uint8 clock[] = {0xf8};
+	CHECK(name, Midi1USBPacketCodec::EncodeMessage(clock, sizeof(clock), 1,
+		packets, sizeof(packets), &written) == B_OK, "encode Real-Time");
+	CHECK(name, written == 4 && (packets[0] & 0x0f) == 0x0f,
+		"Real-Time CIN");
+	CHECK(name, Midi1USBPacketCodec::DecodeEventPacket(packets, decoded,
+		sizeof(decoded), &decodedSize, &cable) == B_OK
+		&& decodedSize == 1 && decoded[0] == 0xf8,
+		"Real-Time round trip");
+
 	const uint8 sysex[] = {0xf0, 0x01, 0x02, 0x03, 0x04, 0xf7};
 	uint8 shortPackets[4] = {0xaa, 0xaa, 0xaa, 0xaa};
 	written = 99;

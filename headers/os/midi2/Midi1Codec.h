@@ -13,7 +13,6 @@ struct midi1_message {
 	uint8 data1;
 	uint8 data2;
 	uint8 size;
-	bool is_sysex;
 };
 
 class Midi1Receiver {

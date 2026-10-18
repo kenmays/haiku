@@ -15,6 +15,10 @@ namespace BPrivate {
  * Write boundary for a MIDI 1.0 byte stream. A concrete backend owns device
  * lifecycle, scheduling, and physical or packet transport framing.
  *
+ * WriteBytes() reports the number of bytes accepted through written. A backend
+ * may perform a partial write; callers must handle both the returned status
+ * and written count. The interface does not define thread safety.
+ *
  * DIN/UART backends write MIDI bytes directly. USB-MIDI backends must encode
  * bytes into USB-MIDI event packets; incoming USB event packets must be
  * decoded before calling Midi1Receiver::Feed(). This interface does not
@@ -27,7 +31,12 @@ public:
 		size_t* written) = 0;
 };
 
-/* Thin write-side adapter. Caller serializes concurrent writes. */
+/*
+ * Thin write-side adapter. The transport is not owned. Caller serializes
+ * concurrent writes. SendChannelMessage() validates and encodes one complete
+ * Channel Voice message. SendRawBytes() passes the supplied bytes through
+ * unchanged; it does not validate message boundaries or MIDI status bytes.
+ */
 class Midi1TransportWriter {
 public:
 	explicit Midi1TransportWriter(Midi1ByteTransport* transport);

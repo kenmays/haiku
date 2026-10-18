@@ -73,7 +73,9 @@ void Midi1Receiver::_HandleStatus(uint8 status)
 				if (fListener != NULL) fListener->SysExEnded();
 			} else if (fListener != NULL)
 				fListener->ParseError(B_BAD_DATA);
+			// EOX is a complete one-byte status even when no SysEx is open.
 			fPendingStatus = 0;
+			fRequiredData = 0;
 			break;
 		case 0xf4: case 0xf5: case 0xf9: case 0xfd:
 			if (fListener != NULL) fListener->ParseError(B_BAD_DATA);

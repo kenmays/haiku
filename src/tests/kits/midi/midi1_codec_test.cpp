@@ -276,6 +276,13 @@ TestUSBPacketCodec()
 		"Program Change round trip");
 
 	const uint8 sysex[] = {0xf0, 0x01, 0x02, 0x03, 0x04, 0xf7};
+	uint8 shortPackets[4] = {0xaa, 0xaa, 0xaa, 0xaa};
+	written = 99;
+	CHECK(name, Midi1USBPacketCodec::EncodeMessage(sysex, sizeof(sysex),
+		0, shortPackets, sizeof(shortPackets), &written) == B_BUFFER_OVERFLOW,
+		"reject short SysEx packet buffer");
+	CHECK(name, written == 0 && shortPackets[0] == 0xaa,
+		"short buffer failure must not emit a partial SysEx stream");
 	CHECK(name, Midi1USBPacketCodec::EncodeMessage(sysex, sizeof(sysex),
 		0, packets, sizeof(packets), &written) == B_OK, "encode SysEx");
 	CHECK(name, written == 8 && (packets[0] & 0x0f) == 4

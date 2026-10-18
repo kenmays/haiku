@@ -8,6 +8,7 @@ for architectureObject in [ MultiArchSubDirSetup ] {
 		SharedLibrary [ MultiArchDefaultGristFiles libmidi2.so ] :
 			Midi1Codec.cpp
 			Midi1Transport.cpp
+			Midi1USBTransport.cpp
 			MidiConsumer.cpp
 			MidiEndpoint.cpp
 			MidiLocalConsumer.cpp

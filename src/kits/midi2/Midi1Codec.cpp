@@ -163,9 +163,11 @@ status_t Midi1Codec::EncodeChannelMessage(uint8 status, uint8 d1, uint8 d2,
 	if (written == NULL) return B_BAD_VALUE;
 	*written = 0;
 	uint8 length = ChannelMessageLength(status);
-	if (length == 0 || output == NULL || capacity < length
-		|| d1 > 0x7f || (length == 3 && d2 > 0x7f))
+	if (length == 0 || output == NULL || d1 > 0x7f
+		|| (length == 3 && d2 > 0x7f))
 		return B_BAD_VALUE;
+	if (capacity < length)
+		return B_BUFFER_OVERFLOW;
 	output[0] = status;
 	output[1] = d1;
 	if (length == 3) output[2] = d2;

@@ -44,7 +44,10 @@ MIDI message into event packets or decode individual event packets back into
 MIDI bytes. USB-MIDI does not use MIDI running status on the USB packet stream.
 SysEx encoding checks the full packet-buffer requirement before writing, so a
 short output buffer returns B_BUFFER_OVERFLOW without emitting a partial
-SysEx stream. The codec does not perform USB device discovery, endpoint I/O,
+SysEx stream. Packet decoding validates the complete event before copying MIDI
+bytes to caller output, and standalone EOX is represented using CIN 5. The
+channel-message encoder reports insufficient output capacity separately from
+invalid message arguments. The codec does not perform USB device discovery, endpoint I/O,
 transfer scheduling, or cable lifecycle management; those belong to a USB
 backend. Bluetooth MIDI has its own packetization and timing rules and needs a
 distinct backend.

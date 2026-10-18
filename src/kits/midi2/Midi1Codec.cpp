@@ -53,20 +53,26 @@ void Midi1Receiver::_HandleStatus(uint8 status)
 		fRequiredData = Midi1Codec::ChannelMessageLength(status) - 1;
 		return;
 	}
+
+	// System Common cancels running status; Real-Time never reaches this path.
 	fRunningStatus = 0;
 	fPendingStatus = status;
 	fDataCount = 0;
-	fRequiredData = Midi1Codec::SystemMessageLength(status);
+	uint8 length = Midi1Codec::SystemMessageLength(status);
+	fRequiredData = length > 0 ? length - 1 : 0;
 	switch (status) {
 		case 0xf0:
-			fInSysEx = true; fPendingStatus = 0;
+			fInSysEx = true;
+			fPendingStatus = 0;
+			fRequiredData = 0;
 			if (fListener != NULL) fListener->SysExStarted();
 			break;
 		case 0xf7:
 			if (fInSysEx) {
 				fInSysEx = false;
 				if (fListener != NULL) fListener->SysExEnded();
-			} else if (fListener != NULL) fListener->ParseError(B_BAD_DATA);
+			} else if (fListener != NULL)
+				fListener->ParseError(B_BAD_DATA);
 			fPendingStatus = 0;
 			break;
 		case 0xf4: case 0xf5: case 0xf9: case 0xfd:
@@ -74,9 +80,9 @@ void Midi1Receiver::_HandleStatus(uint8 status)
 			fPendingStatus = fRequiredData = 0;
 			break;
 		default:
-			if (fRequiredData == 1) {
+			if (length == 1) {
 				_Dispatch(status, 0, 0, 1);
-				fPendingStatus = fRequiredData = 0;
+				fPendingStatus = 0;
 			}
 			break;
 	}
@@ -84,13 +90,15 @@ void Midi1Receiver::_HandleStatus(uint8 status)
 
 void Midi1Receiver::_HandleByte(uint8 byte)
 {
-	// Real-time messages may interrupt any message, including SysEx.
+	// Real-Time messages may interrupt any message and preserve parser state.
 	if (byte >= 0xf8) {
 		if (Midi1Codec::SystemMessageLength(byte) != 0)
 			_Dispatch(byte, 0, 0, 1);
-		else if (fListener != NULL) fListener->ParseError(B_BAD_DATA);
+		else if (fListener != NULL)
+			fListener->ParseError(B_BAD_DATA);
 		return;
 	}
+
 	if (byte & 0x80) {
 		if (fInSysEx) {
 			if (byte == 0xf7) {
@@ -107,10 +115,12 @@ void Midi1Receiver::_HandleByte(uint8 byte)
 		_HandleStatus(byte);
 		return;
 	}
+
 	if (fInSysEx) {
 		if (fListener != NULL) fListener->SysExData(&byte, 1);
 		return;
 	}
+
 	if (fPendingStatus == 0) {
 		if (fRunningStatus == 0) {
 			if (fListener != NULL) fListener->ParseError(B_BAD_DATA);
@@ -120,11 +130,12 @@ void Midi1Receiver::_HandleByte(uint8 byte)
 		fRequiredData = Midi1Codec::ChannelMessageLength(fPendingStatus) - 1;
 		fDataCount = 0;
 	}
-	if (fDataCount >= sizeof(fData)) {
+	if (fRequiredData == 0 || fDataCount >= sizeof(fData)) {
 		if (fListener != NULL) fListener->ParseError(B_BAD_DATA);
-		fPendingStatus = fDataCount = 0;
+		fPendingStatus = fDataCount = fRequiredData = 0;
 		return;
 	}
+
 	fData[fDataCount++] = byte;
 	if (fDataCount == fRequiredData) {
 		uint8 status = fPendingStatus;
@@ -153,7 +164,8 @@ status_t Midi1Codec::EncodeChannelMessage(uint8 status, uint8 d1, uint8 d2,
 	if (length == 0 || output == NULL || capacity < length
 		|| d1 > 0x7f || (length == 3 && d2 > 0x7f))
 		return B_BAD_VALUE;
-	output[0] = status; output[1] = d1;
+	output[0] = status;
+	output[1] = d1;
 	if (length == 3) output[2] = d2;
 	*written = length;
 	return B_OK;

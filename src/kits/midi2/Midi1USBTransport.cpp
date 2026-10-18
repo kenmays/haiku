@@ -121,7 +121,7 @@ Midi1USBPacketCodec::EncodeMessage(const uint8* message, size_t messageSize,
 			return B_BAD_DATA;
 		// Fail atomically when the caller's packet buffer cannot hold the
 		// complete SysEx message. Do not leave a truncated stream in output.
-		size_t packetCount = (messageSize + 2) / 3;
+		size_t packetCount = messageSize / 3 + (messageSize % 3 != 0 ? 1 : 0);
 		if (packetCount > capacity / 4)
 			return B_BUFFER_OVERFLOW;
 		for (size_t i = 0; i < messageSize; i++) {

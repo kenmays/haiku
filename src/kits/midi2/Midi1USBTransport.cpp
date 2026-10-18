@@ -79,7 +79,8 @@ Midi1USBPacketCodec::DecodeEventPacket(const uint8 packet[4], uint8* output,
 	for (uint8 i = 0; i < length; i++) {
 		bool isStatus = i == 0 && (cin == 0x2 || cin == 0x3
 			|| (cin >= 0x8 && cin <= 0xe) || cin == 0xf);
-		bool isSysExStart = cin == 0x4 && i == 0 && midi[i] == 0xf0;
+		bool isSysExStart = (cin == 0x4 || cin == 0x6 || cin == 0x7)
+			&& i == 0 && midi[i] == 0xf0;
 		bool isEOX = (cin == 0x6 || cin == 0x7)
 			&& i == length - 1 && midi[i] == 0xf7;
 		if (!isStatus && !isSysExStart && midi[i] > 0x7f && !isEOX)

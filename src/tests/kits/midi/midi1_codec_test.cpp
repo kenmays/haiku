@@ -66,6 +66,12 @@ TestChannelMessages()
 	CHECK(name, Midi1Codec::ChannelMessageLength(0x90) == 3, "Note On length");
 	CHECK(name, Midi1Codec::ChannelMessageLength(0xc0) == 2, "Program Change length");
 	CHECK(name, Midi1Codec::ChannelMessageLength(0xd0) == 2, "Channel Pressure length");
+	for (uint8 kind = 0x8; kind <= 0xe; kind++) {
+		uint8 status = kind << 4;
+		uint8 expected = kind == 0xc || kind == 0xd ? 2 : 3;
+		CHECK(name, Midi1Codec::ChannelMessageLength(status) == expected,
+			"all Channel Voice families have the correct length");
+	}
 	CHECK(name, Midi1Codec::ChannelMessageLength(0xf0) == 0, "reject system status");
 	return 0;
 }
@@ -144,6 +150,25 @@ TestRealtimeInterleaving()
 	CHECK(name, listener.messages[2].status == 0xfa, "Start dispatched");
 	CHECK(name, listener.messages[3].status == 0x90
 		&& listener.messages[3].data1 == 61, "running status preserved");
+	return 0;
+}
+
+static int
+TestRealtimeStatusFamilies()
+{
+	const char* name = "all defined System Real-Time statuses";
+	TestListener listener;
+	Midi1Receiver receiver(&listener);
+	const uint8 bytes[] = {0xf8, 0xfa, 0xfb, 0xfc, 0xfe, 0xff};
+	CHECK(name, receiver.Feed(bytes, sizeof(bytes)) == B_OK, "feed Real-Time bytes");
+	CHECK(name, listener.messageCount == 6, "all six defined statuses dispatched");
+	for (int32 i = 0; i < listener.messageCount; i++) {
+		CHECK(name, listener.messages[i].status == bytes[i],
+			"preserve Real-Time status order");
+		CHECK(name, listener.messages[i].size == 1,
+			"Real-Time message length is one byte");
+	}
+	CHECK(name, listener.errorCount == 0, "defined statuses are not errors");
 	return 0;
 }
 
@@ -353,6 +378,7 @@ main()
 	failures += TestSystemCommonLengths();
 	failures += TestSystemCommonCancelsRunningStatus();
 	failures += TestRealtimeInterleaving();
+	failures += TestRealtimeStatusFamilies();
 	failures += TestSysEx();
 	failures += TestMalformedAndReset();
 	failures += TestEncoder();

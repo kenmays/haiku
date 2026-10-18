@@ -42,9 +42,12 @@ Number (CIN), and up to three MIDI bytes. Include
 <midi2/Midi1USBTransport.h> and use Midi1USBPacketCodec to encode a complete
 MIDI message into event packets or decode individual event packets back into
 MIDI bytes. USB-MIDI does not use MIDI running status on the USB packet stream.
-The codec does not perform USB device discovery, endpoint I/O, transfer
-scheduling, or cable lifecycle management; those belong to a USB backend. Bluetooth MIDI has its own packetization and timing rules and needs
-a distinct backend.
+SysEx encoding checks the full packet-buffer requirement before writing, so a
+short output buffer returns B_BUFFER_OVERFLOW without emitting a partial
+SysEx stream. The codec does not perform USB device discovery, endpoint I/O,
+transfer scheduling, or cable lifecycle management; those belong to a USB
+backend. Bluetooth MIDI has its own packetization and timing rules and needs a
+distinct backend.
 
 Regression tests
 ----------------

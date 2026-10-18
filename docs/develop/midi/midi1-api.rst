@@ -30,7 +30,8 @@ Transport boundary
 ------------------
 
 Include <midi2/Midi1Transport.h> to implement a Midi1ByteTransport backend and
-use Midi1TransportWriter for complete Channel Voice messages. The transport
+use Midi1TransportWriter for complete Channel Voice messages or SendRawBytes()
+for System Common, Real-Time, and chunked SysEx byte sequences. The transport
 implementation owns device discovery/lifecycle, write scheduling, and
 transport-specific framing. Midi1Receiver::Feed() accepts reconstructed MIDI
 bytes from the receive side.

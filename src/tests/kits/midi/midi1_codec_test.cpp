@@ -4,6 +4,7 @@
  */
 #include <Errors.h>
 #include <midi2/Midi1Codec.h>
+#include <midi2/Midi1USBTransport.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -198,6 +199,44 @@ TestEncoder()
 	return 0;
 }
 
+static int
+TestUSBPacketCodec()
+{
+	const char* name = "USB-MIDI event packet codec";
+	uint8 message[] = {0x90, 60, 100};
+	uint8 packets[16];
+	size_t written = 0;
+	CHECK(name, Midi1USBPacketCodec::EncodeMessage(message, sizeof(message),
+		3, packets, sizeof(packets), &written) == B_OK, "encode channel event");
+	CHECK(name, written == 4 && packets[0] == 0x39, "cable number and CIN");
+	uint8 decoded[3];
+	size_t decodedSize = 0;
+	uint8 cable = 0;
+	CHECK(name, Midi1USBPacketCodec::DecodeEventPacket(packets, decoded,
+		sizeof(decoded), &decodedSize, &cable) == B_OK, "decode channel event");
+	CHECK(name, cable == 3 && decodedSize == 3
+		&& memcmp(message, decoded, 3) == 0, "channel round trip");
+
+	const uint8 sysex[] = {0xf0, 0x01, 0x02, 0x03, 0x04, 0xf7};
+	CHECK(name, Midi1USBPacketCodec::EncodeMessage(sysex, sizeof(sysex),
+		0, packets, sizeof(packets), &written) == B_OK, "encode SysEx");
+	CHECK(name, written == 8 && (packets[0] & 0x0f) == 4
+		&& (packets[4] & 0x0f) == 7, "SysEx continuation and end CIN");
+	CHECK(name, Midi1USBPacketCodec::DecodeEventPacket(packets, decoded,
+		sizeof(decoded), &decodedSize, &cable) == B_OK, "decode SysEx start");
+	CHECK(name, decodedSize == 3 && decoded[0] == 0xf0
+		&& decoded[1] == 1 && decoded[2] == 2, "SysEx start bytes");
+	CHECK(name, Midi1USBPacketCodec::DecodeEventPacket(packets + 4, decoded,
+		sizeof(decoded), &decodedSize, &cable) == B_OK, "decode SysEx end");
+	CHECK(name, decodedSize == 3 && decoded[2] == 0xf7, "SysEx end bytes");
+
+	const uint8 badPacket[] = {0x09, 0x90, 0x80, 0x00};
+	CHECK(name, Midi1USBPacketCodec::DecodeEventPacket(badPacket, decoded,
+		sizeof(decoded), &decodedSize, &cable) == B_BAD_DATA,
+		"reject CIN/status mismatch");
+	return 0;
+}
+
 int
 main()
 {
@@ -210,6 +249,7 @@ main()
 	failures += TestSysEx();
 	failures += TestMalformedAndReset();
 	failures += TestEncoder();
+	failures += TestUSBPacketCodec();
 	if (failures == 0)
 		printf("MIDI 1.0 codec tests passed.\n");
 	return failures == 0 ? 0 : 1;

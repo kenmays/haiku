@@ -5,6 +5,7 @@
 #include <Errors.h>
 #include <midi2/Midi1Codec.h>
 #include <midi2/Midi1USBTransport.h>
+#include <midi2/Midi1Transport.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -199,6 +200,53 @@ TestEncoder()
 	return 0;
 }
 
+struct MockByteTransport : Midi1ByteTransport {
+	uint8 bytes[16];
+	size_t byteCount;
+	size_t maximumWrite;
+	status_t writeStatus;
+
+	MockByteTransport()
+		: byteCount(0), maximumWrite(sizeof(bytes)), writeStatus(B_OK)
+	{
+		memset(bytes, 0, sizeof(bytes));
+	}
+
+	status_t WriteBytes(const uint8* data, size_t size, size_t* written)
+	{
+		if (written == NULL)
+			return B_BAD_VALUE;
+		size_t count = size < maximumWrite ? size : maximumWrite;
+		if (count > sizeof(bytes) - byteCount)
+			return B_BUFFER_OVERFLOW;
+		memcpy(bytes + byteCount, data, count);
+		byteCount += count;
+		*written = count;
+		return writeStatus;
+	}
+};
+
+static int
+TestTransportWriter()
+{
+	const char* name = "byte transport writer";
+	MockByteTransport transport;
+	Midi1TransportWriter writer(&transport);
+	size_t written = 0;
+	CHECK(name, writer.SendChannelMessage(0x90, 60, 100, &written) == B_OK,
+		"send Note On");
+	CHECK(name, written == 3 && transport.byteCount == 3
+		&& transport.bytes[0] == 0x90 && transport.bytes[2] == 100,
+		"written bytes");
+	transport.maximumWrite = 1;
+	CHECK(name, writer.SendRawBytes((const uint8*)"abc", 3, &written)
+		== B_IO_ERROR, "report partial write");
+	CHECK(name, written == 1, "partial byte count");
+	CHECK(name, writer.SendRawBytes(NULL, 1, &written) == B_BAD_VALUE,
+		"reject null non-empty write");
+	return 0;
+}
+
 static int
 TestUSBPacketCodec()
 {
@@ -259,6 +307,7 @@ main()
 	failures += TestSysEx();
 	failures += TestMalformedAndReset();
 	failures += TestEncoder();
+	failures += TestTransportWriter();
 	failures += TestUSBPacketCodec();
 	if (failures == 0)
 		printf("MIDI 1.0 codec tests passed.\n");

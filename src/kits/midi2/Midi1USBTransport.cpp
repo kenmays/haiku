@@ -52,7 +52,7 @@ Midi1USBPacketCodec::DecodeEventPacket(const uint8 packet[4], uint8* output,
 				return B_BAD_DATA;
 			break;
 		case 0x5:
-			if (midi[0] < 0xf6 || midi[0] == 0xf9 || midi[0] == 0xfd)
+			if (midi[0] != 0xf6 && midi[0] != 0xf7)
 				return B_BAD_DATA;
 			break;
 		case 0x6:
@@ -78,8 +78,11 @@ Midi1USBPacketCodec::DecodeEventPacket(const uint8 packet[4], uint8* output,
 	}
 
 	for (uint8 i = 0; i < length; i++) {
-		if (i > 0 && midi[i] > 0x7f && !(cin == 0x6 || cin == 0x7
-			? i == length - 1 && midi[i] == 0xf7 : false))
+		bool isStatus = i == 0 && (cin == 0x2 || cin == 0x3
+			|| (cin >= 0x8 && cin <= 0xe) || cin == 0xf);
+		bool isEOX = (cin == 0x6 || cin == 0x7)
+			&& i == length - 1 && midi[i] == 0xf7;
+		if (!isStatus && midi[i] > 0x7f && !isEOX)
 			return B_BAD_DATA;
 		output[i] = midi[i];
 	}
@@ -106,6 +109,10 @@ Midi1USBPacketCodec::EncodeMessage(const uint8* message, size_t messageSize,
 		if (messageSize != expected)
 			return B_BAD_DATA;
 		cin = status >> 4;
+		for (size_t i = 1; i < messageSize; i++) {
+			if (message[i] > 0x7f)
+				return B_BAD_DATA;
+		}
 		consumed = expected;
 	} else if (status == 0xf0) {
 		if (messageSize < 2 || message[messageSize - 1] != 0xf7)

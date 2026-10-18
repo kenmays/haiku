@@ -326,9 +326,12 @@ TestUSBPacketCodec()
 	CHECK(name, decodedSize == 3 && decoded[2] == 0xf7, "SysEx end bytes");
 
 	const uint8 badPacket[] = {0x09, 0x90, 0x80, 0x00};
+	memset(decoded, 0xaa, sizeof(decoded));
 	CHECK(name, Midi1USBPacketCodec::DecodeEventPacket(badPacket, decoded,
 		sizeof(decoded), &decodedSize, &cable) == B_BAD_DATA,
-		"reject CIN/status mismatch");
+		"reject invalid channel data byte");
+	CHECK(name, decoded[0] == 0xaa && decoded[1] == 0xaa,
+		"invalid packet must not partially modify output");
 	return 0;
 }
 

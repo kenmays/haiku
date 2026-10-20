@@ -15,6 +15,7 @@ This checklist records the safety gates that must be satisfied before enabling d
 ## Latest code gate (2026-10-20)
 
 - Gen6+ BCS allocation is now explicitly omitted during kernel initialization; shared ring fields are initialized as unavailable.
+- Legacy Gen1–5 primary-ring allocation teardown now checks the hardware enable/start state before freeing; an allocation still named by an enabled ring is quarantined rather than freed.
 - The accelerant refuses to select a Gen6+ BCS ring even if stale shared state contains a ring description.
 - Ring setup rejects Gen6+ before touching the BCS registers. This covers Gen6/7 as well as Gen8–12 and avoids submitting commands without a completion fence and bounded recovery.
 - These changes are a fail-closed safety measure, not implementation of BCS acceleration. Gen1–5 still needs a separate audit of completion-token semantics, ring shutdown, and allocation lifetime.

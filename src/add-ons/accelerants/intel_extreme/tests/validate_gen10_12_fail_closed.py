@@ -83,10 +83,12 @@ def main() -> int:
         and "return B_TIMED_OUT;" in lvds_panel,
         "LVDS DPMS polling must time out rather than hang indefinitely",
     )
-    power_function = function_body(dpms, "set_display_power_mode(uint32 mode)")
     power_signature = dpms.find("set_display_power_mode(uint32 mode)")
+    power_end = dpms.find("uint32\\nintel_dpms_capabilities", power_signature)
+    power_function = dpms[power_signature:power_end]
     require(
-        "status_t" in dpms[power_signature - 20:power_signature]
+        power_signature >= 0
+        and "status_t" in dpms[power_signature - 20:power_signature]
         and "return status;" in power_function
         and "return B_OK;" in power_function,
         "DPMS power transitions must return panel transition failures",

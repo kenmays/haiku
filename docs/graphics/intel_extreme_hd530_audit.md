@@ -103,8 +103,8 @@ Changes in this branch:
 - The accelerant initializes the BCS ring independently; failure to allocate/setup the BCS ring is logged and leaves blit hooks unavailable instead of preventing display initialization.
 - Gen6+ XY blit hooks and idle waiting select the BCS ring; pre-Gen6 devices continue to use the original primary ring.
 - All blit hooks are withheld if the required ring is missing. Skylake/SOC software-rendering fallback remains in force.
-- Ring setup now waits up to one second for an already-enabled ring to drain, disables it with a readback, clears head/tail, programs the start address, publishes an empty tail, enables the ring, and verifies control/head readback. It refuses to reset a ring whose live pointers are invalid or which does not drain.
-- Teardown serializes with ring producers, waits briefly for pending commands, logs a timeout, disables the ring, and only then destroys the lock.
+- Ring setup refuses to reinitialize an already-enabled ring because head==tail does not prove the engine pipeline has completed. For a disabled ring, it reads back control, clears head/tail, programs the start address, publishes an empty tail, enables the ring, and verifies control/head/tail/start readback.
+- Teardown serializes with ring producers, polls head/tail briefly, logs a timeout, then disables the ring and destroys the lock. Head==tail is only a coarse ring-drain signal, not a proven engine completion fence; the Gen6+ completion path remains disabled.
 
 Still unresolved:
 - The BCS ring's presence and MMIO offset are source-level matches to the Skylake register model, but they have not been tested on hardware.

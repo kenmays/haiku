@@ -186,6 +186,12 @@ def main() -> int:
         and "if (status < B_OK)" not in overlay_allocator,
         "overlay allocations must handle positive errno values as failures",
     )
+    require(
+        "if (width == 0 || height == 0)" in overlay_allocator
+        and "((size_t)-1) / height" in overlay_allocator
+        and "size_t bufferSize = (size_t)buffer->bytes_per_row * height;" in overlay_allocator,
+        "overlay allocation must reject empty dimensions and size overflow",
+    )
 
     free_memory = function_body(memory, "intel_free_memory(")
     require(

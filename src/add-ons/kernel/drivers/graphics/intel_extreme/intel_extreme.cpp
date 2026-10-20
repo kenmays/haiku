@@ -1046,7 +1046,7 @@ intel_extreme_uninit(intel_info &info)
 	// are no longer reachable by the GPU. Preserve the whole aperture in that
 	// case; the intentional resource leak is safer than freeing live GPU memory.
 	bool quarantineAperture = false;
-	if (info.shared_info != NULL
+	if (info.shared_info != NULL && info.registers != NULL
 		&& info.device_type.Generation() < 6) {
 		ring_buffer &primary = info.shared_info->primary_ring_buffer;
 		uint32 ringRegisterBase = primary.register_base != 0

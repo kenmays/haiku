@@ -132,3 +132,10 @@ The status-page/breadcrumb implementation remains deliberately blocked until the
 ### 11. Ring publication ordering remains unverified
 
 The ineffective local-stack `atomic_add()` previously placed immediately before the MMIO tail update has been removed: an atomic operation on an unrelated local variable does not flush the ring or establish the GPU-visible ordering required here. The current code still writes the new tail without a verified CPU/write-combined-memory-to-MMIO publication primitive. Do **not** treat command submission as ordering-safe until the CPU mapping/cache type, architecture-specific ordering requirements, and Haiku-supported barrier or MMIO publication primitive are verified for this platform. This issue is separate from a GPU completion fence and does not establish that BCS commands have executed.
+
+
+### 12. Failed command reservations now discard the entire unpublished batch
+
+`QueueCommands` now records reservation failures from `Put()`, `PutFlush()`, `PutWaitFor()`, and `PutOverlayFlip()`. Its destructor restores the software position and free-space accounting to the batch's initial state and does not publish the tail if any reservation failed. This prevents a previously written prefix from being published after a later command failed to reserve ring space. The command words already written beyond the published tail are intentionally left unreachable and will be overwritten by later submissions.
+
+The local-stack `atomic_add()` previously used before the tail write was also removed because it did not operate on ring memory and did not establish the required GPU-visible publication ordering. The tail write still lacks a verified architecture/cache-aware ordering primitive; command submission therefore remains unvalidated and hardware acceleration must stay disabled. These changes are static hardening only and have not been compiled or tested on hardware.

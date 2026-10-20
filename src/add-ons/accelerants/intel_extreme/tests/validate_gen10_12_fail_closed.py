@@ -137,6 +137,22 @@ def main() -> int:
         "DP AUX and VBT-selected DDI GMBUS fallback paths must remain explicit",
     )
 
+    # DisplayPort I2C chunks must not advance after exhausting all bounded
+    # I2C-DEFER retries. Both write and read paths require an explicit ACK.
+    aux_i2c = function_body(ports, "Port::_DpAuxSendReceive(")
+    require(
+        aux_i2c.count("bool acknowledged = false;") == 2
+        and aux_i2c.count("if (!acknowledged)") == 2
+        and aux_i2c.count("return B_IO_ERROR;") >= 4,
+        "AUX I2C read/write chunks must fail if seven DEFER retries receive no ACK",
+    )
+    require(
+        "case DP_AUX_I2C_ACK:" not in aux_i2c
+        and aux_i2c.count("case DP_AUX_I2C_REPLY_ACK:") == 2
+        and aux_i2c.count("continue;") == 2,
+        "AUX I2C retry loops must continue on DEFER and advance only after ACK",
+    )
+
     # CPU-only 2D policy is generation-independent: every Intel 2D drawing
     # hook must be absent so app_server selects its software rasterizer.
     drawing_hooks = (

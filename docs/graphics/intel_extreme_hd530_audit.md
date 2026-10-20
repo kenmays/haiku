@@ -324,3 +324,24 @@ This hardens partial initialization and prevents a failed optional allocation fr
 The accelerant's 2D command path selects the BCS ring for Generation 6 and later; the primary ring is selected only for earlier generations. Primary-ring setup therefore no longer gates accelerant initialization on Gen6+. Its teardown is likewise skipped there because this accelerant instance never initialized that ring. BCS setup remains optional for display initialization and its failure leaves hardware blits unavailable.
 
 This removes an unnecessary failure dependency and avoids touching an unused render engine during Gen6+ accelerant startup/shutdown. It does not enable Gen6+ blits: the completion-fence and publication-ordering prerequisites remain unresolved. This change should be validated on legacy pre-Gen6 devices and Gen6+ devices, including BCS allocation/setup failure.
+
+### 8. Follow-up review: status-page allocation is not a completion fence
+
+The kernel-side initialization in `src/add-ons/kernel/drivers/graphics/intel_extreme/intel_extreme.cpp` allocates a page for `status_page` with `B_APERTURE_NEED_PHYSICAL` and stores `physical_status_page`. That allocation alone does **not** establish that the GPU can write a breadcrumb there:
+
+- The inspected initialization path does not establish a verified Gen6+ BCS HWS_PGA programming sequence, a GPU-visible address-domain guarantee, or a defined breadcrumb slot/format.
+- The accelerant currently has no monotonic BCS sequence number and no completion polling tied to a submitted batch. Head/tail equality is only ring consumption state; it is not a sufficient completion proof for all engine/pipeline work.
+- The status page must not be assumed coherent merely because it has a CPU pointer and physical address. Confirm the GART mapping, GPU address interpretation, required alignment, cache behavior, and required posting/readback sequence for the exact generation.
+- A fence implementation must reserve space for the generation-correct flush and breadcrumb commands as one atomic batch. If reservation, command emission, or tail publication fails, the fence counter must not advance and the operation must not report success.
+- Timeout handling must return a real failure and leave acceleration disabled. A bounded reset is not safe until the correct per-engine reset sequence, reset polling, error-state capture, and post-reset ring reinitialization are implemented and checked against the applicable PRM/workarounds.
+
+**Safe next implementation gate:** first document and verify the exact Gen9 BCS HWS_PGA register and address semantics against the Skylake PRM and the current Haiku GART implementation; then implement the Gen9 fence behind an explicitly disabled-by-default path with unit/static checks. Only after that sequence is verified should the implementation be generalized to Gen6–12, with per-generation command and register tables rather than treating Gen6+ as one uniform hardware target.
+
+### 9. Allocation and teardown constraints
+
+- The primary ring allocation is intentionally skipped for Gen6+ because the active 2D path is BCS; do not reintroduce an unused render-ring allocation as a workaround.
+- The BCS ring allocation is retained, but allocation success is not equivalent to safe engine ownership. Do not reclaim its aperture allocation while the engine may still fetch commands. The current teardown stops the ring after a bounded drain wait, but this alone does not prove GPU quiescence or GART allocation lifetime safety.
+- Any future cleanup path must track allocation ownership explicitly, stop and read back the engine control register, validate the stop/reset state, and only then release the corresponding GART allocation. On uncertain state, prefer a bounded leak over freeing memory that the GPU may still access.
+- Status-page and cursor allocation failures should leave both pointer and address fields invalid. Optional cursor failure may fall back to software; status-page failure must block any future fence-enabled path rather than silently substituting head/tail polling.
+
+These are review findings and implementation gates, not claims that the missing fence or recovery path has been completed.

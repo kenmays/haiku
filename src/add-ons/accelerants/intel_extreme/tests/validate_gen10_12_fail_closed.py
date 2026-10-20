@@ -137,6 +137,21 @@ def main() -> int:
         "DP AUX and VBT-selected DDI GMBUS fallback paths must remain explicit",
     )
 
+    # EDID detection gets at most one automatic retry after a failed
+    # read; repeated connection polling must not generate unbounded DDC/AUX IO.
+    has_edid = function_body(ports, "Port::HasEDID(")
+    get_edid = function_body(ports, "Port::GetEDID(")
+    require(
+        "fEDIDReadAttempts < 2" in has_edid
+        and "GetEDID(NULL, fEDIDReadAttempts != 0)" in has_edid,
+        "HasEDID must perform at most one bounded retry after an initial failure",
+    )
+    require(
+        "if (fEDIDReadAttempts < 2)" in get_edid
+        and "fEDIDReadAttempts++;" in get_edid,
+        "EDID reads must account for bounded automatic retries",
+    )
+
     # DisplayPort I2C chunks must not advance after exhausting all bounded
     # I2C-DEFER retries. Both write and read paths require an explicit ACK.
     aux_i2c = function_body(ports, "Port::_DpAuxSendReceive(")

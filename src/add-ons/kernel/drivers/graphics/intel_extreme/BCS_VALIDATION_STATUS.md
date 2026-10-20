@@ -39,7 +39,7 @@ A repeatable source-level regression check is provided at:
 Run it from any Haiku checkout with:
 `python3 src/add-ons/accelerants/intel_extreme/tests/validate_gen10_12_fail_closed.py`
 
-The source guards were checked against the current branch contents and all checks passed. The script itself has not been executed inside a Haiku checkout in this session; no Haiku build, emulator test, or Gen10/11/12 hardware test has been performed.
+The source guards were checked against the current branch contents and all checks passed. The regression script additionally asserts that the Gen6+ rejection in ring setup occurs before lock setup and any MMIO read/write. The script itself has not been executed inside a Haiku checkout in this session; no Haiku build, emulator test, or Gen10/11/12 hardware test has been performed.
 
 ### Why a shared Gen9 recovery sequence is not acceptable
 

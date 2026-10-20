@@ -101,6 +101,17 @@ QueueCommands::~QueueCommands()
 void
 QueueCommands::Put(struct command &command, size_t size)
 {
+	// All command batches must consist of complete dwords and preserve the
+	// ring's 8-byte submission alignment. Reject malformed sizes rather than
+	// silently truncating a command or publishing a partial packet.
+	if (size == 0 || (size % sizeof(uint32)) != 0
+		|| ((size / sizeof(uint32)) & 1) != 0) {
+		ERROR("rejecting malformed ring command size %lu\\n",
+			(unsigned long)size);
+		fFailed = true;
+		return;
+	}
+
 	uint32 count = size / sizeof(uint32);
 	uint32 *data = command.Data();
 

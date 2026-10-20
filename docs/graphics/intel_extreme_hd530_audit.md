@@ -33,14 +33,20 @@ In `src/add-ons/accelerants/intel_extreme/engine.cpp`, `QueueCommands::MakeSpace
 
 The current branch changes `MakeSpace()` to return success/failure and makes `Put()`, `PutFlush()`, `PutWaitFor()`, and `PutOverlayFlip()` stop when space cannot be acquired. This is a defensive integrity fix, not a GPU recovery/reset implementation. A timed-out command can still be dropped, so callers and synchronization semantics need further work.
 
-### 2. 2D acceleration is not yet proven usable on Skylake
+### 2. Software rendering is the default on Skylake-family devices
+
+In `hooks.cpp`, the 2D blit/fill/invert/span hooks now return `NULL` for `INTEL_FAMILY_LAKE` and `INTEL_FAMILY_SOC0`. This intentionally leaves rendering to Haiku's CPU/software path while the affected GPU command stream and engine-idle behavior remain unvalidated. The engine token's capability mask remains zero; do not advertise `B_2D_ACCELERATION` until the Gen9 blitter path passes hardware testing.
+
+The mode list and proposed/fallback modes now advertise `B_PARALLEL_ACCESS`. This is a **display-mode flag** from Haiku's `Accelerant.h`, not an engine capability: it tells the app_server that CPU access to the mapped framebuffer can proceed in parallel with display scanout. It does not itself implement software rendering, enable GPU blits, or prove that CPU writes are cache-coherent on every platform; the framebuffer mapping and cache behavior still require testing.
+
+### 3. 2D acceleration is not yet proven usable on Skylake
 
 - `sEngineToken` is initialized with capabilities `0 /*B_2D_ACCELERATION*/`. This means the driver is not advertising the 2D acceleration capability, despite individual hook implementations existing. Do not simply flip this bit until command submission, sync, and recovery are validated.
 - `intel_wait_engine_idle()` explicitly returns early for `INTEL_FAMILY_LAKE` and `INTEL_FAMILY_SOC0` because the acceleration engine was observed to stall. This is a serious blocker. It needs a register/command-level root-cause investigation against Skylake PRM Vols. 6, 11, 13 and 16 before removing the guard.
 - The existing rectangle and screen-to-screen operations use legacy XY blit command structures. Confirm command encodings, supported pixel formats, pitch/address units, clipping, alignment, fence/cache requirements, and valid framebuffer placement against the Skylake blitter PRM before enabling them.
 - The `B_FILL_SPAN` hook and its one-row color-blit implementation are present, but must not be treated as proof that hardware acceleration is operational.
 
-### 3. Display detection and EDID/DDC exist, but require targeted verification
+### 4. Display detection and EDID/DDC exist, but require targeted verification
 
 `Ports.cpp` already contains EDID/DDC handling, DP AUX/I2C support, VBT-dependent I2C selection/fallback, and DDI port handling. The right next step is to audit sequencing and error reporting against Skylake display-engine documentation rather than replacing these mechanisms wholesale.
 
@@ -51,11 +57,11 @@ Priority checks:
 - Preserve the distinction between “EDID read failed” and “monitor disconnected.” VBT and internal-panel fallback behavior should be tested on laptop and desktop configurations separately.
 - In `DigitalDisplayInterface::IsConnected()`, review the fallback after EDID detection: its pipe scan appears to return based on the first pipe's enable state rather than establishing that an enabled pipe is routed to the current port. Confirm and correct this logic with a focused test before changing behavior.
 
-### 4. Display modes and multiple monitors
+### 5. Display modes and multiple monitors
 
 The accelerant creates three pipes for generations 7–11, but pipe allocation alone does not guarantee correct multi-monitor support. Validate pipe/transcoder/port constraints, shared DPLL allocation, bandwidth, link training, and rollback on failure. Test clone/extended configurations, hotplug, suspend/resume, and failed modesets.
 
-### 5. Required test gates before advertising acceleration
+### 6. Required test gates before advertising acceleration
 
 - Build the accelerant and kernel driver with Haiku's supported build system and treat warnings/errors as blockers.
 - Static checks: command size/alignment, ring bounds, framebuffer pitch and base units, integer overflow, MMIO readback, and every timeout/error path.
@@ -66,4 +72,4 @@ The accelerant creates three pipes for generations 7–11, but pipe allocation a
 
 ## Current status
 
-This branch includes the fill-span hook work and a ring-buffer fail-closed fix. It does **not** yet provide full HD Graphics 530 feature parity, complete errata closure, or verified HDMI/DP/mDP/EDID support. Those require the exact applicable Intel documentation revision plus builds and physical-hardware tests.
+This branch includes the fill-span hook work, a ring-buffer fail-closed fix, software-rendering fallback for Skylake-family 2D operations, and the `B_PARALLEL_ACCESS` display-mode flag. It does **not** yet provide full HD Graphics 530 feature parity, complete errata closure, or verified HDMI/DP/mDP/EDID support. Those require the exact applicable Intel documentation revision plus builds and physical-hardware tests.

@@ -204,7 +204,7 @@ intel_set_dpms_mode(uint32 mode)
 	// Reject invalid values before changing shared state or touching registers.
 	if (mode != B_DPMS_ON && mode != B_DPMS_STAND_BY
 		&& mode != B_DPMS_SUSPEND && mode != B_DPMS_OFF) {
-		ERROR("%s: Unsupported DPMS mode 0x%" B_PRIx32 "\\n", __func__,
+		ERROR("%s: Unsupported DPMS mode 0x%" B_PRIx32 "\n", __func__,
 			mode);
 		return B_BAD_VALUE;
 	}

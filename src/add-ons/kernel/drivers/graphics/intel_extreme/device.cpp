@@ -317,10 +317,14 @@ device_ioctl(void* data, uint32 op, void* buffer, size_t bufferLength)
 				allocMemory.alignment, allocMemory.flags,
 				&allocMemory.buffer_base);
 			if (status == B_OK) {
-				// copy result
+				// If publishing the allocation result to userland fails, the
+				// caller cannot know the returned base to free it later. Roll
+				// the allocation back here rather than leaking aperture space.
 				if (user_memcpy(buffer, &allocMemory,
-						sizeof(intel_allocate_graphics_memory)) < B_OK)
+						sizeof(intel_allocate_graphics_memory)) < B_OK) {
+					intel_free_memory(*info, allocMemory.buffer_base);
 					return B_BAD_ADDRESS;
+				}
 			}
 			return status;
 		}

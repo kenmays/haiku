@@ -226,6 +226,18 @@ QueueCommands::MakeSpace(uint32 size)
 		return false;
 	}
 
+	// Cached space is an optimization, not authority. Recompute an upper
+	// bound from the live head and current (possibly unpublished) tail so a
+	// stale high space_left value cannot authorize an overwrite.
+	uint32 availableHead = head;
+	if (availableHead <= fRingBuffer.position)
+		availableHead += fRingBuffer.size;
+	uint32 available = availableHead - fRingBuffer.position;
+	uint32 safeSpace = available > sizeof(uint64)
+		? available - sizeof(uint64) : 0;
+	if (fRingBuffer.space_left > safeSpace)
+		fRingBuffer.space_left = safeSpace;
+
 	size *= sizeof(uint32);
 	bigtime_t start = system_time();
 

@@ -58,6 +58,7 @@
 #define INTEL_GROUP_ALD		(INTEL_FAMILY_LAKE | 0x0400)  // AlderLake
 #define INTEL_GROUP_ICL		(INTEL_FAMILY_LAKE | 0x0800)  // IceLake
 #define INTEL_GROUP_CNL		(INTEL_FAMILY_LAKE | 0x0900)  // CannonLake
+#define INTEL_GROUP_RKL		(INTEL_FAMILY_LAKE | 0x0a00)  // RocketLake
 // models
 #define INTEL_TYPE_SERVER	0x0004
 #define INTEL_TYPE_MOBILE	0x0008
@@ -105,6 +106,8 @@
 #define INTEL_MODEL_ICLM	(INTEL_GROUP_ICL | INTEL_TYPE_MOBILE)
 #define INTEL_MODEL_CNL		(INTEL_GROUP_CNL)
 #define INTEL_MODEL_CNLM	(INTEL_GROUP_CNL | INTEL_TYPE_MOBILE)
+#define INTEL_MODEL_RKL		(INTEL_GROUP_RKL)
+#define INTEL_MODEL_RKLM	(INTEL_GROUP_RKL | INTEL_TYPE_MOBILE)
 
 #define INTEL_PCH_DEVICE_ID_MASK	0xff80
 #define INTEL_PCH_IBX_DEVICE_ID		0x3b00
@@ -244,8 +247,12 @@ struct DeviceType {
 			return 8;
 		if (InGroup(INTEL_GROUP_JSL))
 			return 11;
+		if (InGroup(INTEL_GROUP_CNL))
+			return 10;
 		if (InGroup(INTEL_GROUP_ICL))
 			return 11;
+		if (InGroup(INTEL_GROUP_RKL))
+			return 12;
 		if (InGroup(INTEL_GROUP_TGL) || InGroup(INTEL_GROUP_ALD))
 			return 12;
 		if (InFamily(INTEL_FAMILY_LAKE))

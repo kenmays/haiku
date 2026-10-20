@@ -26,18 +26,21 @@
 #define CALLED(x...) TRACE("CALLED %s\n", __PRETTY_FUNCTION__)
 
 
-void
+status_t
 intel_free_memory(addr_t base)
 {
 	if (base == 0)
-		return;
+		return B_OK;
 
 	intel_free_graphics_memory freeMemory;
 	freeMemory.magic = INTEL_PRIVATE_DATA_MAGIC;
 	freeMemory.buffer_base = base;
 
-	ioctl(gInfo->device, INTEL_FREE_GRAPHICS_MEMORY, &freeMemory,
-		sizeof(freeMemory));
+	if (ioctl(gInfo->device, INTEL_FREE_GRAPHICS_MEMORY, &freeMemory,
+			sizeof(freeMemory)) < 0)
+		return errno;
+
+	return B_OK;
 }
 
 

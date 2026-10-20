@@ -126,14 +126,18 @@ def main() -> int:
     quarantine_gate = teardown.find("if (quarantineAperture)")
     unmap_at = teardown.find("gGART->unmap_aperture(info.aperture);")
     else_at = teardown.find("} else {", quarantine_gate)
+    mmio_guard = teardown.find("info.registers != NULL")
+    first_read = teardown.find("read32(")
     require(
         "bool quarantineAperture = false;" in teardown
         and "INTEL_RING_BUFFER_ENABLED" in teardown
         and "quarantineAperture = true;" in teardown
+        and mmio_guard >= 0
+        and first_read > mmio_guard
         and quarantine_gate >= 0
         and else_at > quarantine_gate
         and unmap_at > else_at,
-        "GART aperture unmap must be skipped when a legacy ring/allocation is quarantined",
+        "GART unmap must be conditional, and ring inspection must require mapped MMIO",
     )
 
     # Keep the selected Gen10 review candidate explicit and disabled. A PCI

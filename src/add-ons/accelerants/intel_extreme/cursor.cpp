@@ -77,18 +77,18 @@ intel_set_cursor_shape(uint16 width, uint16 height, uint16 hotX, uint16 hotY,
 		gInfo->shared_info->cursor_hot_x = hotX;
 		gInfo->shared_info->cursor_hot_y = hotY;
 
-		intel_move_cursor(x, y);
+		move_cursor(x, y);
 	}
 
 	return B_OK;
 }
 
 
-void
-intel_move_cursor(uint16 _x, uint16 _y)
+static void
+move_cursor(int32 x, int32 y)
 {
-	int32 x = (int32)_x - gInfo->shared_info->cursor_hot_x;
-	int32 y = (int32)_y - gInfo->shared_info->cursor_hot_y;
+	x -= gInfo->shared_info->cursor_hot_x;
+	y -= gInfo->shared_info->cursor_hot_y;
 
 	if (x < 0)
 		x = -x | CURSOR_POSITION_NEGATIVE;
@@ -96,6 +96,13 @@ intel_move_cursor(uint16 _x, uint16 _y)
 		y = -y | CURSOR_POSITION_NEGATIVE;
 
 	write32(INTEL_CURSOR_POSITION, (y << 16) | x);
+}
+
+
+void
+intel_move_cursor(uint16 _x, uint16 _y)
+{
+	move_cursor((int32)_x, (int32)_y);
 }
 
 

@@ -295,39 +295,20 @@ setup_ring_buffer(ring_buffer &ringBuffer, const char* name)
 	uint32 ring = ringBuffer.register_base;
 	uint32 control = read32(ring + RING_BUFFER_CONTROL);
 
-	// If a previous owner left the ring enabled, let pending work drain
-	// before disabling it. Never reset head/tail on a ring that is still busy.
+	// Head == tail does not prove that commands have finished executing in
+	// the engine pipeline. Without a verified engine-idle/fence mechanism,
+	// refuse to reinitialize a ring that is already enabled.
 	if ((control & INTEL_RING_BUFFER_ENABLED) != 0) {
-		bigtime_t start = system_time();
-		while (true) {
-			uint32 head = read32(ring + RING_BUFFER_HEAD)
-				& INTEL_RING_BUFFER_HEAD_MASK;
-			uint32 tail = read32(ring + RING_BUFFER_TAIL)
-				& INTEL_RING_BUFFER_HEAD_MASK;
-
-			if (head >= ringBuffer.size || tail >= ringBuffer.size
-				|| (head & (sizeof(uint32) - 1)) != 0
-				|| (tail & (sizeof(uint32) - 1)) != 0) {
-				ERROR("invalid live ring state for %s: head %" B_PRIx32
-					", tail %" B_PRIx32 "\n", name, head, tail);
-				uninit_lock(&ringBuffer.lock);
-				ringBuffer.size = 0;
-				return B_ERROR;
-			}
-
-			if (head == tail)
-				break;
-
-			if (system_time() > start + 1000000LL) {
-				ERROR("ring %s did not drain: head %" B_PRIx32
-					", tail %" B_PRIx32 ", control %" B_PRIx32 "\n",
-					name, head, tail, control);
-				uninit_lock(&ringBuffer.lock);
-				ringBuffer.size = 0;
-				return B_BUSY;
-			}
-			spin(10);
-		}
+		uint32 head = read32(ring + RING_BUFFER_HEAD)
+			& INTEL_RING_BUFFER_HEAD_MASK;
+		uint32 tail = read32(ring + RING_BUFFER_TAIL)
+			& INTEL_RING_BUFFER_HEAD_MASK;
+		ERROR("refusing to reinitialize enabled ring %s: control %"
+			B_PRIx32 ", head %" B_PRIx32 ", tail %" B_PRIx32 "\n",
+			name, control, head, tail);
+		uninit_lock(&ringBuffer.lock);
+		ringBuffer.size = 0;
+		return B_BUSY;
 	}
 
 	// Follow the documented ring initialization ordering: stop the ring,

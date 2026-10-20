@@ -396,7 +396,7 @@ intel_set_display_mode(display_mode* mode)
 			sharedInfo.frame_buffer_offset = 0;
 		}
 
-		ERROR("%s: Failed to allocate framebuffer !\\n", __func__);
+		ERROR("%s: Failed to allocate framebuffer !\n", __func__);
 		return B_NO_MEMORY;
 	}
 

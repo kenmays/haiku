@@ -1056,9 +1056,9 @@ intel_extreme_uninit(intel_info &info)
 		if ((control & INTEL_RING_BUFFER_ENABLED) != 0) {
 			quarantineAperture = true;
 			if (primary.base != NULL && start == primary.offset) {
-				ERROR("quarantining GART aperture: enabled primary ring still references our allocation\\n");
+				ERROR("quarantining GART aperture: enabled primary ring still references our allocation\n");
 			} else {
-				ERROR("quarantining GART aperture: primary ring remains enabled with unverified allocation ownership (start 0x%" B_PRIx32 ")\\n",
+				ERROR("quarantining GART aperture: primary ring remains enabled with unverified allocation ownership (start 0x%" B_PRIx32 ")\n",
 					start);
 			}
 		} else if (primary.base != NULL) {
@@ -1072,7 +1072,7 @@ intel_extreme_uninit(intel_info &info)
 				primary.position = 0;
 				primary.space_left = 0;
 			} else {
-				ERROR("could not free primary ring allocation: %s\\n",
+				ERROR("could not free primary ring allocation: %s\n",
 					strerror(freeStatus));
 				// A failed free leaves allocation ownership unresolved. Avoid
 				// unmapping the aperture, which would force-delete that memory.
@@ -1082,7 +1082,7 @@ intel_extreme_uninit(intel_info &info)
 	}
 
 	if (quarantineAperture) {
-		ERROR("leaving GART aperture mapped to preserve potentially GPU-visible allocations\\n");
+		ERROR("leaving GART aperture mapped to preserve potentially GPU-visible allocations\n");
 	} else {
 		gGART->unmap_aperture(info.aperture);
 	}

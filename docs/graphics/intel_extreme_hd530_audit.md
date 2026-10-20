@@ -175,3 +175,9 @@ The current branch now reads and validates the ring control, start address, head
 
 This is a fail-closed consistency check, not a synchronization fence: it does not prove prior GPU commands have completed, resolve CPU/WC-memory-to-MMIO ordering, provide a completion breadcrumb, or recover a stalled engine. The driver still must be built and tested with a real device, and Gen6+ hardware acceleration must remain disabled pending the documented BCS completion and recovery work.
 
+### 15. Bound cached free space using the live ring head
+
+The reservation path now also derives an upper bound on available bytes from the current hardware head and the software tail (which may be ahead of the last published tail while a batch is being assembled). It preserves the mandatory 8-byte empty slot and clamps `space_left` downward when the cached value exceeds that bound. This keeps cached accounting from being treated as authoritative when reserving command words.
+
+This calculation is a conservative producer-side bound, not a substitute for the hardware consistency checks, a completion breadcrumb, or a reset protocol. Head/tail values can still be misleading after an engine reset or other hardware-state corruption; no automatic recovery is attempted. Gen6+ BCS synchronization and acceleration remain disabled until the generation-specific status-page and completion protocol is implemented and validated.
+

@@ -739,7 +739,7 @@ intel_extreme_init(intel_info &info)
 		// Leave the ring explicitly unavailable. Accelerant-side code must
 		// not infer readiness from a register address or a stale allocation.
 		primary.base = NULL;
-		ERROR("could not allocate primary ring buffer: %s\\n",
+		ERROR("could not allocate primary ring buffer: %s\n",
 			strerror(primaryRingStatus));
 	}
 
@@ -763,7 +763,7 @@ intel_extreme_init(intel_info &info)
 			// Keep the Gen6+ blitter unavailable rather than exposing a
 			// partially initialized ring to the accelerant.
 			blitter.base = NULL;
-			ERROR("could not allocate blitter ring buffer: %s\\n",
+			ERROR("could not allocate blitter ring buffer: %s\n",
 				strerror(blitterRingStatus));
 		}
 	}

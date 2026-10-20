@@ -12,6 +12,8 @@ import sys
 ROOT = Path(__file__).resolve().parents[5]
 ENGINE_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/engine.cpp"
 KERNEL_PATH = ROOT / "src/add-ons/kernel/drivers/graphics/intel_extreme/intel_extreme.cpp"
+DRIVER_PATH = ROOT / "src/add-ons/kernel/drivers/graphics/intel_extreme/driver.cpp"
+BRINGUP_PATH = ROOT / "src/add-ons/kernel/drivers/graphics/intel_extreme/GEN10_12_BCS_BRINGUP.md"
 
 
 def function_body(source: str, signature: str) -> str:
@@ -41,6 +43,8 @@ def require(condition: bool, message: str) -> None:
 def main() -> int:
     engine = ENGINE_PATH.read_text(encoding="utf-8")
     kernel = KERNEL_PATH.read_text(encoding="utf-8")
+    driver = DRIVER_PATH.read_text(encoding="utf-8")
+    bringup = BRINGUP_PATH.read_text(encoding="utf-8")
 
     engine_token = function_body(engine, "intel_acquire_engine(")
     require(
@@ -112,6 +116,19 @@ def main() -> int:
         and "blitter.register_base = 0;" in bcs_init
         and "intel_allocate_memory" not in bcs_init,
         "kernel initialization must leave Gen6+ BCS unallocated and unavailable",
+    )
+
+    # Keep the selected Gen10 review candidate explicit and disabled. A PCI
+    # allowlist entry is identification only; it must not bypass the BCS gate.
+    require(
+        '{0x5a52, INTEL_MODEL_CNLM, "CannonLake GT2"}' in driver,
+        "Cannon Lake Gen10 review candidate 0x5a52 is missing or changed",
+    )
+    require(
+        "candidate for source review only" in bringup
+        and "no Gen10 BCS implementation or reset routine is added" in bringup
+        and "command submission remains disabled" in bringup,
+        "Gen10 candidate must remain explicitly disabled pending PRM and hardware evidence",
     )
 
     # The same Generation() >= 6 guard applies to these numeric generations.

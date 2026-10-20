@@ -63,7 +63,8 @@ QueueCommands::Put(struct command &command, size_t size)
 	uint32 count = size / sizeof(uint32);
 	uint32 *data = command.Data();
 
-	MakeSpace(count);
+	if (!MakeSpace(count))
+		return;
 
 	for (uint32 i = 0; i < count; i++) {
 		Write(data[i]);
@@ -74,7 +75,8 @@ QueueCommands::Put(struct command &command, size_t size)
 void
 QueueCommands::PutFlush()
 {
-	MakeSpace(2);
+	if (!MakeSpace(2))
+		return;
 
 	Write(COMMAND_FLUSH);
 	Write(COMMAND_NOOP);
@@ -84,7 +86,8 @@ QueueCommands::PutFlush()
 void
 QueueCommands::PutWaitFor(uint32 event)
 {
-	MakeSpace(2);
+	if (!MakeSpace(2))
+		return;
 
 	Write(COMMAND_WAIT_FOR_EVENT | event);
 	Write(COMMAND_NOOP);
@@ -94,7 +97,8 @@ QueueCommands::PutWaitFor(uint32 event)
 void
 QueueCommands::PutOverlayFlip(uint32 mode, bool updateCoefficients)
 {
-	MakeSpace(2);
+	if (!MakeSpace(2))
+		return;
 
 	Write(COMMAND_OVERLAY_FLIP | mode);
 
@@ -109,16 +113,25 @@ QueueCommands::PutOverlayFlip(uint32 mode, bool updateCoefficients)
 }
 
 
-void
+bool
 QueueCommands::MakeSpace(uint32 size)
 {
 	ASSERT((size & 1) == 0);
+
+	// Fail closed if the ring is unavailable or a request cannot fit.
+	// A timeout must never permit overwriting commands the GPU has not
+	// consumed.
+	if (fRingBuffer.size < B_PAGE_SIZE
+		|| size > fRingBuffer.size / sizeof(uint32)
+		|| fRingBuffer.base == NULL || fRingBuffer.register_base == 0) {
+		ERROR("invalid ring buffer or oversized command request\n");
+		return false;
+	}
 
 	size *= sizeof(uint32);
 	bigtime_t start = system_time();
 
 	while (fRingBuffer.space_left < size) {
-		// wait until more space is free
 		uint32 head = read32(fRingBuffer.register_base + RING_BUFFER_HEAD)
 			& INTEL_RING_BUFFER_HEAD_MASK;
 
@@ -130,13 +143,14 @@ QueueCommands::MakeSpace(uint32 size)
 		if (fRingBuffer.space_left < size) {
 			if (system_time() > start + 1000000LL) {
 				ERROR("engine stalled, head %" B_PRIx32 "\n", head);
-				break;
+				return false;
 			}
 			spin(10);
 		}
 	}
 
 	fRingBuffer.space_left -= size;
+	return true;
 }
 
 

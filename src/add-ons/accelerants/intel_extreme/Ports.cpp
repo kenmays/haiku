@@ -649,6 +649,7 @@ Port::_DpAuxSendReceive(uint32 slaveAddress,
 			else
 				message.request &= ~DP_AUX_I2C_MOT;
 
+			bool acknowledged = false;
 			for (int attempt = 0; attempt < 7; attempt++) {
 				ssize_t result = _DpAuxTransfer(&message);
 				if (result < 0) {
@@ -658,23 +659,24 @@ Port::_DpAuxSendReceive(uint32 slaveAddress,
 
 				switch (message.reply & DP_AUX_I2C_REPLY_MASK) {
 					case DP_AUX_I2C_REPLY_ACK:
-						goto nextWrite;
+						acknowledged = true;
+						break;
 					case DP_AUX_I2C_REPLY_NACK:
 						TRACE("%s: aux i2c nack\n", __func__);
 						return B_IO_ERROR;
 					case DP_AUX_I2C_REPLY_DEFER:
 						TRACE("%s: aux i2c defer\n", __func__);
 						snooze(400);
-						break;
+						continue;
 					default:
 						TRACE("%s: aux invalid I2C reply: 0x%02x\n",
 							__func__, message.reply);
 						return B_ERROR;
 				}
+				break;
 			}
-nextWrite:
-			if (result < 0)
-				return result;
+			if (!acknowledged)
+				return B_IO_ERROR;
 			i += message.size;
 		}
 	}
@@ -698,6 +700,7 @@ nextWrite:
 			else
 				message.request &= ~DP_AUX_I2C_MOT;
 
+			bool acknowledged = false;
 			for (int attempt = 0; attempt < 7; attempt++) {
 				result = _DpAuxTransfer(&message);
 				if (result < 0) {
@@ -707,23 +710,24 @@ nextWrite:
 
 				switch (message.reply & DP_AUX_I2C_REPLY_MASK) {
 					case DP_AUX_I2C_REPLY_ACK:
-						goto nextRead;
+						acknowledged = true;
+						break;
 					case DP_AUX_I2C_REPLY_NACK:
 						TRACE("%s: aux i2c nack\n", __func__);
 						return B_IO_ERROR;
 					case DP_AUX_I2C_REPLY_DEFER:
 						TRACE("%s: aux i2c defer\n", __func__);
 						snooze(400);
-						break;
+						continue;
 					default:
 						TRACE("%s: aux invalid I2C reply: 0x%02x\n",
 							__func__, message.reply);
 						return B_ERROR;
 				}
+				break;
 			}
-nextRead:
-			if (result < 0)
-				return result;
+			if (!acknowledged)
+				return B_IO_ERROR;
 			if (result == 0)
 				i += message.size;
 		}

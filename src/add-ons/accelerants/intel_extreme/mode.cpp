@@ -369,8 +369,14 @@ intel_set_display_mode(display_mode* mode)
 	// First register dump
 	//dump_registers();
 
-	// TODO: This may not be neccesary
-	set_display_power_mode(B_DPMS_OFF);
+	// Turn off the display before releasing its scanout buffer. If the
+	// panel cannot confirm the transition, keep the current framebuffer intact.
+	status_t powerStatus = set_display_power_mode(B_DPMS_OFF);
+	if (powerStatus != B_OK) {
+		ERROR("%s: Unable to turn display off before mode switch!\\n",
+			__func__);
+		return powerStatus;
+	}
 
 	// Free the old framebuffer before allocating a replacement. If the
 	// kernel refuses the free, preserve the old pointer and restore scanout
@@ -512,8 +518,13 @@ intel_set_display_mode(display_mode* mode)
 	// We set the same color mode across all pipes
 	program_pipe_color_modes(colorMode);
 
-	// TODO: This may not be neccesary (see DPMS OFF at top)
-	set_display_power_mode(sharedInfo.dpms_mode);
+	// Restore the requested power state after the new scanout has been
+	// configured. Report a timeout instead of claiming DPMS succeeded.
+	powerStatus = set_display_power_mode(sharedInfo.dpms_mode);
+	if (powerStatus != B_OK) {
+		ERROR("%s: Unable to restore display power state!\\n", __func__);
+		return powerStatus;
+	}
 
 	// Changing bytes per row seems to be ignored if the plane/pipe is turned
 	// off

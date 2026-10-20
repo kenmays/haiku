@@ -130,19 +130,19 @@ get_accelerant_hook(uint32 feature, void* data)
 
 		/* 2D acceleration */
 		case B_SCREEN_TO_SCREEN_BLIT:
-			if (use_software_2d())
+			if (use_software_2d() || !has_blitter_ring())
 				return NULL;
 			return (void*)intel_screen_to_screen_blit;
 		case B_FILL_RECTANGLE:
-			if (use_software_2d())
+			if (use_software_2d() || !has_blitter_ring())
 				return NULL;
 			return (void*)intel_fill_rectangle;
 		case B_INVERT_RECTANGLE:
-			if (use_software_2d())
+			if (use_software_2d() || !has_blitter_ring())
 				return NULL;
 			return (void*)intel_invert_rectangle;
 		case B_FILL_SPAN:
-			if (use_software_2d())
+			if (use_software_2d() || !has_blitter_ring())
 				return NULL;
 			return (void*)intel_fill_span;
 

@@ -182,12 +182,33 @@ const struct supported_device {
 	{0x3ea5, INTEL_MODEL_CFL,  "CoffeeLake GT3"},
 	{0x3ea6, INTEL_MODEL_CFL,  "CoffeeLake GT3"},
 
+	// Cannon Lake (Gen10); IDs cross-checked against public i915 PCI tables.
+	{0x5a52, INTEL_MODEL_CNLM, "CannonLake GT2"},
+	{0x5a5a, INTEL_MODEL_CNLM, "CannonLake GT2"},
+	{0x5a42, INTEL_MODEL_CNLM, "CannonLake GT2"},
+	{0x5a4a, INTEL_MODEL_CNLM, "CannonLake GT2"},
+	{0x5a51, INTEL_MODEL_CNLM, "CannonLake GT1"},
+	{0x5a58, INTEL_MODEL_CNLM, "CannonLake GT1"},
+	{0x5a41, INTEL_MODEL_CNLM, "CannonLake GT1"},
+	{0x5a49, INTEL_MODEL_CNLM, "CannonLake GT1"},
+	{0x5a71, INTEL_MODEL_CNLM, "CannonLake GT1"},
+	{0x5a79, INTEL_MODEL_CNLM, "CannonLake GT1"},
+
 	{0x8a56, INTEL_MODEL_ICLM, "IceLake GT1"},
 	{0x8a5c, INTEL_MODEL_ICLM, "IceLake GT1.5"},
 	{0x8a5a, INTEL_MODEL_ICLM, "IceLake GT1.5"},
 	{0x8a51, INTEL_MODEL_ICLM, "IceLake GT2"},
 	{0x8a52, INTEL_MODEL_ICLM, "IceLake GT2"},
 	{0x8a53, INTEL_MODEL_ICLM, "IceLake GT2"},
+	{0x8a50, INTEL_MODEL_ICLM, "IceLake GT1"},
+	{0x8a54, INTEL_MODEL_ICLM, "IceLake GT1.5"},
+	{0x8a57, INTEL_MODEL_ICLM, "IceLake GT1"},
+	{0x8a58, INTEL_MODEL_ICLM, "IceLake GT1"},
+	{0x8a59, INTEL_MODEL_ICLM, "IceLake GT1"},
+	{0x8a5b, INTEL_MODEL_ICLM, "IceLake GT1.5"},
+	{0x8a5d, INTEL_MODEL_ICLM, "IceLake GT1.5"},
+	{0x8a70, INTEL_MODEL_ICLM, "IceLake GT1"},
+	{0x8a71, INTEL_MODEL_ICLM, "IceLake GT1"},
 
 	{0x9ba4, INTEL_MODEL_CML,	"CometLake GT1"},
 	{0x9ba8, INTEL_MODEL_CML,	"CometLake GT1"},
@@ -214,6 +235,15 @@ const struct supported_device {
 	{0x9a68, INTEL_MODEL_TGLM,	"TigerLake"},
 	{0x9a70, INTEL_MODEL_TGLM,	"TigerLake"},
 
+	// Rocket Lake (Gen12 Xe-LP graphics).
+	{0x4c8a, INTEL_MODEL_RKL,  "RocketLake UHD Graphics 750"},
+	{0x4c8b, INTEL_MODEL_RKL,  "RocketLake UHD Graphics 730"},
+	{0x4c90, INTEL_MODEL_RKL,  "RocketLake UHD Graphics P750"},
+	{0x4c9a, INTEL_MODEL_RKL,  "RocketLake UHD Graphics"},
+
+	{0x46a1, INTEL_MODEL_ALDM, "Alder Lake-P"},
+	{0x46b1, INTEL_MODEL_ALDM, "Alder Lake-P"},
+	{0x46c1, INTEL_MODEL_ALDM, "Alder Lake-P"},
 	{0x46a6, INTEL_MODEL_ALDM,  "Alder Lake-P GT2"},
 	{0x46d1, INTEL_MODEL_ALDM,  "Alder Lake-N"},
 #if 0

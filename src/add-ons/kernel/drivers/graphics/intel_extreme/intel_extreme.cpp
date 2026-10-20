@@ -860,10 +860,15 @@ intel_extreme_init(intel_info &info)
 	// Allocate hardware status page and the cursor memory
 	TRACE("Allocating hardware status page");
 
-	if (intel_allocate_memory(info, B_PAGE_SIZE, 0, B_APERTURE_NEED_PHYSICAL,
-			(addr_t*)info.shared_info->status_page,
-			&info.shared_info->physical_status_page) == B_OK) {
-		// TODO: set status page
+	info.shared_info->status_page = NULL;
+	info.shared_info->physical_status_page = 0;
+	status_t statusPageStatus = intel_allocate_memory(info, B_PAGE_SIZE, 0,
+		B_APERTURE_NEED_PHYSICAL,
+		(addr_t*)&info.shared_info->status_page,
+		&info.shared_info->physical_status_page);
+	if (statusPageStatus != B_OK) {
+		ERROR("could not allocate hardware status page: %s\\n",
+			strerror(statusPageStatus));
 	}
 	if (hardwareCursor) {
 		intel_allocate_memory(info, B_PAGE_SIZE, 0, B_APERTURE_NEED_PHYSICAL,

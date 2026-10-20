@@ -429,7 +429,7 @@ setup_ring_buffer(ring_buffer &ringBuffer, const char* name)
 	// that incomplete submission model, even though the MMIO register block
 	// is present. Hardware 2D stays unavailable until this is implemented.
 	if (gInfo->shared_info->device_type.Generation() >= 8) {
-		ERROR("Gen8+ direct ring submission is not implemented; ring disabled\\n");
+		ERROR("Gen8+ direct ring submission is not implemented; ring disabled\n");
 		ringBuffer.size = 0;
 		ringBuffer.register_base = 0;
 		return B_NOT_SUPPORTED;

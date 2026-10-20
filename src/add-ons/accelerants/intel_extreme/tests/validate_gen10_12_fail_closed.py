@@ -147,10 +147,15 @@ def main() -> int:
         "AUX I2C read/write chunks must fail if seven DEFER retries receive no ACK",
     )
     require(
-        "case DP_AUX_I2C_ACK:" not in aux_i2c
-        and aux_i2c.count("case DP_AUX_I2C_REPLY_ACK:") == 2
-        and aux_i2c.count("continue;") == 2,
-        "AUX I2C retry loops must continue on DEFER and advance only after ACK",
+        aux_i2c.count("case DP_AUX_I2C_REPLY_ACK:") == 2
+        and aux_i2c.count("continue;") == 2
+        and aux_i2c.count("attempt < 8") == 2,
+        "AUX I2C retries must allow seven retries after the initial DEFER",
+    )
+    aux_native = function_body(ports, "Port::_DpAuxTransfer(dp_aux_msg*")
+    require(
+        "retry < 8" in aux_native,
+        "native AUX transactions must allow seven retries after the initial DEFER",
     )
 
     # CPU-only 2D policy is generation-independent: every Intel 2D drawing

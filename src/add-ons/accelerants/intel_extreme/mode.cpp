@@ -379,17 +379,24 @@ intel_set_display_mode(display_mode* mode)
 	addr_t base;
 	if (intel_allocate_memory(bytesPerRow * target.virtual_height, 0,
 			base) < B_OK) {
-		// oh, how did that happen? Unfortunately, there is no really good way
-		// back. Try to restore a framebuffer for the previous mode, at least.
+		// Keep the previous mode usable when its framebuffer can be restored.
+		// The display is still powered off at this point, so only re-enable it
+		// after a valid framebuffer base has been programmed.
 		if (intel_allocate_memory(sharedInfo.current_mode.virtual_height
 				* sharedInfo.bytes_per_row, 0, base) == B_OK) {
 			sharedInfo.frame_buffer = base;
 			sharedInfo.frame_buffer_offset = base
 				- (addr_t)sharedInfo.graphics_memory;
 			set_frame_buffer_base();
+			set_display_power_mode(sharedInfo.dpms_mode);
+		} else {
+			// The original allocation was released above. Do not leave a stale
+			// CPU framebuffer pointer for software drawing to dereference.
+			sharedInfo.frame_buffer = 0;
+			sharedInfo.frame_buffer_offset = 0;
 		}
 
-		ERROR("%s: Failed to allocate framebuffer !\n", __func__);
+		ERROR("%s: Failed to allocate framebuffer !\\n", __func__);
 		return B_NO_MEMORY;
 	}
 

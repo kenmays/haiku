@@ -214,12 +214,15 @@ setup_ring_buffer(ring_buffer &ringBuffer, const char* name)
 		|| (ringBuffer.size & (ringBuffer.size - 1)) != 0
 		|| (ringBuffer.size & (B_PAGE_SIZE - 1)) != 0) {
 		ERROR("invalid ring buffer geometry for %s\n", name);
+		if (ringBuffer.register_base != 0)
+			write32(ringBuffer.register_base + RING_BUFFER_CONTROL, 0);
 		ringBuffer.size = 0;
 		return;
 	}
 
 	if (init_lock(&ringBuffer.lock, name) < B_OK) {
-		// disable ring buffer
+		// A ring without a usable lock must not remain enabled.
+		write32(ringBuffer.register_base + RING_BUFFER_CONTROL, 0);
 		ringBuffer.size = 0;
 		return;
 	}

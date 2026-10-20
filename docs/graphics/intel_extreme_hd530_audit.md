@@ -139,3 +139,30 @@ The ineffective local-stack `atomic_add()` previously placed immediately before 
 `QueueCommands` now records reservation failures from `Put()`, `PutFlush()`, `PutWaitFor()`, and `PutOverlayFlip()`. Its destructor restores the software position and free-space accounting to the batch's initial state and does not publish the tail if any reservation failed. This prevents a previously written prefix from being published after a later command failed to reserve ring space. The command words already written beyond the published tail are intentionally left unreachable and will be overwritten by later submissions.
 
 The local-stack `atomic_add()` previously used before the tail write was also removed because it did not operate on ring memory and did not establish the required GPU-visible publication ordering. The tail write still lacks a verified architecture/cache-aware ordering primitive; command submission therefore remains unvalidated and hardware acceleration must stay disabled. These changes are static hardening only and have not been compiled or tested on hardware.
+
+
+### 13. Gen10–Gen12 support boundary and shared-path audit (follow-up)
+
+The PCI table contains entries for Cannon Lake (Gen10), Ice Lake / Elkhart Lake / Tiger Lake (Gen11), and Rocket Lake / Alder Lake / Raptor Lake (Gen12). A matching PCI ID proves only that the driver can recognize a device; it does **not** establish correct display initialization, connector routing, 2D command legality, power management, or acceleration support.
+
+Current safe support statement for these generations:
+
+- **Device discovery:** PCI IDs are present for a subset of these product families. This is not a complete or authoritative enumeration of every SKU, stepping, or subsystem variant. Continue cross-checking IDs against current upstream PCI tables and Intel platform documentation before adding entries.
+- **Display modes and pipes:** the accelerant allocates four pipe objects for Gen12 and three for Gen7–Gen11. Object allocation is not proof that the physical generation supports those pipes, that each transcoder/port is routed correctly, or that clock/bandwidth limits are respected. Gen12 pipe D and multi-monitor modes must remain unclaimed until platform-specific constraints and failure rollback are verified.
+- **2D engine:** a dedicated BCS ring is selected for Gen6+; this is only ring plumbing, not generation-correct command submission. The current shared ring setup, legacy XY blit command structures, flush opcode, status-page assumptions, and MMIO ordering have not been independently validated for Gen10, Gen11, or Gen12. Do not enable hardware 2D or set `B_2D_ACCELERATION` for these generations.
+- **Synchronization/recovery:** Gen6+ idle/sync deliberately fails closed with `B_NOT_SUPPORTED` rather than treating head/tail equality as proof of completion. Do not remove that guard for Gen10–Gen12. Implement and validate a per-generation completion/breadcrumb scheme and bounded engine recovery only after the correct PRM register/command definitions, address-space constraints, and errata are established.
+- **EDID/DDC/AUX:** shared code paths are present, but the current fallback logic does not prove AUX power sequencing, I2C-over-AUX transaction semantics, native AUX retry behavior, link training, Type-C/TC routing, PHY power, or hotplug behavior on Gen10–Gen12. These require generation-specific display-engine documentation and tests; Gen9 behavior must not be assumed equivalent.
+- **`B_PARALLEL_ACCESS`:** retaining this display-mode flag is independent of GPU blit acceleration. It does not prove framebuffer mapping/cache coherency on every platform, and it must not be used as evidence that BCS is operational.
+- **Power management:** DMC/firmware loading, power wells, PHY/port power, runtime power transitions, suspend/resume, and reset sequencing need generation-specific review. Avoid writing guessed register values or applying Skylake workarounds to newer generations without matching documentation.
+
+#### Required next implementation gates for Gen10–Gen12
+
+1. Create a per-generation register/command capability table sourced from the matching Intel PRMs, EDS/platform docs, and specification updates/errata; do not infer support from `Generation() >= N` alone where behavior differs.
+2. Audit ring allocation and GPU virtual/graphics address width, ring control masks, enable/disable ordering, memory/cache attributes, and the supported CPU-to-MMIO publication barrier for each generation.
+3. Implement a verified BCS completion breadcrumb with monotonically increasing submission sequence numbers, timeout propagation, and an engine-unavailable state after failed recovery. The status-page allocation fix alone is insufficient; HWS_PGA programming and address-space/mapping lifetime must be proven.
+4. Add generation-specific bounded reset/reinitialization only after documenting exact status/error registers, reset bits, polling deadlines, and required reinitialization steps. A failed reset must preserve software rendering and must not claim completion.
+5. Validate rectangle/fill commands against each generation's BCS PRM, including opcode/length, pitch and address units, supported tiling/format, clipping, overlap direction, flush requirements, and completion semantics.
+6. Test display separately from 2D: port detection, EDID base/extensions/checksums, DDC/AUX, DP/eDP/HDMI routing, link training, hotplug, modeset rollback, multiple displays, DPMS, and suspend/resume.
+7. Build kernel driver and accelerant together and run static checks plus real hardware tests on at least one representative platform per supported generation. Keep the acceleration capability disabled until each tested generation passes.
+
+**Status:** Gen10–Gen12 remain recognized-device / software-rendering targets, not fully supported or hardware-accelerated targets. No build, CI test, emulator test, or physical Gen10–Gen12 validation has been performed in this branch. This section documents the remaining gates; it does not claim implementation or validation that has not occurred.

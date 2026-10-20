@@ -371,6 +371,13 @@ setup_ring_buffer(ring_buffer &ringBuffer, const char* name)
 		|| (ringBuffer.size & (ringBuffer.size - 1)) != 0
 		|| (ringBuffer.size & (B_PAGE_SIZE - 1)) != 0
 		|| (ringBuffer.offset & (B_PAGE_SIZE - 1)) != 0
+		// RING_BUFFER_START is a 32-bit GGTT offset. Also verify that the
+		// allocation fits wholly inside the mapped graphics aperture before
+		// truncating the address into that register.
+		|| (uint64)ringBuffer.offset > 0xffffffffULL
+		|| ringBuffer.offset > gInfo->shared_info->graphics_memory_size
+		|| ringBuffer.size > gInfo->shared_info->graphics_memory_size
+			- ringBuffer.offset
 		|| ((ringBuffer.size - B_PAGE_SIZE)
 			& ~INTEL_RING_BUFFER_SIZE_MASK) != 0) {
 		ERROR("invalid ring buffer geometry for %s\n", name);

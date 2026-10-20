@@ -101,11 +101,16 @@ def main() -> int:
     )
 
     # Cursor coordinates must subtract each axis's own hotspot.
-    cursor_move = function_body(cursor, "intel_move_cursor(")
+    cursor_move = function_body(cursor, "move_cursor(int32 x, int32 y)")
+    cursor_shape = function_body(cursor, "intel_set_cursor_shape(")
     require(
-        "int32 x = (int32)_x - gInfo->shared_info->cursor_hot_x;" in cursor_move
-        and "int32 y = (int32)_y - gInfo->shared_info->cursor_hot_y;" in cursor_move,
+        "x -= gInfo->shared_info->cursor_hot_x;" in cursor_move
+        and "y -= gInfo->shared_info->cursor_hot_y;" in cursor_move,
         "hardware cursor position must apply the correct X and Y hotspot",
+    )
+    require(
+        "move_cursor(x, y);" in cursor_shape,
+        "hotspot changes must preserve signed off-screen cursor coordinates",
     )
 
     # CPU-only 2D policy is generation-independent: every Intel 2D drawing

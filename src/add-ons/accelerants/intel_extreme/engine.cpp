@@ -106,7 +106,7 @@ QueueCommands::Put(struct command &command, size_t size)
 	// silently truncating a command or publishing a partial packet.
 	if (size == 0 || (size % sizeof(uint32)) != 0
 		|| ((size / sizeof(uint32)) & 1) != 0) {
-		ERROR("rejecting malformed ring command size %lu\\n",
+		ERROR("rejecting malformed ring command size %lu\n",
 			(unsigned long)size);
 		fFailed = true;
 		return;

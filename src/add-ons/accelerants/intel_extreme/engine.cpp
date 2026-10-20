@@ -31,27 +31,38 @@ static engine_token sEngineToken = {1, 0 /*B_2D_ACCELERATION*/, NULL};
 
 QueueCommands::QueueCommands(ring_buffer &ring)
 	:
-	fRingBuffer(ring)
+	fRingBuffer(ring),
+	fInitialPosition(0),
+	fInitialSpaceLeft(0)
 {
 	acquire_lock(&fRingBuffer.lock);
+	fInitialPosition = fRingBuffer.position;
+	fInitialSpaceLeft = fRingBuffer.space_left;
 }
 
 
 QueueCommands::~QueueCommands()
 {
+	// Commands are published by updating the tail. If the batch cannot be
+	// padded to the required 8-byte alignment, discard the unsubmitted batch
+	// instead of writing an unreserved NOOP into a possibly full ring.
 	if (fRingBuffer.position & 0x07) {
-		// make sure the command is properly aligned
-		Write(COMMAND_NOOP);
+		if (MakeSpace(2)) {
+			Write(COMMAND_NOOP);
+		} else {
+			fRingBuffer.position = fInitialPosition;
+			fRingBuffer.space_left = fInitialSpaceLeft;
+		}
 	}
 
-	// We must make sure memory is written back in case the ring buffer
-	// is in write combining mode - releasing the lock does this, as the
-	// buffer is flushed on a locked memory operation (which is what this
-	// benaphore does), but it must happen before writing the new tail...
-	int32 flush;
-	atomic_add(&flush, 1);
+	if (fRingBuffer.position != fInitialPosition) {
+		// Flush write-combined ring memory before publishing the new tail.
+		int32 flush;
+		atomic_add(&flush, 1);
 
-	write32(fRingBuffer.register_base + RING_BUFFER_TAIL, fRingBuffer.position);
+		write32(fRingBuffer.register_base + RING_BUFFER_TAIL,
+			fRingBuffer.position);
+	}
 
 	release_lock(&fRingBuffer.lock);
 }

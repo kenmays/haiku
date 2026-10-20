@@ -349,9 +349,21 @@ void
 intel_screen_to_screen_blit(engine_token* token, blit_params* params,
 	uint32 count)
 {
+	if (params == NULL || count == 0)
+		return;
+
 	QueueCommands queue(gInfo->shared_info->primary_ring_buffer);
 
 	for (uint32 i = 0; i < count; i++) {
+		// The XY command uses 16-bit coordinates and exclusive right/bottom
+		// edges. Reject arithmetic that would wrap while converting the
+		// inclusive width/height used by the accelerant hook.
+		if ((uint32)params[i].dest_left + (uint32)params[i].width + 1 > 0xffff
+			|| (uint32)params[i].dest_top + (uint32)params[i].height + 1 > 0xffff
+			|| (uint32)params[i].src_left + (uint32)params[i].width > 0xffff
+			|| (uint32)params[i].src_top + (uint32)params[i].height > 0xffff)
+			continue;
+
 		xy_source_blit_command blit;
 		blit.source_left = params[i].src_left;
 		blit.source_top = params[i].src_top;
@@ -369,9 +381,17 @@ void
 intel_fill_rectangle(engine_token* token, uint32 color,
 	fill_rect_params* params, uint32 count)
 {
+	if (params == NULL || count == 0)
+		return;
+
 	QueueCommands queue(gInfo->shared_info->primary_ring_buffer);
 
 	for (uint32 i = 0; i < count; i++) {
+		if (params[i].right < params[i].left
+			|| params[i].bottom < params[i].top
+			|| params[i].right == 0xffff || params[i].bottom == 0xffff)
+			continue;
+
 		xy_color_blit_command blit(false);
 		blit.dest_left = params[i].left;
 		blit.dest_top = params[i].top;
@@ -388,9 +408,17 @@ void
 intel_invert_rectangle(engine_token* token, fill_rect_params* params,
 	uint32 count)
 {
+	if (params == NULL || count == 0)
+		return;
+
 	QueueCommands queue(gInfo->shared_info->primary_ring_buffer);
 
 	for (uint32 i = 0; i < count; i++) {
+		if (params[i].right < params[i].left
+			|| params[i].bottom < params[i].top
+			|| params[i].right == 0xffff || params[i].bottom == 0xffff)
+			continue;
+
 		xy_color_blit_command blit(true);
 		blit.dest_left = params[i].left;
 		blit.dest_top = params[i].top;

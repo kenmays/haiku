@@ -351,3 +351,29 @@ These are review findings and implementation gates, not claims that the missing 
 Commit `d699a6e` updates `intel_acquire_engine()` to reject any requested capability not advertised by `sEngineToken.capabilities`. The token currently advertises zero hardware capabilities, so requests for `B_2D_ACCELERATION` return `B_NOT_SUPPORTED` rather than receiving a token that cannot satisfy the request. This closes a gap where acquisition ignored the caller's capability mask despite acceleration being intentionally disabled.
 
 This change is defensive API behavior, not a substitute for testing the app_server/accelerant fallback path. Confirm that the software renderer is selected correctly when the acquire hook returns `B_NOT_SUPPORTED`; only advertise `B_2D_ACCELERATION` after the BCS fence, publication ordering, and recovery path are verified end-to-end.
+
+
+### 11. Regression gates for ring submission and engine API
+
+The following cases should be covered by a Haiku build/test run before this branch is considered ready. They are test requirements; they have not been executed in this environment.
+
+**Engine acquisition**
+- Requesting `B_2D_ACCELERATION` must return `B_NOT_SUPPORTED` while the token advertises no capabilities, and must leave the output token null.
+- A zero-capability request may acquire the engine lock, but must not result in any command submission or imply that hardware 2D acceleration is available.
+- If an input sync token cannot be satisfied, acquisition must release the engine lock and leave the output token null.
+- Releasing a token with an invalid token pointer must return `B_BAD_VALUE` without releasing another caller's lock.
+
+**Ring reservation and publication**
+- Reject zero, odd-dword, non-dword-aligned, oversized, and malformed ring requests without changing the hardware tail.
+- Reject disabled rings, incorrect ring-size control fields, mismatched START, out-of-range or unaligned HEAD, and an externally changed TAIL.
+- Simulate a full ring and a non-advancing HEAD: reservation must time out within the documented bound, roll the software batch back, and never publish a partial command prefix.
+- Force a failure after one or more commands have been written to the CPU mapping: the destructor must restore the original software position/space and leave the MMIO tail unchanged.
+- Verify the required platform memory-ordering primitive before enabling any path that publishes commands from write-combined or otherwise weakly ordered memory. A CPU compiler barrier alone is not sufficient evidence.
+- Confirm that the software-rendering path is selected when the ring is unavailable or the engine acquisition hook rejects acceleration.
+
+**Teardown and failure injection**
+- Exercise ring allocation failure, lock initialization failure, ring-enable readback mismatch, mode-list creation failure, and normal accelerant shutdown.
+- On a non-draining ring, teardown must stop the engine and read back the control register; it must not free backing memory unless the kernel/GART ownership path separately establishes safe quiescence.
+- Verify pre-Gen6 primary-ring teardown separately from Gen6+ BCS teardown, and confirm Gen6+ startup does not touch the unused primary ring.
+
+**Acceptance criteria:** no successful hardware-acceleration capability advertisement until the above regressions pass and a generation-correct completion fence is implemented; no Gen6+ completion claim based solely on ring HEAD/TAIL equality; no GPU-visible allocation is reclaimed on an unverified stop/reset path.

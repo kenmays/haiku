@@ -199,6 +199,33 @@ QueueCommands::MakeSpace(uint32 size)
 		return false;
 	}
 
+	// Validate the hardware ring on every reservation, not just when cached
+	// space runs out. Otherwise a stale space_left value can let us write to
+	// a disabled ring or publish against a tail changed by another owner.
+	uint32 control = read32(fRingBuffer.register_base
+		+ RING_BUFFER_CONTROL);
+	uint32 head = read32(fRingBuffer.register_base + RING_BUFFER_HEAD)
+		& INTEL_RING_BUFFER_HEAD_MASK;
+	uint32 hardwareTail = read32(fRingBuffer.register_base
+		+ RING_BUFFER_TAIL) & INTEL_RING_BUFFER_HEAD_MASK;
+	uint32 ringStart = read32(fRingBuffer.register_base + RING_BUFFER_START);
+	uint32 expectedSize = (fRingBuffer.size - B_PAGE_SIZE)
+		& INTEL_RING_BUFFER_SIZE_MASK;
+	if ((control & INTEL_RING_BUFFER_ENABLED) == 0
+		|| (control & INTEL_RING_BUFFER_SIZE_MASK) != expectedSize
+		|| ringStart != fRingBuffer.offset
+		|| head >= fRingBuffer.size
+		|| (head & (sizeof(uint32) - 1)) != 0
+		|| hardwareTail != fInitialPosition) {
+		ERROR("ring reservation rejected: control %" B_PRIx32
+			", head %" B_PRIx32 ", hardware tail %" B_PRIx32
+			", expected tail %" B_PRIx32 ", start %" B_PRIx32
+			", expected start %" B_PRIx32 "\\n",
+			control, head, hardwareTail, fInitialPosition, ringStart,
+			fRingBuffer.offset);
+		return false;
+	}
+
 	size *= sizeof(uint32);
 	bigtime_t start = system_time();
 

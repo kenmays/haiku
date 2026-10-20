@@ -182,12 +182,12 @@ const struct supported_device {
 	{0x3ea5, INTEL_MODEL_CFL,  "CoffeeLake GT3"},
 	{0x3ea6, INTEL_MODEL_CFL,  "CoffeeLake GT3"},
 
-	{0x8a56, INTEL_MODEL_CFLM, "IceLake GT1"},
-	{0x8a5c, INTEL_MODEL_CFLM, "IceLake GT1.5"},
-	{0x8a5a, INTEL_MODEL_CFLM, "IceLake GT1.5"},
-	{0x8a51, INTEL_MODEL_CFLM, "IceLake GT2"},
-	{0x8a52, INTEL_MODEL_CFLM, "IceLake GT2"},
-	{0x8a53, INTEL_MODEL_CFLM, "IceLake GT2"},
+	{0x8a56, INTEL_MODEL_ICLM, "IceLake GT1"},
+	{0x8a5c, INTEL_MODEL_ICLM, "IceLake GT1.5"},
+	{0x8a5a, INTEL_MODEL_ICLM, "IceLake GT1.5"},
+	{0x8a51, INTEL_MODEL_ICLM, "IceLake GT2"},
+	{0x8a52, INTEL_MODEL_ICLM, "IceLake GT2"},
+	{0x8a53, INTEL_MODEL_ICLM, "IceLake GT2"},
 
 	{0x9ba4, INTEL_MODEL_CML,	"CometLake GT1"},
 	{0x9ba8, INTEL_MODEL_CML,	"CometLake GT1"},

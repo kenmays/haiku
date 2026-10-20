@@ -239,7 +239,7 @@ uninit_ring_buffer(ring_buffer &ringBuffer)
 status_t
 setup_ring_buffer(ring_buffer &ringBuffer, const char* name)
 {
-	TRACE("Setup ring buffer %s, offset %lx, size %lx\n", name,
+	TRACE("Setup ring buffer %s, offset %lx, size %lx\\n", name,
 		ringBuffer.offset, ringBuffer.size);
 
 	// Write() wraps with a power-of-two mask and the hardware size field is
@@ -251,34 +251,110 @@ setup_ring_buffer(ring_buffer &ringBuffer, const char* name)
 		|| (ringBuffer.offset & (B_PAGE_SIZE - 1)) != 0
 		|| ((ringBuffer.size - B_PAGE_SIZE)
 			& ~INTEL_RING_BUFFER_SIZE_MASK) != 0) {
-		ERROR("invalid ring buffer geometry for %s\n", name);
-		if (ringBuffer.register_base != 0)
-			write32(ringBuffer.register_base + RING_BUFFER_CONTROL, 0);
+		ERROR("invalid ring buffer geometry for %s\\n", name);
 		ringBuffer.size = 0;
 		return B_BAD_VALUE;
 	}
 
 	status_t status = init_lock(&ringBuffer.lock, name);
 	if (status < B_OK) {
-		// A ring without a usable lock must not remain enabled.
-		write32(ringBuffer.register_base + RING_BUFFER_CONTROL, 0);
+		// Do not touch hardware when lock initialization failed: we cannot
+		// safely serialize with any previous ring owner.
 		ringBuffer.size = 0;
 		return status;
 	}
 
 	uint32 ring = ringBuffer.register_base;
+	uint32 control = read32(ring + RING_BUFFER_CONTROL);
+
+	// If a previous owner left the ring enabled, let pending work drain
+	// before disabling it. Never reset head/tail on a ring that is still busy.
+	if ((control & INTEL_RING_BUFFER_ENABLED) != 0) {
+		bigtime_t start = system_time();
+		while (true) {
+			uint32 head = read32(ring + RING_BUFFER_HEAD)
+				& INTEL_RING_BUFFER_HEAD_MASK;
+			uint32 tail = read32(ring + RING_BUFFER_TAIL)
+				& INTEL_RING_BUFFER_HEAD_MASK;
+
+			if (head >= ringBuffer.size || tail >= ringBuffer.size
+				|| (head & (sizeof(uint32) - 1)) != 0
+				|| (tail & (sizeof(uint32) - 1)) != 0) {
+				ERROR("invalid live ring state for %s: head %" B_PRIx32
+					", tail %" B_PRIx32 "\\n", name, head, tail);
+				uninit_lock(&ringBuffer.lock);
+				ringBuffer.size = 0;
+				return B_ERROR;
+			}
+
+			if (head == tail)
+				break;
+
+			if (system_time() > start + 1000000LL) {
+				ERROR("ring %s did not drain: head %" B_PRIx32
+					", tail %" B_PRIx32 ", control %" B_PRIx32 "\\n",
+					name, head, tail, control);
+				uninit_lock(&ringBuffer.lock);
+				ringBuffer.size = 0;
+				return B_BUSY;
+			}
+			spin(10);
+		}
+	}
+
+	// Follow the documented ring initialization ordering: stop the ring,
+	// read back control, clear head/tail, read back head, program START,
+	// then publish the empty tail before enabling the ring.
+	write32(ring + RING_BUFFER_CONTROL, 0);
+	read32(ring + RING_BUFFER_CONTROL);
+	write32(ring + RING_BUFFER_HEAD, 0);
+	write32(ring + RING_BUFFER_TAIL, 0);
+
+	uint32 head = read32(ring + RING_BUFFER_HEAD)
+		& INTEL_RING_BUFFER_HEAD_MASK;
+	if (head != 0) {
+		write32(ring + RING_BUFFER_HEAD, 0);
+		head = read32(ring + RING_BUFFER_HEAD)
+			& INTEL_RING_BUFFER_HEAD_MASK;
+	}
+	if (head != 0) {
+		ERROR("failed to clear ring head for %s: %" B_PRIx32 "\\n",
+			name, head);
+		uninit_lock(&ringBuffer.lock);
+		ringBuffer.size = 0;
+		return B_ERROR;
+	}
+
+	read32(ring + RING_BUFFER_HEAD);
+	write32(ring + RING_BUFFER_START, ringBuffer.offset);
+	write32(ring + RING_BUFFER_HEAD, 0);
+	write32(ring + RING_BUFFER_TAIL, 0);
+	read32(ring + RING_BUFFER_TAIL);
+
 	ringBuffer.position = 0;
 	// Preserve the empty slot required to distinguish full from empty.
 	ringBuffer.space_left = ringBuffer.size - sizeof(uint64);
 
-	write32(ring + RING_BUFFER_TAIL, 0);
-	write32(ring + RING_BUFFER_START, ringBuffer.offset);
 	write32(ring + RING_BUFFER_CONTROL,
 		((ringBuffer.size - B_PAGE_SIZE) & INTEL_RING_BUFFER_SIZE_MASK)
 		| INTEL_RING_BUFFER_ENABLED);
+	control = read32(ring + RING_BUFFER_CONTROL);
+	head = read32(ring + RING_BUFFER_HEAD) & INTEL_RING_BUFFER_HEAD_MASK;
+
+	if ((control & INTEL_RING_BUFFER_ENABLED) == 0 || head != 0) {
+		ERROR("ring %s failed to enable: control %" B_PRIx32
+			", head %" B_PRIx32 ", tail %" B_PRIx32 "\\n",
+			name, control, head,
+			read32(ring + RING_BUFFER_TAIL) & INTEL_RING_BUFFER_HEAD_MASK);
+		write32(ring + RING_BUFFER_CONTROL, 0);
+		read32(ring + RING_BUFFER_CONTROL);
+		uninit_lock(&ringBuffer.lock);
+		ringBuffer.size = 0;
+		return B_ERROR;
+	}
+
 	return B_OK;
 }
-
 
 //	#pragma mark - engine management
 

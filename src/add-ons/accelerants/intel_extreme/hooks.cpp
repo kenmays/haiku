@@ -23,6 +23,18 @@ use_software_2d()
 }
 
 
+static bool
+has_blitter_ring()
+{
+	const intel_shared_info& info = *gInfo->shared_info;
+	const ring_buffer& ring = info.device_type.Generation() >= 6
+		? info.blitter_ring_buffer : info.primary_ring_buffer;
+
+	return ring.size >= B_PAGE_SIZE && ring.register_base != 0
+		&& ring.base != NULL;
+}
+
+
 extern "C" void*
 get_accelerant_hook(uint32 feature, void* data)
 {

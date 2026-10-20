@@ -267,7 +267,7 @@ uninit_ring_buffer(ring_buffer &ringBuffer)
 status_t
 setup_ring_buffer(ring_buffer &ringBuffer, const char* name)
 {
-	TRACE("Setup ring buffer %s, offset %lx, size %lx\\n", name,
+	TRACE("Setup ring buffer %s, offset %lx, size %lx\n", name,
 		ringBuffer.offset, ringBuffer.size);
 
 	// Write() wraps with a power-of-two mask and the hardware size field is
@@ -279,7 +279,7 @@ setup_ring_buffer(ring_buffer &ringBuffer, const char* name)
 		|| (ringBuffer.offset & (B_PAGE_SIZE - 1)) != 0
 		|| ((ringBuffer.size - B_PAGE_SIZE)
 			& ~INTEL_RING_BUFFER_SIZE_MASK) != 0) {
-		ERROR("invalid ring buffer geometry for %s\\n", name);
+		ERROR("invalid ring buffer geometry for %s\n", name);
 		ringBuffer.size = 0;
 		return B_BAD_VALUE;
 	}
@@ -309,7 +309,7 @@ setup_ring_buffer(ring_buffer &ringBuffer, const char* name)
 				|| (head & (sizeof(uint32) - 1)) != 0
 				|| (tail & (sizeof(uint32) - 1)) != 0) {
 				ERROR("invalid live ring state for %s: head %" B_PRIx32
-					", tail %" B_PRIx32 "\\n", name, head, tail);
+					", tail %" B_PRIx32 "\n", name, head, tail);
 				uninit_lock(&ringBuffer.lock);
 				ringBuffer.size = 0;
 				return B_ERROR;
@@ -320,7 +320,7 @@ setup_ring_buffer(ring_buffer &ringBuffer, const char* name)
 
 			if (system_time() > start + 1000000LL) {
 				ERROR("ring %s did not drain: head %" B_PRIx32
-					", tail %" B_PRIx32 ", control %" B_PRIx32 "\\n",
+					", tail %" B_PRIx32 ", control %" B_PRIx32 "\n",
 					name, head, tail, control);
 				uninit_lock(&ringBuffer.lock);
 				ringBuffer.size = 0;
@@ -346,7 +346,7 @@ setup_ring_buffer(ring_buffer &ringBuffer, const char* name)
 			& INTEL_RING_BUFFER_HEAD_MASK;
 	}
 	if (head != 0) {
-		ERROR("failed to clear ring head for %s: %" B_PRIx32 "\\n",
+		ERROR("failed to clear ring head for %s: %" B_PRIx32 "\n",
 			name, head);
 		uninit_lock(&ringBuffer.lock);
 		ringBuffer.size = 0;
@@ -369,11 +369,17 @@ setup_ring_buffer(ring_buffer &ringBuffer, const char* name)
 	control = read32(ring + RING_BUFFER_CONTROL);
 	head = read32(ring + RING_BUFFER_HEAD) & INTEL_RING_BUFFER_HEAD_MASK;
 
-	if ((control & INTEL_RING_BUFFER_ENABLED) == 0 || head != 0) {
+	uint32 tail = read32(ring + RING_BUFFER_TAIL)
+		& INTEL_RING_BUFFER_HEAD_MASK;
+	uint32 start = read32(ring + RING_BUFFER_START);
+	if ((control & INTEL_RING_BUFFER_ENABLED) == 0 || head != 0
+		|| tail != 0 || start != ringBuffer.offset
+		|| (control & INTEL_RING_BUFFER_SIZE_MASK)
+			!= ((ringBuffer.size - B_PAGE_SIZE) & INTEL_RING_BUFFER_SIZE_MASK)) {
 		ERROR("ring %s failed to enable: control %" B_PRIx32
-			", head %" B_PRIx32 ", tail %" B_PRIx32 "\\n",
-			name, control, head,
-			read32(ring + RING_BUFFER_TAIL) & INTEL_RING_BUFFER_HEAD_MASK);
+			", head %" B_PRIx32 ", tail %" B_PRIx32
+			", start %" B_PRIx32 " (expected %" B_PRIx32 ")\n",
+			name, control, head, tail, start, ringBuffer.offset);
 		write32(ring + RING_BUFFER_CONTROL, 0);
 		read32(ring + RING_BUFFER_CONTROL);
 		uninit_lock(&ringBuffer.lock);

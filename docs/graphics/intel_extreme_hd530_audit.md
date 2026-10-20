@@ -166,3 +166,12 @@ Current safe support statement for these generations:
 7. Build kernel driver and accelerant together and run static checks plus real hardware tests on at least one representative platform per supported generation. Keep the acceleration capability disabled until each tested generation passes.
 
 **Status:** Gen10–Gen12 remain recognized-device / software-rendering targets, not fully supported or hardware-accelerated targets. No build, CI test, emulator test, or physical Gen10–Gen12 validation has been performed in this branch. This section documents the remaining gates; it does not claim implementation or validation that has not occurred.
+
+### 14. Validate ring state before every command reservation
+
+Follow-up source review found that the previous checks in `QueueCommands::MakeSpace()` were only reached when the cached `space_left` value was smaller than the request. A stale cached value could therefore bypass the enabled-bit, head geometry, and published-tail checks and write commands to a disabled or externally changed ring.
+
+The current branch now reads and validates the ring control, start address, head, and hardware tail **for every reservation**, before decrementing cached space or writing command words. It rejects a reservation if the ring is disabled, the programmed size differs from the software ring geometry, the start address differs from the configured graphics offset, the head is out of range/misaligned, or the hardware tail does not equal the batch's initially published tail. This closes the cached-space bypass in the producer path and complements the existing rechecks while waiting for space.
+
+This is a fail-closed consistency check, not a synchronization fence: it does not prove prior GPU commands have completed, resolve CPU/WC-memory-to-MMIO ordering, provide a completion breadcrumb, or recover a stalled engine. The driver still must be built and tested with a real device, and Gen6+ hardware acceleration must remain disabled pending the documented BCS completion and recovery work.
+

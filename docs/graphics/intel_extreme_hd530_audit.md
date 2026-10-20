@@ -92,3 +92,25 @@ The follow-up review found several issues beyond the original timeout handling:
 A future reset path should be a documented, bounded state machine rather than a blind register write: stop accepting new batches; acquire the shared engine lock; capture ring head/tail, relevant engine status/error registers, and the last submitted sequence; request the documented Gen9 engine reset procedure; poll with a strict deadline; reinitialize ring control/base/head/tail and any required context/fence/cache state; submit a harmless validation command; wait for confirmed completion; and only then resume submissions. If any step fails, leave the engine marked unavailable and continue with software rendering. The exact reset bits and ordering must be sourced from the matching Skylake PRM and errata, not inferred from another generation.
 
 These additional source changes are static hardening only. They have not been compiled or exercised on a Skylake machine.
+
+### 8. Blitter-engine routing and ring initialization findings
+
+Intel Skylake Gen9 Vol. 11 describes the Blitter (BLT) engine as a separate command streamer with its own register block beginning at `0x20000`. The driver's original `INTEL_PRIMARY_RING_BUFFER` is `0x02030` (render ring tail register), yet the XY source/color blit commands were being submitted through `primary_ring_buffer`. That is a concrete engine-selection mismatch and a strong candidate for the historical stall; it should not be treated as a proven sole cause until hardware traces confirm it. Intel PRM Vol. 11 and the Linux i915 ring implementation provide the reference basis.
+
+Changes in this branch:
+- Added `INTEL_BLITTER_RING_BUFFER` at `0x22030` and a separate `blitter_ring_buffer` in shared state.
+- The kernel driver now allocates a dedicated ring for Gen6+ devices when allocation succeeds.
+- The accelerant initializes the BCS ring independently; failure to allocate/setup the BCS ring is logged and leaves blit hooks unavailable instead of preventing display initialization.
+- Gen6+ XY blit hooks and idle waiting select the BCS ring; pre-Gen6 devices continue to use the original primary ring.
+- All blit hooks are withheld if the required ring is missing. Skylake/SOC software-rendering fallback remains in force.
+- Ring setup now waits up to one second for an already-enabled ring to drain, disables it with a readback, clears head/tail, programs the start address, publishes an empty tail, enables the ring, and verifies control/head readback. It refuses to reset a ring whose live pointers are invalid or which does not drain.
+- Teardown serializes with ring producers, waits briefly for pending commands, logs a timeout, disables the ring, and only then destroys the lock.
+
+Still unresolved:
+- The BCS ring's presence and MMIO offset are source-level matches to the Skylake register model, but they have not been tested on hardware.
+- The exact `MI_FLUSH`/`MI_FLUSH_DW` sequence and the current `COMMAND_FLUSH` encoding must be verified for the BCS engine and Gen9. A flush command accepted by the render engine is not automatically valid for BCS.
+- Proper completion tokens still need a monotonic sequence/breadcrumb mechanism; head==tail is only a coarse idle test.
+- Reset/recovery still needs a Gen9-specific state machine and error/status capture, and hardware acceleration must remain disabled on Skylake until this path is tested.
+- The shared-state layout change requires rebuilding the kernel driver and accelerant together.
+
+Reference: [Intel Skylake Gen9 PRM Vol. 11 — Blitter](https://www.x.org/docs/intel/SKL/rev01/intel-gfx-prm-osrc-skl-vol11-blitter.pdf); [Linux i915 ring initialization](https://code.googlesource.com/linux/torvalds/linux/+/11e3b725cfc282efe9d4a354153e99d86a16af08/drivers/gpu/drm/i915/intel_ringbuffer.c).

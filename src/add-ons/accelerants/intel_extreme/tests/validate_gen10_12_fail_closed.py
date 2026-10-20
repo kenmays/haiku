@@ -42,6 +42,16 @@ def main() -> int:
     engine = ENGINE_PATH.read_text(encoding="utf-8")
     kernel = KERNEL_PATH.read_text(encoding="utf-8")
 
+    engine_token = function_body(engine, "intel_acquire_engine(")
+    require(
+        "B_2D_ACCELERATION" not in engine.split(
+            "static engine_token sEngineToken", 1
+        )[1].split(";", 1)[0]
+        and "capabilities & ~sEngineToken.capabilities" in engine_token
+        and "return B_NOT_SUPPORTED;" in engine_token,
+        "accelerant must not advertise unsupported 2D engine capabilities",
+    )
+
     selector = function_body(engine, "get_blitter_ring_buffer()")
     require(
         "Generation() >= 6" in selector and "return NULL;" in selector,

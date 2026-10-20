@@ -28,7 +28,7 @@ class QueueCommands {
 		void PutWaitFor(uint32 event);
 		void PutOverlayFlip(uint32 code, bool updateCoefficients);
 
-		void MakeSpace(uint32 size);
+		bool MakeSpace(uint32 size);
 		void Write(uint32 data);
 
 	private:

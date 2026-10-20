@@ -15,6 +15,7 @@ KERNEL_PATH = ROOT / "src/add-ons/kernel/drivers/graphics/intel_extreme/intel_ex
 DRIVER_PATH = ROOT / "src/add-ons/kernel/drivers/graphics/intel_extreme/driver.cpp"
 BRINGUP_PATH = ROOT / "src/add-ons/kernel/drivers/graphics/intel_extreme/GEN10_12_BCS_BRINGUP.md"
 OVERLAY_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/overlay.cpp"
+PORTS_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/Ports.cpp"
 HOOKS_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/hooks.cpp"
 MODE_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/mode.cpp"
 CURSOR_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/cursor.cpp"
@@ -53,6 +54,7 @@ def main() -> int:
     driver = DRIVER_PATH.read_text(encoding="utf-8")
     bringup = BRINGUP_PATH.read_text(encoding="utf-8")
     overlay = OVERLAY_PATH.read_text(encoding="utf-8")
+    ports = PORTS_PATH.read_text(encoding="utf-8")
     hooks = HOOKS_PATH.read_text(encoding="utf-8")
     mode = MODE_PATH.read_text(encoding="utf-8")
     cursor = CURSOR_PATH.read_text(encoding="utf-8")
@@ -111,6 +113,28 @@ def main() -> int:
     require(
         "move_cursor(x, y);" in cursor_shape,
         "hotspot changes must preserve signed off-screen cursor coordinates",
+    )
+
+    # EDID reads must attempt the alternate transport after either bus
+    # setup or the EDID transaction fails; DDI/AUX selection is VBT-sensitive.
+    edid_reader = function_body(ports, "Port::GetEDID(")
+    require(
+        "status_t status = SetupI2c(&bus);" in edid_reader
+        and "ddc2_read_edid1(&bus, &fEDIDInfo, NULL, NULL)" in edid_reader
+        and "if (status != B_OK)" in edid_reader
+        and "status_t fallbackStatus = SetupI2cFallback(&bus);" in edid_reader
+        and "if (fallbackStatus == B_OK)" in edid_reader,
+        "EDID reads must attempt fallback transport after primary setup/read failure",
+    )
+    dp_setup = function_body(ports, "DisplayPort::SetupI2c(")
+    dp_fallback = function_body(ports, "DisplayPort::SetupI2cFallback(")
+    ddi_fallback = function_body(ports, "DigitalDisplayInterface::SetupI2cFallback(")
+    require(
+        "return _SetupDpAuxI2c(bus);" in dp_setup
+        and "return _SetupDpAuxI2c(bus);" in dp_fallback
+        and "_IsDisplayPortInVBT() && _IsHdmiInVBT()" in ddi_fallback
+        and "return Port::SetupI2c(bus);" in ddi_fallback,
+        "DP AUX and VBT-selected DDI GMBUS fallback paths must remain explicit",
     )
 
     # CPU-only 2D policy is generation-independent: every Intel 2D drawing

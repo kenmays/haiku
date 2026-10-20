@@ -281,43 +281,41 @@ intel_release_engine(engine_token* engineToken, sync_token* syncToken)
 }
 
 
-void
-intel_wait_engine_idle(void)
+static status_t
+wait_engine_idle_internal(void)
 {
-	CALLED();
-
-	// Skylake acc engine not yet functional (stalls)
+	// Do not claim the engine is idle on generations where the engine path
+	// is known to stall. The public void hook can only log this failure;
+	// status-returning sync hooks propagate it to their caller.
 	if (gInfo->shared_info->device_type.InFamily(INTEL_FAMILY_LAKE)
-			|| gInfo->shared_info->device_type.InFamily(INTEL_FAMILY_SOC0)) {
-		return;
+		|| gInfo->shared_info->device_type.InFamily(INTEL_FAMILY_SOC0)) {
+		ERROR("engine idle wait unsupported for this device family\n");
+		return B_NOT_SUPPORTED;
 	}
 
+	ring_buffer &ring = gInfo->shared_info->primary_ring_buffer;
+	if (ring.size < B_PAGE_SIZE || ring.register_base == 0 || ring.base == NULL)
+		return B_NO_INIT;
+
 	{
-		QueueCommands queue(gInfo->shared_info->primary_ring_buffer);
+		QueueCommands queue(ring);
 		queue.PutFlush();
 	}
 
-	// TODO: this should only be a temporary solution!
-	// a better way to do this would be to acquire the engine's lock and
-	// sync to the latest token
-
 	bigtime_t start = system_time();
-
-	ring_buffer &ring = gInfo->shared_info->primary_ring_buffer;
-	uint32 head, tail;
 	while (true) {
-		head = read32(ring.register_base + RING_BUFFER_HEAD)
+		uint32 head = read32(ring.register_base + RING_BUFFER_HEAD)
 			& INTEL_RING_BUFFER_HEAD_MASK;
-		tail = read32(ring.register_base + RING_BUFFER_TAIL)
+		uint32 tail = read32(ring.register_base + RING_BUFFER_TAIL)
 			& INTEL_RING_BUFFER_HEAD_MASK;
 
 		if (head == tail)
-			break;
+			return B_OK;
 
 		if (system_time() > start + 1000000LL) {
-			// the engine seems to be locked up!
-			ERROR("engine locked up, head %" B_PRIx32 "!\n", head);
-			break;
+			ERROR("engine locked up, head %" B_PRIx32 ", tail %" B_PRIx32 "\n",
+				head, tail);
+			return B_ERROR;
 		}
 
 		spin(10);
@@ -325,10 +323,24 @@ intel_wait_engine_idle(void)
 }
 
 
+void
+intel_wait_engine_idle(void)
+{
+	CALLED();
+	if (wait_engine_idle_internal() != B_OK)
+		ERROR("wait engine idle failed\n");
+}
+
+
 status_t
 intel_get_sync_token(engine_token* engineToken, sync_token* syncToken)
 {
 	CALLED();
+	if (engineToken == NULL || syncToken == NULL)
+		return B_BAD_VALUE;
+
+	syncToken->engine_id = engineToken->engine_id;
+	syncToken->counter = 0;
 	return B_OK;
 }
 
@@ -337,8 +349,13 @@ status_t
 intel_sync_to_token(sync_token* syncToken)
 {
 	CALLED();
-	intel_wait_engine_idle();
-	return B_OK;
+	if (syncToken == NULL)
+		return B_BAD_VALUE;
+
+	if (syncToken->engine_id != sEngineToken.engine_id)
+		return B_BAD_VALUE;
+
+	return wait_engine_idle_internal();
 }
 
 

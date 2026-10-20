@@ -905,7 +905,7 @@ intel_extreme_init(intel_info &info)
 			// so later code can fall back without observing partial state.
 			info.shared_info->cursor_memory = NULL;
 			info.shared_info->physical_cursor_memory = 0;
-			ERROR("could not allocate cursor memory: %s\\n",
+			ERROR("could not allocate cursor memory: %s\n",
 				strerror(cursorStatus));
 		}
 	}

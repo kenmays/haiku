@@ -359,18 +359,25 @@ intel_fill_span(engine_token* token, uint32 color, uint16* _params,
 		uint16	right;
 	} *params = (struct params*)_params;
 
+	if (params == NULL || count == 0)
+		return;
+
+	// Use the same color-blit command as rectangle fills. This avoids the
+	// mono-pattern setup path, which was previously incomplete here and
+	// emitted no scanline commands at all.
 	QueueCommands queue(gInfo->shared_info->primary_ring_buffer);
 
-	xy_setup_mono_pattern_command setup;
-	setup.background_color = color;
-	setup.pattern = 0;
-	queue.Put(setup, sizeof(setup));
-
 	for (uint32 i = 0; i < count; i++) {
-		xy_scanline_blit_command blit;
+		if (params[i].right < params[i].left)
+			continue;
+
+		xy_color_blit_command blit(false);
 		blit.dest_left = params[i].left;
 		blit.dest_top = params[i].top;
-		blit.dest_right = params[i].right;
-		blit.dest_bottom = params[i].top;
+		blit.dest_right = (uint16)(params[i].right + 1);
+		blit.dest_bottom = (uint16)(params[i].top + 1);
+		blit.color = color;
+
+		queue.Put(blit, sizeof(blit));
 	}
 }

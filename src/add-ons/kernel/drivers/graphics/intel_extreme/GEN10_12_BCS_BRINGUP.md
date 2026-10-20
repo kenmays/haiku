@@ -42,6 +42,18 @@ Before writing submission/reset code for this candidate, record and review all o
 
 For comparison—not as a substitute for the Gen10 manual—Intel publishes an Ice Lake (Gen11) PRM index with a dedicated Volume 10, Copy Engine: https://www.intel.com/content/www/us/en/docs/graphics-for-linux/developer-reference/1-0/ice-lake.html. The existence of separate platform manuals reinforces that command and reset details must be tied to the exact platform.
 
+## Source audit findings for the Gen10 candidate
+
+Inspection of the current branch confirms these implementation constraints:
+
+- `driver.cpp` identifies `0x5a52` as `INTEL_MODEL_CNLM` / Cannon Lake GT2. The allowlist does not establish a validated BCS register map.
+- `intel_extreme.cpp` allocates a generic hardware status page and validates its aperture-relative offset, but it deliberately leaves the Gen6+ blitter ring unallocated. The existing status-page allocation is not itself a completion fence: no Gen10 BCS breadcrumb is submitted or waited on.
+- `intel_allocate_memory()` and `intel_free_memory()` delegate to the GART allocator. Any future ring/fence work must establish the exact allocator contract, including GPU-visible address space, allocation lifetime, and behavior when freeing fails or a device cannot be proven quiescent.
+- `engine.cpp` rejects Gen6+ ring setup before lock initialization and MMIO access, does not advertise 2D acceleration, and rejects Gen6+ sync-token/idle claims. Do not relax these guards as part of a register-definition-only change.
+- A targeted public-documentation search in this pass did not establish an authoritative Cannon Lake-specific Copy Engine PRM or a complete Gen10 reset recipe. Intel's official [Graphics for Linux PRM index](https://www.intel.com/content/www/us/en/docs/graphics-for-linux/developer-reference/) is the authoritative starting point for currently published manuals; if the exact Cannon Lake material is unavailable, this is an evidence blocker, not permission to borrow Gen11/Gen12 sequences.
+
+These findings intentionally do not claim that the existing generic status page is suitable for a Gen10 BCS completion write, or that the current GART API alone can guarantee safe teardown after a hang.
+
 ## Required implementation sequence
 
 1. **Identify the device.** Record PCI ID, platform codename, graphics IP version, BCS instance/register base, aperture/GGTT properties, and the exact PRM revision used. Reject unknown IDs.

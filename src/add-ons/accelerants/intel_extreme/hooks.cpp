@@ -11,35 +11,14 @@
 #include "accelerant.h"
 
 
-// Hardware 2D is enabled only for generations whose legacy command path
-// has a usable completion/synchronization implementation. The current
-// engine code deliberately returns B_NOT_SUPPORTED from its idle-wait path
-// on Gen6+, so exposing blit hooks there can report work as submitted without
-// a reliable completion fence. Keep display modesetting available and let
-// app_server use its CPU/software renderer until the generation-specific
-// Blitter Command Streamer setup and completion fence are implemented.
-static bool
-use_software_2d()
-{
-	const DeviceType& type = gInfo->shared_info->device_type;
-	return type.Generation() >= 6
-		|| type.InFamily(INTEL_FAMILY_LAKE)
-		|| type.InFamily(INTEL_FAMILY_SOC0);
-}
-
-
-static bool
-has_blitter_ring()
-{
-	const intel_shared_info& info = *gInfo->shared_info;
-	const ring_buffer& ring = info.device_type.Generation() >= 6
-		? info.blitter_ring_buffer : info.primary_ring_buffer;
-
-	return ring.size >= B_PAGE_SIZE && ring.register_base != 0
-		&& ring.base != NULL;
-}
-
-
+// Keep 2D drawing on Haiku's CPU/software renderer for every supported Intel
+// generation. The hardware hooks below must remain unavailable until the
+// driver has generation-correct command submission, completion, recovery,
+// and teardown semantics. This policy intentionally covers Gen1 through Gen12
+// rather than allowing the older primary-ring path to accelerate drawing.
+//
+// Display modesetting and scanout remain hardware-driven; only the drawing
+// hooks are withheld so app_server can use its software rasterizer.
 extern "C" void*
 get_accelerant_hook(uint32 feature, void* data)
 {
@@ -135,21 +114,17 @@ get_accelerant_hook(uint32 feature, void* data)
 
 		/* 2D acceleration */
 		case B_SCREEN_TO_SCREEN_BLIT:
-			if (use_software_2d() || !has_blitter_ring())
-				return NULL;
-			return (void*)intel_screen_to_screen_blit;
+			// CPU-only 2D policy: leave drawing to app_server's software renderer.
+			return NULL;
 		case B_FILL_RECTANGLE:
-			if (use_software_2d() || !has_blitter_ring())
-				return NULL;
-			return (void*)intel_fill_rectangle;
+			// CPU-only 2D policy: leave drawing to app_server's software renderer.
+			return NULL;
 		case B_INVERT_RECTANGLE:
-			if (use_software_2d() || !has_blitter_ring())
-				return NULL;
-			return (void*)intel_invert_rectangle;
+			// CPU-only 2D policy: leave drawing to app_server's software renderer.
+			return NULL;
 		case B_FILL_SPAN:
-			if (use_software_2d() || !has_blitter_ring())
-				return NULL;
-			return (void*)intel_fill_span;
+			// CPU-only 2D policy: leave drawing to app_server's software renderer.
+			return NULL;
 
 		// overlay
 		case B_OVERLAY_COUNT:

@@ -65,6 +65,7 @@ The accelerant creates three pipes for generations 7–11, but pipe allocation a
 
 - Build the accelerant and kernel driver with Haiku's supported build system and treat warnings/errors as blockers.
 - Static checks: command size/alignment, ring bounds, framebuffer pitch and base units, integer overflow, MMIO readback, and every timeout/error path.
+- Graphics-memory ioctl failure injection: force the allocation-result copy to user space to fail and verify the kernel frees the newly allocated aperture base; also verify normal allocate/free and invalid-base handling.
 - Instrumented hardware tests: register dumps before/after initialization, ring head/tail progress, engine idle behavior, and failure recovery.
 - 2D correctness: fills, spans, inversion, overlapping/non-overlapping blits, all supported pixel formats, clipping/edge coordinates, and comparison against software rendering.
 - Display matrix: EDID base/extensions/checksums, DDC over I2C and AUX, HDMI, DP/mDP, internal eDP, multiple monitors, hotplug, mode changes, DPMS, and resume.

@@ -42,7 +42,7 @@ The mode list and proposed/fallback modes now advertise `B_PARALLEL_ACCESS`. Thi
 ### 3. 2D acceleration is not yet proven usable on Skylake
 
 - `sEngineToken` is initialized with capabilities `0 /*B_2D_ACCELERATION*/`. This means the driver is not advertising the 2D acceleration capability, despite individual hook implementations existing. Do not simply flip this bit until command submission, sync, and recovery are validated.
-- The internal idle wait now returns an error for `INTEL_FAMILY_LAKE` and `INTEL_FAMILY_SOC0` rather than claiming idle; the public `void` hook logs the failure. This is a serious blocker. It needs a register/command-level root-cause investigation against Skylake PRM Vols. 6, 11, 13 and 16 before removing the guard.
+- The internal idle wait now returns `B_NOT_SUPPORTED` for all Gen6+ devices rather than claiming idle; the public `void` hook logs the failure. Gen6+ needs a verified BCS completion fence and generation-correct flush sequence before the guard can be removed. Skylake also needs register/command-level root-cause investigation against PRM Vols. 6, 11, 13 and 16.
 - The existing rectangle and screen-to-screen operations use legacy XY blit command structures. Confirm command encodings, supported pixel formats, pitch/address units, clipping, alignment, fence/cache requirements, and valid framebuffer placement against the Skylake blitter PRM before enabling them.
 - The `B_FILL_SPAN` hook and its one-row color-blit implementation are present, but must not be treated as proof that hardware acceleration is operational.
 
@@ -101,7 +101,7 @@ Changes in this branch:
 - Added `INTEL_BLITTER_RING_BUFFER` at `0x22030` and a separate `blitter_ring_buffer` in shared state.
 - The kernel driver now allocates a dedicated ring for Gen6+ devices when allocation succeeds.
 - The accelerant initializes the BCS ring independently; failure to allocate/setup the BCS ring is logged and leaves blit hooks unavailable instead of preventing display initialization.
-- Gen6+ XY blit hooks and idle waiting select the BCS ring; pre-Gen6 devices continue to use the original primary ring.
+- Gen6+ XY blit hooks select the BCS ring; pre-Gen6 devices continue to use the original primary ring. Gen6+ idle waits deliberately return `B_NOT_SUPPORTED` until BCS completion synchronization is implemented.
 - All blit hooks are withheld if the required ring is missing. Skylake/SOC software-rendering fallback remains in force.
 - Ring setup refuses to reinitialize an already-enabled ring because head==tail does not prove the engine pipeline has completed. For a disabled ring, it reads back control, clears head/tail, programs the start address, publishes an empty tail, enables the ring, and verifies control/head/tail/start readback.
 - Teardown serializes with ring producers, polls head/tail briefly, logs a timeout, then disables the ring and destroys the lock. Head==tail is only a coarse ring-drain signal, not a proven engine completion fence; the Gen6+ completion path remains disabled.

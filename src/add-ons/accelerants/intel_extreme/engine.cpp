@@ -447,12 +447,13 @@ intel_release_engine(engine_token* engineToken, sync_token* syncToken)
 static status_t
 wait_engine_idle_internal(void)
 {
-	// Do not claim the engine is idle on generations where the engine path
-	// is known to stall. The public void hook can only log this failure;
-	// status-returning sync hooks propagate it to their caller.
-	if (gInfo->shared_info->device_type.InFamily(INTEL_FAMILY_LAKE)
-		|| gInfo->shared_info->device_type.InFamily(INTEL_FAMILY_SOC0)) {
-		ERROR("engine idle wait unsupported for this device family\n");
+	// Gen6+ blits use the separate BCS ring, but this driver has not yet
+	// initialized a valid hardware-status-page breadcrumb or verified the
+	// generation-correct MI_FLUSH_DW sequence. COMMAND_FLUSH is not a
+	// substitute for a proven BCS completion fence, so do not claim idle.
+	// This includes Skylake, whose engine path is already known to stall.
+	if (gInfo->shared_info->device_type.Generation() >= 6) {
+		ERROR("engine idle wait unsupported until BCS completion is implemented\n");
 		return B_NOT_SUPPORTED;
 	}
 

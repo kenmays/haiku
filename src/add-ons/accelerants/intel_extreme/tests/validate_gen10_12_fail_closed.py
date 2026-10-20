@@ -157,6 +157,11 @@ def main() -> int:
         "retry < 8" in aux_native,
         "native AUX transactions must allow seven retries after the initial DEFER",
     )
+    require(
+        "else if (result == 0)" in aux_native
+        and "if (result != (ssize_t)message->size)" in aux_native,
+        "AUX replies must contain a response and reads must reject short payloads",
+    )
 
     # CPU-only 2D policy is generation-independent: every Intel 2D drawing
     # hook must be absent so app_server selects its software rasterizer.

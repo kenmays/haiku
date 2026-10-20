@@ -377,8 +377,7 @@ intel_set_display_mode(display_mode* mode)
 	// rather than proceeding with ambiguous allocation ownership.
 	status_t freeStatus = intel_free_memory(sharedInfo.frame_buffer);
 	if (freeStatus != B_OK) {
-		ERROR("%s: Failed to release old framebuffer (status %ld)\\n",
-			__func__, freeStatus);
+		ERROR("%s: Failed to release old framebuffer!\n", __func__);
 		set_display_power_mode(sharedInfo.dpms_mode);
 		return B_ERROR;
 	}

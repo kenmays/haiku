@@ -228,9 +228,37 @@ QueueCommands::Write(uint32 data)
 void
 uninit_ring_buffer(ring_buffer &ringBuffer)
 {
-	// Stop hardware access before destroying the producer lock.
+	if (ringBuffer.size < B_PAGE_SIZE || ringBuffer.register_base == 0)
+		return;
+
+	// Serialize teardown with producers before touching the ring registers.
+	if (acquire_lock(&ringBuffer.lock) != B_OK) {
+		ERROR("could not acquire ring lock during teardown\n");
+		return;
+	}
+
+	bigtime_t start = system_time();
+	while (true) {
+		uint32 head = read32(ringBuffer.register_base + RING_BUFFER_HEAD)
+			& INTEL_RING_BUFFER_HEAD_MASK;
+		uint32 tail = read32(ringBuffer.register_base + RING_BUFFER_TAIL)
+			& INTEL_RING_BUFFER_HEAD_MASK;
+		if (head == tail)
+			break;
+
+		if (system_time() > start + 1000000LL) {
+			ERROR("ring teardown timed out: head %" B_PRIx32
+				", tail %" B_PRIx32 "\n", head, tail);
+			break;
+		}
+		spin(10);
+	}
+
+	// At teardown, stop the engine even if it did not drain. The mapping is
+	// still owned by the device driver; never free it while the engine runs.
 	write32(ringBuffer.register_base + RING_BUFFER_CONTROL, 0);
 	read32(ringBuffer.register_base + RING_BUFFER_CONTROL);
+	release_lock(&ringBuffer.lock);
 	uninit_lock(&ringBuffer.lock);
 	ringBuffer.size = 0;
 }

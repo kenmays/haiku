@@ -14,7 +14,7 @@
 // Keep 2D drawing on Haiku's CPU/software renderer for every supported Intel
 // generation. The hardware hooks below must remain unavailable until the
 // driver has generation-correct command submission, completion, recovery,
-// and teardown semantics. This policy intentionally covers Gen1 through Gen12
+// and teardown semantics. This policy covers every supported generation, Gen2 through Gen12
 // rather than allowing the older primary-ring path to accelerate drawing.
 //
 // Display modesetting and scanout remain hardware-driven; only the drawing

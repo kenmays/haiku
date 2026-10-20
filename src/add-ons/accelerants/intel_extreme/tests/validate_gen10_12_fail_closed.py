@@ -19,6 +19,7 @@ HOOKS_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/hooks.cpp"
 MODE_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/mode.cpp"
 MEMORY_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/memory.cpp"
 ACCELERANT_HEADER_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/accelerant.h"
+DPMS_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/dpms.cpp"
 
 
 def function_body(source: str, signature: str) -> str:
@@ -55,6 +56,25 @@ def main() -> int:
     mode = MODE_PATH.read_text(encoding="utf-8")
     memory = MEMORY_PATH.read_text(encoding="utf-8")
     accelerant_header = ACCELERANT_HEADER_PATH.read_text(encoding="utf-8")
+    dpms = DPMS_PATH.read_text(encoding="utf-8")
+
+    # DPMS must expose all four implemented states and reject invalid input
+    # before changing shared state or programming display power registers.
+    dpms_setter = function_body(dpms, "intel_set_dpms_mode(")
+    require(
+        "return B_DPMS_ON | B_DPMS_SUSPEND | B_DPMS_STAND_BY | B_DPMS_OFF;" in dpms,
+        "DPMS capabilities must include On, Standby, Suspend, and Off",
+    )
+    invalid_mode_guard = dpms_setter.find("if (mode != B_DPMS_ON")
+    shared_state_update = dpms_setter.find("gInfo->shared_info->dpms_mode = mode;")
+    power_transition = dpms_setter.find("set_display_power_mode(mode);")
+    require(
+        invalid_mode_guard >= 0
+        and "return B_BAD_VALUE;" in dpms_setter[invalid_mode_guard:shared_state_update]
+        and power_transition > invalid_mode_guard
+        and shared_state_update > power_transition,
+        "invalid DPMS modes must be rejected before hardware or shared-state changes",
+    )
 
     # CPU-only 2D policy is generation-independent: every Intel 2D drawing
     # hook must be absent so app_server selects its software rasterizer.

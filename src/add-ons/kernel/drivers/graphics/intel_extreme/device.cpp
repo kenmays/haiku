@@ -322,7 +322,13 @@ device_ioctl(void* data, uint32 op, void* buffer, size_t bufferLength)
 				// the allocation back here rather than leaking aperture space.
 				if (user_memcpy(buffer, &allocMemory,
 						sizeof(intel_allocate_graphics_memory)) < B_OK) {
-					intel_free_memory(*info, allocMemory.buffer_base);
+					status_t freeStatus = intel_free_memory(*info,
+						allocMemory.buffer_base);
+					if (freeStatus != B_OK) {
+						ERROR("%s: failed to roll back graphics allocation at %"
+							B_PRIxADDR ": %s\\n", __func__,
+							allocMemory.buffer_base, strerror(freeStatus));
+					}
 					return B_BAD_ADDRESS;
 				}
 			}

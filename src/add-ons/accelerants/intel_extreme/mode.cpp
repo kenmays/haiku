@@ -372,9 +372,16 @@ intel_set_display_mode(display_mode* mode)
 	// TODO: This may not be neccesary
 	set_display_power_mode(B_DPMS_OFF);
 
-	// free old and allocate new frame buffer in graphics memory
-
-	intel_free_memory(sharedInfo.frame_buffer);
+	// Free the old framebuffer before allocating a replacement. If the
+	// kernel refuses the free, preserve the old pointer and restore scanout
+	// rather than proceeding with ambiguous allocation ownership.
+	status_t freeStatus = intel_free_memory(sharedInfo.frame_buffer);
+	if (freeStatus != B_OK) {
+		ERROR("%s: Failed to release old framebuffer (status %ld)\\n",
+			__func__, freeStatus);
+		set_display_power_mode(sharedInfo.dpms_mode);
+		return B_ERROR;
+	}
 
 	addr_t base;
 	if (intel_allocate_memory(bytesPerRow * target.virtual_height, 0,

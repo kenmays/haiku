@@ -202,6 +202,17 @@ setup_ring_buffer(ring_buffer &ringBuffer, const char* name)
 	TRACE("Setup ring buffer %s, offset %lx, size %lx\n", name,
 		ringBuffer.offset, ringBuffer.size);
 
+	// Write() wraps with a power-of-two mask and the hardware size field is
+	// page based. Do not program a malformed ring and later treat it as live.
+	if (ringBuffer.register_base == 0 || ringBuffer.base == NULL
+		|| ringBuffer.size < B_PAGE_SIZE
+		|| (ringBuffer.size & (ringBuffer.size - 1)) != 0
+		|| (ringBuffer.size & (B_PAGE_SIZE - 1)) != 0) {
+		ERROR("invalid ring buffer geometry for %s\n", name);
+		ringBuffer.size = 0;
+		return;
+	}
+
 	if (init_lock(&ringBuffer.lock, name) < B_OK) {
 		// disable ring buffer
 		ringBuffer.size = 0;

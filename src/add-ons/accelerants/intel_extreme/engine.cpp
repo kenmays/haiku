@@ -494,6 +494,14 @@ intel_acquire_engine(uint32 capabilities, uint32 maxWait, sync_token* syncToken,
 
 	*_engineToken = NULL;
 
+	// This accelerant currently advertises no hardware engine capabilities:
+	// Gen6+ BCS completion fences and safe publication ordering are not yet
+	// verified, and the legacy path must not be selected as a substitute for
+	// unsupported Gen6+ hardware. Reject requests explicitly instead of
+	// handing out a token whose advertised capabilities do not satisfy them.
+	if ((capabilities & ~sEngineToken.capabilities) != 0)
+		return B_NOT_SUPPORTED;
+
 	if (acquire_lock(&gInfo->shared_info->engine_lock) != B_OK)
 		return B_ERROR;
 

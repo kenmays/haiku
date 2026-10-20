@@ -55,7 +55,7 @@ Priority checks:
 - Verify HDMI/DVI DDI mode selection, port/pipe/transcoder routing, DPLL selection, clock programming, lane/PHY setup, and supported color depth. HDMI audio and HDMI 2.0/HDCP features are separate capability paths and must not be inferred from basic video output.
 - Verify miniDP as DP signaling on the board's actual DDI routing. A passive adapter does not create support for an otherwise unavailable signal/protocol.
 - Preserve the distinction between “EDID read failed” and “monitor disconnected.” VBT and internal-panel fallback behavior should be tested on laptop and desktop configurations separately.
-- In `DigitalDisplayInterface::IsConnected()`, review the fallback after EDID detection: its pipe scan appears to return based on the first pipe's enable state rather than establishing that an enabled pipe is routed to the current port. Confirm and correct this logic with a focused test before changing behavior.
+- `DigitalDisplayInterface::IsConnected()` previously checked the first pipe's enable bit in the EDID fallback and could therefore report a port connected based on an unrelated pipe. The branch now removes that fallback inference: after the port-specific scan fails to find an enabled pipe routed to this port, EDID detection is logged but the port is not reported connected. This logic change still needs hardware tests for connected-but-disabled outputs, hotplug, and monitors that fail EDID.
 
 ### 5. Display modes and multiple monitors
 

@@ -142,7 +142,7 @@ QueueCommands::MakeSpace(uint32 size)
 	// A timeout must never permit overwriting commands the GPU has not
 	// consumed.
 	if (fRingBuffer.size < B_PAGE_SIZE
-		|| size > fRingBuffer.size / sizeof(uint32)
+		|| size > (fRingBuffer.size - sizeof(uint64)) / sizeof(uint32)
 		|| fRingBuffer.base == NULL || fRingBuffer.register_base == 0) {
 		ERROR("invalid ring buffer or oversized command request\n");
 		return false;
@@ -158,7 +158,12 @@ QueueCommands::MakeSpace(uint32 size)
 		if (head <= fRingBuffer.position)
 			head += fRingBuffer.size;
 
-		fRingBuffer.space_left = head - fRingBuffer.position;
+		uint32 available = head - fRingBuffer.position;
+
+		// Keep one 8-byte slot empty so head == tail can only mean empty,
+		// never a completely full ring whose commands would be lost.
+		fRingBuffer.space_left = available > sizeof(uint64)
+			? available - sizeof(uint64) : 0;
 
 		if (fRingBuffer.space_left < size) {
 			if (system_time() > start + 1000000LL) {
@@ -221,7 +226,8 @@ setup_ring_buffer(ring_buffer &ringBuffer, const char* name)
 
 	uint32 ring = ringBuffer.register_base;
 	ringBuffer.position = 0;
-	ringBuffer.space_left = ringBuffer.size;
+	// Preserve the empty slot required to distinguish full from empty.
+	ringBuffer.space_left = ringBuffer.size - sizeof(uint64);
 
 	write32(ring + RING_BUFFER_TAIL, 0);
 	write32(ring + RING_BUFFER_START, ringBuffer.offset);

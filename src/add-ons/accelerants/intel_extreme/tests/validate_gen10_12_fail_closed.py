@@ -118,6 +118,24 @@ def main() -> int:
         "kernel initialization must leave Gen6+ BCS unallocated and unavailable",
     )
 
+    # A quarantined ring must also prevent unmap_aperture(): the GART
+    # manager destroys every tracked allocation when an aperture is unmapped.
+    # Preserve the aperture if the legacy ring is enabled or freeing its ring
+    # allocation fails, and make the unmap conditional on that decision.
+    teardown = function_body(kernel, "intel_extreme_uninit(")
+    quarantine_gate = teardown.find("if (quarantineAperture)")
+    unmap_at = teardown.find("gGART->unmap_aperture(info.aperture);")
+    else_at = teardown.find("} else {", quarantine_gate)
+    require(
+        "bool quarantineAperture = false;" in teardown
+        and "INTEL_RING_BUFFER_ENABLED" in teardown
+        and "quarantineAperture = true;" in teardown
+        and quarantine_gate >= 0
+        and else_at > quarantine_gate
+        and unmap_at > else_at,
+        "GART aperture unmap must be skipped when a legacy ring/allocation is quarantined",
+    )
+
     # Keep the selected Gen10 review candidate explicit and disabled. A PCI
     # allowlist entry is identification only; it must not bypass the BCS gate.
     require(

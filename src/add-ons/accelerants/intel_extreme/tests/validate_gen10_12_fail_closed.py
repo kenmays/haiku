@@ -14,6 +14,7 @@ ENGINE_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/engine.cpp"
 KERNEL_PATH = ROOT / "src/add-ons/kernel/drivers/graphics/intel_extreme/intel_extreme.cpp"
 DRIVER_PATH = ROOT / "src/add-ons/kernel/drivers/graphics/intel_extreme/driver.cpp"
 BRINGUP_PATH = ROOT / "src/add-ons/kernel/drivers/graphics/intel_extreme/GEN10_12_BCS_BRINGUP.md"
+OVERLAY_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/overlay.cpp"
 
 
 def function_body(source: str, signature: str) -> str:
@@ -45,6 +46,7 @@ def main() -> int:
     kernel = KERNEL_PATH.read_text(encoding="utf-8")
     driver = DRIVER_PATH.read_text(encoding="utf-8")
     bringup = BRINGUP_PATH.read_text(encoding="utf-8")
+    overlay = OVERLAY_PATH.read_text(encoding="utf-8")
 
     engine_token = function_body(engine, "intel_acquire_engine(")
     require(
@@ -138,6 +140,20 @@ def main() -> int:
         and else_at > quarantine_gate
         and unmap_at > else_at,
         "GART unmap must be conditional, and ring inspection must require mapped MMIO",
+    )
+
+    # Overlay GART allocations must not be reported as released if a free
+    # fails. Retain the descriptor so ownership of the remaining allocation
+    # is not lost and a later release can retry.
+    release_overlay_buffer = function_body(overlay, "intel_release_overlay_buffer(")
+    require(
+        "status_t status = intel_free_memory(overlay->state_base);" in release_overlay_buffer
+        and "status_t status = intel_free_memory(overlay->buffer_base);" in release_overlay_buffer
+        and "if (status != B_OK)" in release_overlay_buffer
+        and release_overlay_buffer.find("free(overlay);")
+            > release_overlay_buffer.find("intel_free_memory(overlay->buffer_base);")
+        and "return status;" in release_overlay_buffer,
+        "overlay release must preserve ownership metadata when a GART free fails",
     )
 
     # Keep the selected Gen10 review candidate explicit and disabled. A PCI

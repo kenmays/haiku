@@ -1038,6 +1038,45 @@ intel_extreme_uninit(intel_info &info)
 		}
 	}
 
+	// The legacy primary ring is allocated from the GART aperture. It is
+	// not freed by the accelerant, so release it here only after checking
+	// that hardware cannot still fetch commands from this allocation. If
+	// the engine is enabled and its start address still names this ring,
+	// quarantine the allocation rather than freeing memory the GPU may use.
+	if (info.shared_info != NULL
+		&& info.device_type.Generation() < 6) {
+		ring_buffer &primary = info.shared_info->primary_ring_buffer;
+		if (primary.base != NULL) {
+			bool referencedByEnabledRing = false;
+			if (primary.register_base != 0) {
+				uint32 control = read32(info, primary.register_base
+					+ RING_BUFFER_CONTROL);
+				uint32 start = read32(info, primary.register_base
+					+ RING_BUFFER_START);
+				referencedByEnabledRing =
+					(control & INTEL_RING_BUFFER_ENABLED) != 0
+					&& start == primary.offset;
+			}
+			if (referencedByEnabledRing) {
+				ERROR("quarantining primary ring allocation still referenced by enabled hardware\\n");
+			} else {
+				status_t freeStatus = intel_free_memory(info,
+					(addr_t)primary.base);
+				if (freeStatus == B_OK) {
+					primary.base = NULL;
+					primary.register_base = 0;
+					primary.size = 0;
+					primary.offset = 0;
+					primary.position = 0;
+					primary.space_left = 0;
+				} else {
+					ERROR("could not free primary ring allocation: %s\\n",
+						strerror(freeStatus));
+				}
+			}
+		}
+	}
+
 	gGART->unmap_aperture(info.aperture);
 
 	delete_area(info.registers_area);

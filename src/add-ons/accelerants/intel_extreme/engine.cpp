@@ -197,8 +197,11 @@ QueueCommands::Write(uint32 data)
 void
 uninit_ring_buffer(ring_buffer &ringBuffer)
 {
-	uninit_lock(&ringBuffer.lock);
+	// Stop hardware access before destroying the producer lock.
 	write32(ringBuffer.register_base + RING_BUFFER_CONTROL, 0);
+	read32(ringBuffer.register_base + RING_BUFFER_CONTROL);
+	uninit_lock(&ringBuffer.lock);
+	ringBuffer.size = 0;
 }
 
 

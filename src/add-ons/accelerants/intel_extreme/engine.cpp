@@ -79,10 +79,9 @@ QueueCommands::~QueueCommands()
 	}
 
 	if (fRingBuffer.position != fInitialPosition) {
-		// Flush write-combined ring memory before publishing the new tail.
-		int32 flush = 0;
-		atomic_add(&flush, 1);
-
+		// Publish the batch only after writing its command words. The
+		// required CPU/WC-memory-to-MMIO ordering primitive is not yet
+		// verified for this mapping; do not substitute a local atomic op.
 		write32(fRingBuffer.register_base + RING_BUFFER_TAIL,
 			fRingBuffer.position);
 	}

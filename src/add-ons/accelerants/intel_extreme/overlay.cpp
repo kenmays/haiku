@@ -391,7 +391,7 @@ intel_allocate_overlay_buffer(color_space colorSpace, uint16 width,
 
 	status_t status = intel_allocate_memory(buffer->bytes_per_row * height,
 		0, overlay->buffer_base);
-	if (status < B_OK) {
+	if (status != B_OK) {
 		free(overlay);
 		return NULL;
 	}
@@ -399,7 +399,7 @@ intel_allocate_overlay_buffer(color_space colorSpace, uint16 width,
 	if (sharedInfo.device_type.IsModel(INTEL_MODEL_965)) {
 		status = intel_allocate_memory(INTEL_i965_OVERLAY_STATE_SIZE,
 			B_APERTURE_NON_RESERVED, overlay->state_base);
-		if (status < B_OK) {
+		if (status != B_OK) {
 			intel_free_memory(overlay->buffer_base);
 			free(overlay);
 			return NULL;

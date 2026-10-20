@@ -120,3 +120,11 @@ Reference: [Intel Skylake Gen9 PRM Vol. 11 — Blitter](https://www.x.org/docs/i
 The kernel driver's status-page allocation passed `(addr_t*)info.shared_info->status_page` instead of the address of the pointer field. If `status_page` was initially null, the allocator received a null/invalid output pointer rather than `&status_page`. The branch now passes `(addr_t*)&info.shared_info->status_page`, initializes the pointer/physical address explicitly, and logs allocation failure.
 
 This fixes the output-pointer bug only. The code still has a `TODO`-equivalent gap in that it does not program the per-engine HWS_PGA register or establish a Gen6+ breadcrumb protocol. Do not treat status-page allocation as proof that BCS completion/synchronization works.
+
+### 10. Ring-stall diagnostics and fail-closed checks
+
+The ring-space wait now checks that the ring remains enabled and that the hardware tail still matches the batch's last published tail before using the head pointer to calculate free space. It fails closed on disabled-ring state, invalid head geometry, or a tail mismatch. The one-second timeout log now includes the ring control and start registers as well as the hardware head/tail, published tail, software tail, ring size, remaining space, and requested bytes. These values are intended to distinguish a stopped/disabled ring, a bad ring base/control setup, and a command streamer that stopped consuming an otherwise valid ring.
+
+This is diagnostic hardening, not a recovery implementation. The ring head/tail relationship cannot establish that all prior GPU work has completed, and the new log does not identify the precise command that stalled. Capture these values alongside a full MMIO dump and the matching Gen9 engine status/error registers when reproducing the issue on physical HD Graphics 530 hardware.
+
+The status-page/breadcrumb implementation remains deliberately blocked until the exact Skylake Gen9 BCS MI_FLUSH_DW encoding, HWS address-space requirements, and mapping lifetime are verified. Linux i915 Gen8+ code is a useful cross-check for the command shape, but is not sufficient by itself to prove a proposed sequence is valid for Haiku's current GGTT/status-page setup or the BCS engine on this device. Do not remove the Gen6+ B_NOT_SUPPORTED idle-wait guard or enable B_2D_ACCELERATION based on this change.

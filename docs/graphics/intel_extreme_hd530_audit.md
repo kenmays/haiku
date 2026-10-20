@@ -78,7 +78,7 @@ This branch includes the fill-span hook work, a ring-buffer fail-closed fix, sof
 
 The follow-up review found several issues beyond the original timeout handling:
 
-- **Ring geometry must match the wrap algorithm.** `Write()` wraps with `size - 1`, which is valid only for a non-zero power-of-two size. Setup now rejects a null CPU mapping, missing register base, sub-page size, non-power-of-two size, or non-page-aligned size before programming the ring.
+- **Ring geometry must match the wrap algorithm.** `Write()` wraps with `size - 1`, which is valid only for a non-zero power-of-two size. Setup now rejects a null CPU mapping, missing register base, sub-page size, non-power-of-two size, non-page-aligned size/offset, or a size that cannot be represented by the hardware control mask before programming the ring.
 - **Keep an empty slot.** A ring must not let the producer consume all bytes, because equal head/tail values are interpreted as empty. The software accounting now reserves an 8-byte slot in the initial free-space estimate and in the head-to-tail calculation.
 - **Never pad without reserving space.** Queue destruction previously emitted a NOOP for 8-byte alignment without checking that a slot was available. The destructor now reserves space before padding. If padding cannot be reserved, it rolls the unpublished batch back rather than publishing a partial/unaligned batch.
 - **Lock acquisition failure must fail closed.** `QueueCommands` now records whether `acquire_lock()` succeeded and avoids touching the ring or releasing a lock it did not acquire. This guards against a failed ring-lock initialization; it does not substitute for complete setup/teardown ordering.

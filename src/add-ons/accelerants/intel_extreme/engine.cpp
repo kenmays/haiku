@@ -29,6 +29,23 @@
 static engine_token sEngineToken = {1, 0 /*B_2D_ACCELERATION*/, NULL};
 
 
+// Gen6+ has a separate Blitter Command Streamer. Never send XY blit
+// commands to the render ring on those devices.
+static ring_buffer*
+get_blitter_ring_buffer()
+{
+	intel_shared_info &info = *gInfo->shared_info;
+	ring_buffer* ring = info.device_type.Generation() >= 6
+		? &info.blitter_ring_buffer : &info.primary_ring_buffer;
+
+	if (ring->size < B_PAGE_SIZE || ring->register_base == 0
+		|| ring->base == NULL)
+		return NULL;
+
+	return ring;
+}
+
+
 QueueCommands::QueueCommands(ring_buffer &ring)
 	:
 	fRingBuffer(ring),
@@ -329,9 +346,10 @@ wait_engine_idle_internal(void)
 		return B_NOT_SUPPORTED;
 	}
 
-	ring_buffer &ring = gInfo->shared_info->primary_ring_buffer;
-	if (ring.size < B_PAGE_SIZE || ring.register_base == 0 || ring.base == NULL)
+	ring_buffer* ringPointer = get_blitter_ring_buffer();
+	if (ringPointer == NULL)
 		return B_NO_INIT;
+	ring_buffer &ring = *ringPointer;
 
 	{
 		QueueCommands queue(ring);
@@ -406,7 +424,11 @@ intel_screen_to_screen_blit(engine_token* token, blit_params* params,
 	if (params == NULL || count == 0)
 		return;
 
-	QueueCommands queue(gInfo->shared_info->primary_ring_buffer);
+	ring_buffer* ring = get_blitter_ring_buffer();
+	if (ring == NULL)
+		return;
+
+	QueueCommands queue(*ring);
 
 	for (uint32 i = 0; i < count; i++) {
 		// The XY command uses 16-bit coordinates and exclusive right/bottom
@@ -438,7 +460,11 @@ intel_fill_rectangle(engine_token* token, uint32 color,
 	if (params == NULL || count == 0)
 		return;
 
-	QueueCommands queue(gInfo->shared_info->primary_ring_buffer);
+	ring_buffer* ring = get_blitter_ring_buffer();
+	if (ring == NULL)
+		return;
+
+	QueueCommands queue(*ring);
 
 	for (uint32 i = 0; i < count; i++) {
 		if (params[i].right < params[i].left
@@ -465,7 +491,11 @@ intel_invert_rectangle(engine_token* token, fill_rect_params* params,
 	if (params == NULL || count == 0)
 		return;
 
-	QueueCommands queue(gInfo->shared_info->primary_ring_buffer);
+	ring_buffer* ring = get_blitter_ring_buffer();
+	if (ring == NULL)
+		return;
+
+	QueueCommands queue(*ring);
 
 	for (uint32 i = 0; i < count; i++) {
 		if (params[i].right < params[i].left
@@ -501,7 +531,11 @@ intel_fill_span(engine_token* token, uint32 color, uint16* _params,
 	// Use the same color-blit command as rectangle fills. This avoids the
 	// mono-pattern setup path, which was previously incomplete here and
 	// emitted no scanline commands at all.
-	QueueCommands queue(gInfo->shared_info->primary_ring_buffer);
+	ring_buffer* ring = get_blitter_ring_buffer();
+	if (ring == NULL)
+		return;
+
+	QueueCommands queue(*ring);
 
 	for (uint32 i = 0; i < count; i++) {
 		// These coordinates are converted to exclusive right/bottom edges.

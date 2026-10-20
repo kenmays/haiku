@@ -114,3 +114,9 @@ Still unresolved:
 - The shared-state layout change requires rebuilding the kernel driver and accelerant together.
 
 Reference: [Intel Skylake Gen9 PRM Vol. 11 — Blitter](https://www.x.org/docs/intel/SKL/rev01/intel-gfx-prm-osrc-skl-vol11-blitter.pdf); [Linux i915 ring initialization](https://code.googlesource.com/linux/torvalds/linux/+/11e3b725cfc282efe9d4a354153e99d86a16af08/drivers/gpu/drm/i915/intel_ringbuffer.c).
+
+### 9. Hardware status-page allocation bug
+
+The kernel driver's status-page allocation passed `(addr_t*)info.shared_info->status_page` instead of the address of the pointer field. If `status_page` was initially null, the allocator received a null/invalid output pointer rather than `&status_page`. The branch now passes `(addr_t*)&info.shared_info->status_page`, initializes the pointer/physical address explicitly, and logs allocation failure.
+
+This fixes the output-pointer bug only. The code still has a `TODO`-equivalent gap in that it does not program the per-engine HWS_PGA register or establish a Gen6+ breadcrumb protocol. Do not treat status-page allocation as proof that BCS completion/synchronization works.

@@ -35,6 +35,7 @@ class QueueCommands {
 		ring_buffer	&fRingBuffer;
 		uint32			fInitialPosition;
 		uint32			fInitialSpaceLeft;
+		bool			fLockAcquired;
 };
 
 

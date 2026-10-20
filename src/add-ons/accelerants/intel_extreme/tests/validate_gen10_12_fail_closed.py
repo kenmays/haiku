@@ -15,6 +15,7 @@ KERNEL_PATH = ROOT / "src/add-ons/kernel/drivers/graphics/intel_extreme/intel_ex
 DRIVER_PATH = ROOT / "src/add-ons/kernel/drivers/graphics/intel_extreme/driver.cpp"
 BRINGUP_PATH = ROOT / "src/add-ons/kernel/drivers/graphics/intel_extreme/GEN10_12_BCS_BRINGUP.md"
 OVERLAY_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/overlay.cpp"
+HOOKS_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/hooks.cpp"
 
 
 def function_body(source: str, signature: str) -> str:
@@ -47,6 +48,29 @@ def main() -> int:
     driver = DRIVER_PATH.read_text(encoding="utf-8")
     bringup = BRINGUP_PATH.read_text(encoding="utf-8")
     overlay = OVERLAY_PATH.read_text(encoding="utf-8")
+    hooks = HOOKS_PATH.read_text(encoding="utf-8")
+
+    # CPU-only 2D policy is generation-independent: every Intel 2D drawing
+    # hook must be absent so app_server selects its software rasterizer.
+    drawing_hooks = (
+        ("B_SCREEN_TO_SCREEN_BLIT", "intel_screen_to_screen_blit"),
+        ("B_FILL_RECTANGLE", "intel_fill_rectangle"),
+        ("B_INVERT_RECTANGLE", "intel_invert_rectangle"),
+        ("B_FILL_SPAN", "intel_fill_span"),
+    )
+    for index, (feature, implementation) in enumerate(drawing_hooks):
+        start = hooks.find(f"case {feature}:")
+        require(start >= 0, f"missing drawing hook case: {feature}")
+        next_case = hooks.find("\\n\\t\\tcase ", start + 1)
+        body = hooks[start:next_case if next_case >= 0 else len(hooks)]
+        require(
+            "return NULL;" in body and f"(void*){implementation}" not in body,
+            f"{feature} must remain unavailable for CPU-only 2D rendering",
+        )
+    require(
+        "CPU-only 2D policy" in hooks and "Gen1 through Gen12" in hooks,
+        "hooks must document the all-generation software-rendering policy",
+    )
 
     engine_token = function_body(engine, "intel_acquire_engine(")
     require(

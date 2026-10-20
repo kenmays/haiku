@@ -587,6 +587,13 @@ intel_get_sync_token(engine_token* engineToken, sync_token* syncToken)
 	if (engineToken != &sEngineToken || syncToken == NULL)
 		return B_BAD_VALUE;
 
+	// A constant counter is not a completion fence: it cannot distinguish
+	// work submitted before and after this token. Until the generation-
+	// correct status-page breadcrumb and its GPU-visible mapping are
+	// implemented, do not report a successful sync token on Gen6+.
+	if (gInfo->shared_info->device_type.Generation() >= 6)
+		return B_NOT_SUPPORTED;
+
 	syncToken->engine_id = engineToken->engine_id;
 	syncToken->counter = 0;
 	return B_OK;

@@ -384,7 +384,11 @@ intel_set_display_mode(display_mode* mode)
 	status_t freeStatus = intel_free_memory(sharedInfo.frame_buffer);
 	if (freeStatus != B_OK) {
 		ERROR("%s: Failed to release old framebuffer!\n", __func__);
-		set_display_power_mode(sharedInfo.dpms_mode);
+		status_t restoreStatus = set_display_power_mode(sharedInfo.dpms_mode);
+		if (restoreStatus != B_OK) {
+			ERROR("%s: Failed to restore display power after framebuffer release error!\n",
+				__func__);
+		}
 		return B_ERROR;
 	}
 
@@ -400,7 +404,11 @@ intel_set_display_mode(display_mode* mode)
 			sharedInfo.frame_buffer_offset = base
 				- (addr_t)sharedInfo.graphics_memory;
 			set_frame_buffer_base();
-			set_display_power_mode(sharedInfo.dpms_mode);
+			status_t restoreStatus = set_display_power_mode(sharedInfo.dpms_mode);
+			if (restoreStatus != B_OK) {
+				ERROR("%s: Failed to restore display power after framebuffer allocation error!\n",
+					__func__);
+			}
 		} else {
 			// The original allocation was released above. Do not leave a stale
 			// CPU framebuffer pointer for software drawing to dereference.

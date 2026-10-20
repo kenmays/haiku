@@ -291,8 +291,14 @@ const struct supported_device {
 	{0x4690, INTEL_MODEL_ALD, "Alder Lake-S GT1"},
 	{0x4691, INTEL_MODEL_ALD, "Alder Lake-S"},
 	{0x4692, INTEL_MODEL_ALD, "Alder Lake-S GT1"},
-	{0x4693, INTEL_MODEL_ALD, "Alder Lake-S GT1"}
+	{0x4693, INTEL_MODEL_ALD, "Alder Lake-S GT1"},
 
+	// Raptor Lake (Gen12 Xe architecture; PCI IDs from public i915 tables).
+	{0xa721, INTEL_MODEL_RPLM, "Raptor Lake-P"},
+	{0xa7a9, INTEL_MODEL_RPLM, "Raptor Lake-P"},
+	{0xa7ab, INTEL_MODEL_RPLM, "Raptor Lake-P"},
+	{0xa7ac, INTEL_MODEL_RPLM, "Raptor Lake-U"},
+	{0xa7ad, INTEL_MODEL_RPLM, "Raptor Lake-U"}
 };
 
 int32 api_version = B_CUR_DRIVER_API_VERSION;

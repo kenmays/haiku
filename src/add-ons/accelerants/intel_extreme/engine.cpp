@@ -220,7 +220,7 @@ QueueCommands::MakeSpace(uint32 size)
 		ERROR("ring reservation rejected: control %" B_PRIx32
 			", head %" B_PRIx32 ", hardware tail %" B_PRIx32
 			", expected tail %" B_PRIx32 ", start %" B_PRIx32
-			", expected start %" B_PRIx32 "\\n",
+			", expected start %" B_PRIx32 "\n",
 			control, head, hardwareTail, fInitialPosition, ringStart,
 			fRingBuffer.offset);
 		return false;

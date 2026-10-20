@@ -456,6 +456,7 @@ struct intel_shared_info {
 	struct lock		engine_lock;
 
 	ring_buffer		primary_ring_buffer;
+	ring_buffer		blitter_ring_buffer;
 
 	int32			overlay_channel_used;
 	bool			overlay_active;
@@ -719,6 +720,7 @@ struct intel_brightness_legacy {
 
 // ring buffer
 #define INTEL_PRIMARY_RING_BUFFER		0x02030
+#define INTEL_BLITTER_RING_BUFFER		0x22030
 #define INTEL_SECONDARY_RING_BUFFER_0	0x02100
 #define INTEL_SECONDARY_RING_BUFFER_1	0x02110
 // offsets for the ring buffer base registers above

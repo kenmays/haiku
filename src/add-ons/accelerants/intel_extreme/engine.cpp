@@ -382,7 +382,10 @@ intel_fill_span(engine_token* token, uint32 color, uint16* _params,
 	QueueCommands queue(gInfo->shared_info->primary_ring_buffer);
 
 	for (uint32 i = 0; i < count; i++) {
-		if (params[i].right < params[i].left)
+		// These coordinates are converted to exclusive right/bottom edges.
+		// Reject values that would wrap the 16-bit command fields.
+		if (params[i].right < params[i].left || params[i].right == 0xffff
+			|| params[i].top == 0xffff)
 			continue;
 
 		xy_color_blit_command blit(false);

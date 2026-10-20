@@ -723,11 +723,24 @@ intel_extreme_init(intel_info &info)
 	// write combining...
 
 	ring_buffer &primary = info.shared_info->primary_ring_buffer;
-	if (intel_allocate_memory(info, 16 * B_PAGE_SIZE, 0, 0,
-			(addr_t*)&primary.base) == B_OK) {
+	primary.base = NULL;
+	primary.register_base = 0;
+	primary.size = 0;
+	primary.offset = 0;
+	primary.position = 0;
+	primary.space_left = 0;
+	status_t primaryRingStatus = intel_allocate_memory(info,
+		16 * B_PAGE_SIZE, 0, 0, (addr_t*)&primary.base);
+	if (primaryRingStatus == B_OK) {
 		primary.register_base = INTEL_PRIMARY_RING_BUFFER;
 		primary.size = 16 * B_PAGE_SIZE;
 		primary.offset = (addr_t)primary.base - info.aperture_base;
+	} else {
+		// Leave the ring explicitly unavailable. Accelerant-side code must
+		// not infer readiness from a register address or a stale allocation.
+		primary.base = NULL;
+		ERROR("could not allocate primary ring buffer: %s\\n",
+			strerror(primaryRingStatus));
 	}
 
 	// Gen6 introduced a separate Blitter Command Streamer. XY_*_BLIT
@@ -740,11 +753,18 @@ intel_extreme_init(intel_info &info)
 		blitter.offset = 0;
 		blitter.position = 0;
 		blitter.space_left = 0;
-		if (intel_allocate_memory(info, 16 * B_PAGE_SIZE, 0, 0,
-				(addr_t*)&blitter.base) == B_OK) {
+		status_t blitterRingStatus = intel_allocate_memory(info,
+			16 * B_PAGE_SIZE, 0, 0, (addr_t*)&blitter.base);
+		if (blitterRingStatus == B_OK) {
 			blitter.register_base = INTEL_BLITTER_RING_BUFFER;
 			blitter.size = 16 * B_PAGE_SIZE;
 			blitter.offset = (addr_t)blitter.base - info.aperture_base;
+		} else {
+			// Keep the Gen6+ blitter unavailable rather than exposing a
+			// partially initialized ring to the accelerant.
+			blitter.base = NULL;
+			ERROR("could not allocate blitter ring buffer: %s\\n",
+				strerror(blitterRingStatus));
 		}
 	}
 
@@ -839,6 +859,9 @@ intel_extreme_init(intel_info &info)
 
 	// setup overlay registers
 
+	info.overlay_registers = NULL;
+	info.shared_info->physical_overlay_registers = 0;
+	info.shared_info->overlay_offset = 0;
 	status_t status = intel_allocate_memory(info, B_PAGE_SIZE, 0,
 		intel_uses_physical_overlay(*info.shared_info)
 				? B_APERTURE_NEED_PHYSICAL : 0,
@@ -870,10 +893,21 @@ intel_extreme_init(intel_info &info)
 		ERROR("could not allocate hardware status page: %s\n",
 			strerror(statusPageStatus));
 	}
+	info.shared_info->cursor_memory = NULL;
+	info.shared_info->physical_cursor_memory = 0;
 	if (hardwareCursor) {
-		intel_allocate_memory(info, B_PAGE_SIZE, 0, B_APERTURE_NEED_PHYSICAL,
+		status_t cursorStatus = intel_allocate_memory(info, B_PAGE_SIZE, 0,
+			B_APERTURE_NEED_PHYSICAL,
 			(addr_t*)&info.shared_info->cursor_memory,
 			&info.shared_info->physical_cursor_memory);
+		if (cursorStatus != B_OK) {
+			// Cursor allocation is optional. Keep both address forms invalid
+			// so later code can fall back without observing partial state.
+			info.shared_info->cursor_memory = NULL;
+			info.shared_info->physical_cursor_memory = 0;
+			ERROR("could not allocate cursor memory: %s\\n",
+				strerror(cursorStatus));
+		}
 	}
 
 	edid1_info* edidInfo = (edid1_info*)get_boot_item(VESA_EDID_BOOT_INFO,

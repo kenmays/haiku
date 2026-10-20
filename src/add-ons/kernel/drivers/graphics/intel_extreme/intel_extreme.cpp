@@ -730,6 +730,18 @@ intel_extreme_init(intel_info &info)
 		primary.offset = (addr_t)primary.base - info.aperture_base;
 	}
 
+	// Gen6 introduced a separate Blitter Command Streamer. XY_*_BLIT
+	// commands must be submitted to its ring, not the render ring.
+	if (info.device_type.Generation() >= 6) {
+		ring_buffer &blitter = info.shared_info->blitter_ring_buffer;
+		if (intel_allocate_memory(info, 16 * B_PAGE_SIZE, 0, 0,
+				(addr_t*)&blitter.base) == B_OK) {
+			blitter.register_base = INTEL_BLITTER_RING_BUFFER;
+			blitter.size = 16 * B_PAGE_SIZE;
+			blitter.offset = (addr_t)blitter.base - info.aperture_base;
+		}
+	}
+
 	// Enable clock gating
 	intel_en_gating(info);
 

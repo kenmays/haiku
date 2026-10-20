@@ -31,7 +31,7 @@ This is a **static fail-closed validation**, not hardware validation. The curren
 | Gen11 | Pass: covered by the same guard | Same fail-closed behavior; no BCS batch is published | No Gen11-specific reset sequence is implemented or invoked by this accelerant |
 | Gen12 | Pass: covered by the same guard | Same fail-closed behavior; no BCS batch is published | No Gen12-specific reset sequence is implemented or invoked by this accelerant |
 
-Static checks also confirm that kernel initialization leaves the Gen6+ BCS ring fields unavailable and does not allocate a BCS ring, and that engine-idle and sync-token APIs return `B_NOT_SUPPORTED` rather than claiming completion. The four command-producing hooks checked are screen-to-screen blit, fill rectangle, invert rectangle, and fill span.
+Static checks also confirm that the accelerant does not advertise `B_2D_ACCELERATION`, kernel initialization leaves the Gen6+ BCS ring fields unavailable and does not allocate a BCS ring, and engine-idle and sync-token APIs return `B_NOT_SUPPORTED` rather than claiming completion. The four command-producing hooks checked are screen-to-screen blit, fill rectangle, invert rectangle, and fill span.
 
 A repeatable source-level regression check is provided at:
 `src/add-ons/accelerants/intel_extreme/tests/validate_gen10_12_fail_closed.py`
@@ -49,7 +49,7 @@ The Linux i915 reference driver selects a Gen8-family engine reset path for Gen8
 - Intel Graphics Programmer's Reference Manuals: https://www.intel.com/content/www/us/en/docs/graphics-for-linux/developer-reference/1-0/rocket-lake.html
 - Linux i915 engine and command-submission overview: https://docs.kernel.org/gpu/i915.html
 
-Until per-generation command semantics, status-page writes, reset register protocol, reset completion polling, and post-reset resource quiescence are independently reviewed and tested, Gen10–12 must remain disabled for hardware 2D acceleration.
+The expanded implementation sequence and per-generation evidence checklist are recorded in `GEN10_12_BCS_BRINGUP.md`. Until per-generation command semantics, status-page writes, reset register protocol, reset completion polling, and post-reset resource quiescence are independently reviewed and tested, Gen10–12 must remain disabled for hardware 2D acceleration.
 
 ## Required before Gen9 BCS can be enabled
 

@@ -26,6 +26,16 @@
 #define CALLED(x...) TRACE("CALLED %s\n", __PRETTY_FUNCTION__)
 
 
+// Intel's ring memory is mapped through the graphics aperture and may use
+// write-combining. Drain prior WC stores before the MMIO tail doorbell.
+// This orders publication; it is not a GPU completion fence.
+static inline void
+publish_ring_buffer_writes()
+{
+	asm volatile("sfence" ::: "memory");
+}
+
+
 static engine_token sEngineToken = {1, 0 /*B_2D_ACCELERATION*/, NULL};
 
 
@@ -111,9 +121,11 @@ QueueCommands::~QueueCommands()
 			fRingBuffer.position = fInitialPosition;
 			fRingBuffer.space_left = fInitialSpaceLeft;
 		} else {
-			// The required CPU/WC-memory-to-MMIO ordering primitive is not yet
-			// verified for this mapping. This validation is defensive only;
-			// it does not establish safe publication ordering or completion.
+			// The ring mapping may be write-combined. SFENCE drains prior
+			// WC stores before the MMIO tail doorbell so the GPU cannot observe
+			// a published tail before the commands are visible. This is not a
+			// completion fence and does not make an unsupported ring model valid.
+			publish_ring_buffer_writes();
 			write32(fRingBuffer.register_base + RING_BUFFER_TAIL,
 				fRingBuffer.position);
 		}
@@ -408,6 +420,19 @@ setup_ring_buffer(ring_buffer &ringBuffer, const char* name)
 		ERROR("invalid ring buffer geometry for %s\n", name);
 		ringBuffer.size = 0;
 		return B_BAD_VALUE;
+	}
+
+	// Gen8+ uses logical-ring/execlist submission in the reference
+	// implementation. This accelerant only programs the legacy direct
+	// ring registers and does not create a logical ring context or submit
+	// an execlist descriptor. Do not attempt to enable a Gen9 BCS ring with
+	// that incomplete submission model, even though the MMIO register block
+	// is present. Hardware 2D stays unavailable until this is implemented.
+	if (gInfo->shared_info->device_type.Generation() >= 8) {
+		ERROR("Gen8+ direct ring submission is not implemented; ring disabled\\n");
+		ringBuffer.size = 0;
+		ringBuffer.register_base = 0;
+		return B_NOT_SUPPORTED;
 	}
 
 	status_t status = init_lock(&ringBuffer.lock, name);

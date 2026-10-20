@@ -21,6 +21,36 @@ This checklist records the safety gates that must be satisfied before enabling d
 - These changes are a fail-closed safety measure, not implementation of BCS acceleration. Gen1–5 still needs a separate audit of completion-token semantics, ring shutdown, and allocation lifetime.
 - No successful Haiku build, runtime test, or HD 530 hardware test has been established for this branch.
 
+## Gen10–12 command and recovery validation
+
+This is a **static fail-closed validation**, not hardware validation. The current implementation intentionally does not enable command submission or attempt recovery for these generations.
+
+| Generation | Source-level result | Command path | Recovery result |
+|---|---|---|---|
+| Gen10 | Pass: covered by the `Generation() >= 6` guard | BCS ring selection returns unavailable; ring setup returns `B_NOT_SUPPORTED`; 2D hooks have no ring to submit to | No Gen10 reset/recovery sequence is implemented or invoked by this accelerant |
+| Gen11 | Pass: covered by the same guard | Same fail-closed behavior; no BCS batch is published | No Gen11-specific reset sequence is implemented or invoked by this accelerant |
+| Gen12 | Pass: covered by the same guard | Same fail-closed behavior; no BCS batch is published | No Gen12-specific reset sequence is implemented or invoked by this accelerant |
+
+Static checks also confirm that kernel initialization leaves the Gen6+ BCS ring fields unavailable and does not allocate a BCS ring, and that engine-idle and sync-token APIs return `B_NOT_SUPPORTED` rather than claiming completion. The four command-producing hooks checked are screen-to-screen blit, fill rectangle, invert rectangle, and fill span.
+
+A repeatable source-level regression check is provided at:
+`src/add-ons/accelerants/intel_extreme/tests/validate_gen10_12_fail_closed.py`
+
+Run it from any Haiku checkout with:
+`python3 src/add-ons/accelerants/intel_extreme/tests/validate_gen10_12_fail_closed.py`
+
+The source guards were checked against the current branch contents and all checks passed. The script itself has not been executed inside a Haiku checkout in this session; no Haiku build, emulator test, or Gen10/11/12 hardware test has been performed.
+
+### Why a shared Gen9 recovery sequence is not acceptable
+
+The Linux i915 reference driver selects a Gen8-family engine reset path for Gen8–10 and uses a distinct Gen11 reset implementation for Gen11 and later. This is evidence that reset behavior must be generation-aware, not proof that the same sequences can be ported directly into Haiku. References for further implementation review:
+
+- Linux i915 reset implementation: https://linux.googlesource.com/linux/kernel/git/torvalds/linux/%2B/1f57f68c4dd101e5e8ffc9ffa6428f45bcdd776a/drivers/gpu/drm/i915/gt/intel_reset.c
+- Intel Graphics Programmer's Reference Manuals: https://www.intel.com/content/www/us/en/docs/graphics-for-linux/developer-reference/1-0/rocket-lake.html
+- Linux i915 engine and command-submission overview: https://docs.kernel.org/gpu/i915.html
+
+Until per-generation command semantics, status-page writes, reset register protocol, reset completion polling, and post-reset resource quiescence are independently reviewed and tested, Gen10–12 must remain disabled for hardware 2D acceleration.
+
 ## Required before Gen9 BCS can be enabled
 
 1. **Allocation ownership and teardown**

@@ -228,21 +228,27 @@ Port::GetEDID(edid1_info* edid, bool forceRead)
 		TRACE("%s: trying to read EDID\n", PortName());
 
 		i2c_bus bus;
-		if (SetupI2c(&bus) != B_OK)
-			return fEDIDState;
+		status_t status = SetupI2c(&bus);
+		if (status == B_OK)
+			status = ddc2_read_edid1(&bus, &fEDIDInfo, NULL, NULL);
 
-		fEDIDState = ddc2_read_edid1(&bus, &fEDIDInfo, NULL, NULL);
+		// Some DDI/VBT combinations need the alternate transport (GMBUS
+		// instead of AUX, or vice versa). Try it both when the primary bus
+		// cannot be configured and when the EDID transaction itself fails.
+		// Previously a SetupI2c() failure returned the old B_NO_INIT state
+		// immediately, preventing the fallback path from ever being tried.
+		if (status != B_OK) {
+			status_t fallbackStatus = SetupI2cFallback(&bus);
+			if (fallbackStatus == B_OK)
+				status = ddc2_read_edid1(&bus, &fEDIDInfo, NULL, NULL);
+			else if (status == B_NO_INIT)
+				status = fallbackStatus;
+		}
 
+		fEDIDState = status;
 		if (fEDIDState == B_OK) {
-			TRACE("%s: found EDID information!\n", PortName());
+			TRACE("%s: found EDID information!\\n", PortName());
 			edid_dump(&fEDIDInfo);
-		} else if (SetupI2cFallback(&bus) == B_OK) {
-			fEDIDState = ddc2_read_edid1(&bus, &fEDIDInfo, NULL, NULL);
-
-			if (fEDIDState == B_OK) {
-				TRACE("%s: found EDID information!\n", PortName());
-				edid_dump(&fEDIDInfo);
-			}
 		}
 	}
 

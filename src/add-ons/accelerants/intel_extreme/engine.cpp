@@ -45,9 +45,14 @@ static ring_buffer*
 get_blitter_ring_buffer()
 {
 	intel_shared_info &info = *gInfo->shared_info;
-	ring_buffer* ring = info.device_type.Generation() >= 6
-		? &info.blitter_ring_buffer : &info.primary_ring_buffer;
 
+	// Fail closed even if stale or cloned shared-info still contains an old
+	// ring description. Gen6+ requires a completion fence and recovery path
+	// before any command batch may be published.
+	if (info.device_type.Generation() >= 6)
+		return NULL;
+
+	ring_buffer* ring = &info.primary_ring_buffer;
 	if (ring->size < B_PAGE_SIZE || ring->register_base == 0
 		|| ring->base == NULL)
 		return NULL;
@@ -422,14 +427,12 @@ setup_ring_buffer(ring_buffer &ringBuffer, const char* name)
 		return B_BAD_VALUE;
 	}
 
-	// Gen8+ uses logical-ring/execlist submission in the reference
-	// implementation. This accelerant only programs the legacy direct
-	// ring registers and does not create a logical ring context or submit
-	// an execlist descriptor. Do not attempt to enable a Gen9 BCS ring with
-	// that incomplete submission model, even though the MMIO register block
-	// is present. Hardware 2D stays unavailable until this is implemented.
-	if (gInfo->shared_info->device_type.Generation() >= 8) {
-		ERROR("Gen8+ direct ring submission is not implemented; ring disabled\n");
+	// Gen6+ BCS cannot be exposed until submission and completion are
+	// paired: head == tail is not a GPU completion fence, and this
+	// accelerant has no generation-correct status-page breadcrumb or
+	// bounded recovery path yet. Keep all Gen6+ hardware 2D disabled.
+	if (gInfo->shared_info->device_type.Generation() >= 6) {
+		ERROR("Gen6+ BCS completion/recovery is not implemented; ring disabled\\n");
 		ringBuffer.size = 0;
 		ringBuffer.register_base = 0;
 		return B_NOT_SUPPORTED;

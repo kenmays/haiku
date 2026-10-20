@@ -897,12 +897,40 @@ intel_extreme_init(intel_info &info)
 
 	info.shared_info->status_page = NULL;
 	info.shared_info->physical_status_page = 0;
+	info.shared_info->status_page_offset = 0;
 	status_t statusPageStatus = intel_allocate_memory(info, B_PAGE_SIZE, 0,
 		B_APERTURE_NEED_PHYSICAL,
 		(addr_t*)&info.shared_info->status_page,
 		&info.shared_info->physical_status_page);
+	if (statusPageStatus == B_OK) {
+		// Keep the GPU-visible aperture/GGTT offset separate from both the
+		// CPU mapping pointer and the physical backing address. Gen8+/Gen9
+		// HWS programming must not mistake physical_status_page for a GGTT
+		// address. Publish the offset only after validating the full page.
+		addr_t statusPageBase = (addr_t)info.shared_info->status_page;
+		if (statusPageBase < info.aperture_base) {
+			statusPageStatus = B_BAD_VALUE;
+		} else {
+			addr_t offset = statusPageBase - info.aperture_base;
+			if ((offset & (B_PAGE_SIZE - 1)) != 0
+				|| offset > info.shared_info->graphics_memory_size
+				|| B_PAGE_SIZE > info.shared_info->graphics_memory_size - offset
+				|| offset > 0xffffffffULL) {
+				statusPageStatus = B_BAD_VALUE;
+			} else {
+				info.shared_info->status_page_offset = (uint32)offset;
+			}
+		}
+		if (statusPageStatus != B_OK) {
+			ERROR("invalid hardware status page aperture address; freeing allocation\n");
+			intel_free_memory(info, (addr_t)info.shared_info->status_page);
+			info.shared_info->status_page = NULL;
+			info.shared_info->physical_status_page = 0;
+			info.shared_info->status_page_offset = 0;
+		}
+	}
 	if (statusPageStatus != B_OK) {
-		ERROR("could not allocate hardware status page: %s\n",
+		ERROR("could not initialize hardware status page: %s\n",
 			strerror(statusPageStatus));
 	}
 	info.shared_info->cursor_memory = NULL;

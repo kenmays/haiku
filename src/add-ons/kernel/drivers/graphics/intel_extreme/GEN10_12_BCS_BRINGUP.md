@@ -71,6 +71,17 @@ A separate accelerant-side lifetime issue was also found in `intel_release_overl
 
 The source-level regression checker now asserts that the aperture unmap is conditional on the quarantine decision. This assertion has not yet been run from a local checkout; it is not a build or hardware test.
 
+## Overlay shutdown and accelerant teardown audit
+
+A source-level review of the accelerant's command queue found a concrete asynchronous-lifetime gap:
+
+- `hide_overlay()` enqueues a flush and overlay wait/disable commands, then clears `overlay_active` and `current_overlay` before the GPU has necessarily consumed that batch. The `QueueCommands` destructor publishes the command batch by writing the ring tail and returns; this is submission, not CPU-observed completion. The `PutWaitFor()` operations are commands consumed by the GPU, not a host-side wait.
+- `intel_release_overlay_buffer()` calls `hide_overlay()` for the current buffer and can then immediately call `intel_free_memory()`. There is no host-visible completion result from `hide_overlay()` and no completion fence proving that the overlay engine has stopped reading the allocation. Preserving the descriptor when GART free itself fails does not close this earlier use-after-free window.
+- The i965 path is distinct: `hide_overlay()` returns without issuing the legacy overlay shutdown sequence on i965, while overlay configuration can use `i965_configure_overlay()`. A general release path must not treat that no-op as proof of quiescence.
+- `intel_uninit_accelerant()` tears down ring buffers and locks without an overlay shutdown/completion handshake. At kernel teardown, the legacy primary-ring quarantine does not cover overlay/cursor allocations, and Gen6+ still reaches unconditional aperture unmap. Because GART aperture destruction releases tracked allocations, this is not a safe substitute for proving display and overlay quiescence.
+
+**Decision:** do not claim overlay buffer release or accelerant shutdown is fully safe after an asynchronous hide request. A fix needs a platform-appropriate, bounded host-observable completion/quiescence contract, serialization between configure/release/uninit, and an unwind policy that quarantines referenced allocations if completion cannot be established. It must account for the i965 overlay path and all display-visible allocations, not just the primary ring. Until that contract is implemented and reviewed, this remains an unresolved lifecycle blocker; it does not change the Gen6–12 BCS fail-closed decision.
+
 ## Required implementation sequence
 
 1. **Identify the device.** Record PCI ID, platform codename, graphics IP version, BCS instance/register base, aperture/GGTT properties, and the exact PRM revision used. Reject unknown IDs.

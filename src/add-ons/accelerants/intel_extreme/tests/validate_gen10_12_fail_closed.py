@@ -154,14 +154,18 @@ def main() -> int:
 
     # A physical unplug must reset the bounded retry budget so a later replug
     # can recover EDID; this must not turn ordinary polling into infinite I/O.
-    dp_connected = function_body(ports, "bool\nDisplayPort::IsConnected()")
-    hdmi_connected = function_body(ports, "bool\nHDMIPort::IsConnected()")
+    dp_start = ports.find("bool\\nDisplayPort::IsConnected()")
+    hdmi_start = ports.find("bool\\nHDMIPort::IsConnected()")
+    require(dp_start >= 0 and hdmi_start >= 0,
+        "could not locate digital connector detection functions")
+    dp_connected = ports[dp_start:dp_start + 5000]
+    hdmi_connected = ports[hdmi_start:hdmi_start + 3000]
     for name, body in (("DisplayPort", dp_connected), ("HDMI", hdmi_connected)):
         disconnected = body.find("DISPLAY_MONITOR_PORT_ENABLED) == 0")
         require(
             disconnected >= 0
-            and "fEDIDState = B_NO_INIT;" in body[disconnected:]
-            and "fEDIDReadAttempts = 0;" in body[disconnected:],
+            and "fEDIDState = B_NO_INIT;" in body[disconnected:disconnected + 500]
+            and "fEDIDReadAttempts = 0;" in body[disconnected:disconnected + 500],
             f"{name} disconnect must reset EDID state and retry budget for replug",
         )
 

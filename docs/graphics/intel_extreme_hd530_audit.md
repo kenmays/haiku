@@ -263,3 +263,52 @@ A second pass over the full `intel_extreme_init()` body found only three explici
 The allocator wrapper's `intel_allocate_memory()` returns the allocation base through its `_base` output, while the ring setup separately derives an aperture-relative hardware offset by subtracting `info.aperture_base`. The public free ioctl passes the caller-provided `buffer_base` directly to `intel_free_memory()`, which forwards it to `gGART->free_memory()`. That establishes the API-level distinction: the free argument is the allocator's original base, not the ring's GGTT/aperture-relative `offset`. Cleanup must preserve the original returned base for every allocation and must never free the derived hardware offset.
 
 The shared structure currently records original CPU-visible pointers for overlay/status/cursor and ring backing memory, but it does not provide explicit per-allocation success flags for all resources. A follow-up implementation should use a clearly documented sentinel convention or kernel-private ownership record rather than infer allocation success solely from physical address zero or a shared pointer that may be stale. It must preserve the allocator's exact expected base type and handle failed optional allocations without attempting to free uninitialized values.
+
+
+### 21. Gen6+ sync-token behavior: fail closed instead of publishing a fake fence
+
+The current accelerant's `intel_get_sync_token()` previously returned success with a constant counter of zero for every engine generation. A constant counter cannot identify which submitted commands a token represents and must not be treated as proof of completion.
+
+The implementation now returns `B_NOT_SUPPORTED` for Gen6+ until a generation-correct breadcrumb/fence path is implemented. The legacy path retains its existing behavior. This is deliberately conservative: it prevents callers from receiving a nominally successful Gen6+ token that has no real completion semantics. It does not implement a fence and may cause synchronization callers to receive an unsupported status until the fence work is completed.
+
+### 22. Completion-fence implementation gates
+
+A real Gen6+ fence must not be based on ring head/tail equality alone. Before enabling it, the implementation must establish and test all of the following for each supported engine/generation:
+
+1. The exact documented command encoding and placement for the completion write (including required flush/invalidate operations and any command restrictions for BCS versus render).
+2. The status-page address form required by the engine's HWS register: physical address versus GGTT address, alignment, address-width restrictions, and any generation-specific programming sequence.
+3. That the address programmed into hardware refers to the allocation's GPU-visible address, not merely the CPU pointer or an assumed physical address.
+4. Required CPU/GPU cache-coherency and publication ordering: write command payload, apply the platform-supported memory barrier/cache operation, then publish the ring tail; after observing a breadcrumb, apply any required read barrier before consuming completion data.
+5. A monotonically advancing sequence counter with wrap-safe comparison, and a defined policy for reset/reinitialization so stale pre-reset values cannot satisfy new tokens.
+6. A bounded wait with a deadline and diagnostics that capture engine identity, head, tail, ring control, last submitted sequence, last completed sequence, and relevant documented error status.
+
+Until these are verified against the exact platform programming reference and reviewed in code, the driver continues to reject Gen6+ sync-token creation and engine-idle claims.
+
+### 23. Bounded reset/recovery: safety requirements and current limit
+
+No generic reset write has been added. Reset controls, engine reset scope, forcewake requirements, polling semantics, and required post-reset initialization differ by platform and engine. A guessed reset register or a display-engine reset applied to a command streamer could hang the GPU or disrupt display output.
+
+A recovery implementation must be serialized against all submissions and follow a state machine similar to:
+
+- **RUNNING → QUIESCING:** reject new work, acquire the engine submission lock, record a diagnostic snapshot and last sequence.
+- **QUIESCING → RESETTING:** use the documented per-generation/per-engine reset mechanism and required forcewake/power-domain access; poll only until a fixed deadline.
+- **RESETTING → REINITIALIZING:** restore ring start/size/head/tail/control, completion state, cache/context state and any required engine-specific registers using documented ordering.
+- **REINITIALIZING → VALIDATING:** submit a harmless, valid engine-specific command and wait for its actual completion breadcrumb before marking the engine usable.
+- **Any failed deadline or validation → UNAVAILABLE:** leave hardware acceleration disabled for that engine, return an error to waiters, and retain software rendering as the fallback. Do not free its ring/status-page memory unless hardware access has been safely stopped or device reset/removal semantics prove it can no longer DMA.
+
+Recovery must not use head==tail as its sole proof of idle, must not reclaim ring memory after an unconfirmed reset, and must not silently resume submissions after a failed validation.
+
+### 24. Graphics-allocation cleanup: ownership requirements before implementation
+
+The kernel driver currently keeps allocator bases in the primary/BCS ring `base` fields, `overlay_registers`, `shared_info->status_page`, and `shared_info->cursor_memory`. The overlay, status-page and cursor physical-address fields are not suitable substitutes for allocator bases. The BCS and primary rings are shared with the accelerant, whose teardown attempts to disable them; however, a bounded ring-drain timeout is not a completion guarantee, and final kernel teardown must not assume that an accelerant's timeout means DMA has stopped.
+
+A cleanup change should therefore:
+- Track allocation ownership/success explicitly in kernel-private state, rather than relying on an uninitialized optional allocation output or a physical address sentinel.
+- Stop new work and disable interrupt delivery before attempting engine shutdown; use only verified generation-specific shutdown/reset paths.
+- Disable overlay/cursor consumers with documented hardware sequencing before freeing their backing memory.
+- Free only the exact allocator bases returned by `intel_allocate_memory()`, once each, while the aperture mapping remains valid.
+- Continue cleanup after an individual free failure while recording it; never double-free shared ring storage from both accelerant and kernel.
+- Unmap the aperture and delete areas only after all resources that depend on them are safely released.
+- If hardware quiescence cannot be established, fail closed and keep acceleration unavailable rather than releasing potentially active DMA memory.
+
+This is intentionally a requirements record, not a claim that recovery or full allocation cleanup is complete. The next safe implementation depends on verifying the applicable engine reset/HWS procedures and confirming GART allocator behavior, then testing partial-init, normal teardown, stalled engine, and reset-failure paths.

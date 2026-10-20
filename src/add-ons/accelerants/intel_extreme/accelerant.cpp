@@ -518,10 +518,27 @@ intel_init_accelerant(int device)
 
 	intel_shared_info &info = *gInfo->shared_info;
 
-	init_lock(&info.accelerant_lock, "intel extreme accelerant");
-	init_lock(&info.engine_lock, "intel extreme engine");
+	status = init_lock(&info.accelerant_lock, "intel extreme accelerant");
+	if (status < B_OK) {
+		uninit_common();
+		return status;
+	}
 
-	setup_ring_buffer(info.primary_ring_buffer, "intel primary ring buffer");
+	status = init_lock(&info.engine_lock, "intel extreme engine");
+	if (status < B_OK) {
+		uninit_lock(&info.accelerant_lock);
+		uninit_common();
+		return status;
+	}
+
+	status = setup_ring_buffer(info.primary_ring_buffer,
+		"intel primary ring buffer");
+	if (status != B_OK) {
+		uninit_lock(&info.engine_lock);
+		uninit_lock(&info.accelerant_lock);
+		uninit_common();
+		return status;
+	}
 
 	// Probe all ports
 	status = probe_ports();
@@ -539,6 +556,9 @@ intel_init_accelerant(int device)
 
 	status = create_mode_list();
 	if (status != B_OK) {
+		uninit_ring_buffer(info.primary_ring_buffer);
+		uninit_lock(&info.engine_lock);
+		uninit_lock(&info.accelerant_lock);
 		uninit_common();
 		return status;
 	}

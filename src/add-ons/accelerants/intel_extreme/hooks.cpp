@@ -11,6 +11,18 @@
 #include "accelerant.h"
 
 
+// The Skylake-family blitter path is not considered reliable until the
+// Gen9 command submission and engine-idle issues are resolved. Keep the
+// display driver active but let app_server use its CPU/software renderer.
+static bool
+use_software_2d()
+{
+	const DeviceType& type = gInfo->shared_info->device_type;
+	return type.InFamily(INTEL_FAMILY_LAKE)
+		|| type.InFamily(INTEL_FAMILY_SOC0);
+}
+
+
 extern "C" void*
 get_accelerant_hook(uint32 feature, void* data)
 {
@@ -106,12 +118,20 @@ get_accelerant_hook(uint32 feature, void* data)
 
 		/* 2D acceleration */
 		case B_SCREEN_TO_SCREEN_BLIT:
+			if (use_software_2d())
+				return NULL;
 			return (void*)intel_screen_to_screen_blit;
 		case B_FILL_RECTANGLE:
+			if (use_software_2d())
+				return NULL;
 			return (void*)intel_fill_rectangle;
 		case B_INVERT_RECTANGLE:
+			if (use_software_2d())
+				return NULL;
 			return (void*)intel_invert_rectangle;
 		case B_FILL_SPAN:
+			if (use_software_2d())
+				return NULL;
 			return (void*)intel_fill_span;
 
 		// overlay

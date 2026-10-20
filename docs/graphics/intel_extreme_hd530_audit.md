@@ -181,3 +181,9 @@ The reservation path now also derives an upper bound on available bytes from the
 
 This calculation is a conservative producer-side bound, not a substitute for the hardware consistency checks, a completion breadcrumb, or a reset protocol. Head/tail values can still be misleading after an engine reset or other hardware-state corruption; no automatic recovery is attempted. Gen6+ BCS synchronization and acceleration remain disabled until the generation-specific status-page and completion protocol is implemented and validated.
 
+### 16. Reject ring allocations outside the graphics aperture
+
+`setup_ring_buffer()` now validates the programmed GGTT offset before writing `RING_BUFFER_START`: the offset must fit the register's 32-bit field, and the complete ring allocation must fit within `graphics_memory_size`. This prevents address truncation and avoids enabling a ring whose allocation extends beyond the graphics aperture. The check is in addition to page alignment, power-of-two sizing, and hardware size-field validation.
+
+This validates the driver's allocation geometry only; it does not establish correct cache attributes, publication ordering, status-page setup, GPU completion, or engine recovery. Build validation remains outstanding.
+

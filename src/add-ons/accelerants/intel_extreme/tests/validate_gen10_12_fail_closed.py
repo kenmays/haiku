@@ -156,6 +156,23 @@ def main() -> int:
         "overlay release must preserve ownership metadata when a GART free fails",
     )
 
+    # Overlay shutdown currently submits asynchronous GPU commands but has
+    # no host-observed completion contract before the backing allocation can
+    # be freed. Keep this lifecycle blocker explicit until a real completion
+    # and serialization implementation is reviewed.
+    hide_overlay = function_body(overlay, "hide_overlay()")
+    queue_destructor = function_body(engine, "QueueCommands::~QueueCommands()")
+    require(
+        "queue.PutWaitFor(COMMAND_WAIT_FOR_OVERLAY_FLIP);" in hide_overlay
+        and "gInfo->current_overlay = NULL;" in hide_overlay
+        and "write32(fRingBuffer.register_base + RING_BUFFER_TAIL," in queue_destructor
+        and "QueueCommands" in bringup
+        and "submission, not CPU-observed completion" in bringup
+        and "The i965 path is distinct" in bringup
+        and "intel_uninit_accelerant()" in bringup,
+        "overlay shutdown completion and teardown limitations must remain documented",
+    )
+
     # Keep the selected Gen10 review candidate explicit and disabled. A PCI
     # allowlist entry is identification only; it must not bypass the BCS gate.
     require(

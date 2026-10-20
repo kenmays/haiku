@@ -58,10 +58,10 @@ def main() -> int:
         ("B_INVERT_RECTANGLE", "intel_invert_rectangle"),
         ("B_FILL_SPAN", "intel_fill_span"),
     )
-    for index, (feature, implementation) in enumerate(drawing_hooks):
+    for feature, implementation in drawing_hooks:
         start = hooks.find(f"case {feature}:")
         require(start >= 0, f"missing drawing hook case: {feature}")
-        next_case = hooks.find("\\n\\t\\tcase ", start + 1)
+        next_case = hooks.find("\n\t\tcase ", start + 1)
         body = hooks[start:next_case if next_case >= 0 else len(hooks)]
         require(
             "return NULL;" in body and f"(void*){implementation}" not in body,

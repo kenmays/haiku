@@ -17,6 +17,7 @@ BRINGUP_PATH = ROOT / "src/add-ons/kernel/drivers/graphics/intel_extreme/GEN10_1
 OVERLAY_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/overlay.cpp"
 HOOKS_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/hooks.cpp"
 MODE_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/mode.cpp"
+CURSOR_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/cursor.cpp"
 MEMORY_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/memory.cpp"
 ACCELERANT_HEADER_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/accelerant.h"
 DPMS_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/dpms.cpp"
@@ -54,6 +55,7 @@ def main() -> int:
     overlay = OVERLAY_PATH.read_text(encoding="utf-8")
     hooks = HOOKS_PATH.read_text(encoding="utf-8")
     mode = MODE_PATH.read_text(encoding="utf-8")
+    cursor = CURSOR_PATH.read_text(encoding="utf-8")
     memory = MEMORY_PATH.read_text(encoding="utf-8")
     accelerant_header = ACCELERANT_HEADER_PATH.read_text(encoding="utf-8")
     dpms = DPMS_PATH.read_text(encoding="utf-8")
@@ -96,6 +98,14 @@ def main() -> int:
     require(
         "extern status_t set_display_power_mode(uint32 mode);" in accelerant_header,
         "DPMS power transition declaration must return status",
+    )
+
+    # Cursor coordinates must subtract each axis's own hotspot.
+    cursor_move = function_body(cursor, "intel_move_cursor(")
+    require(
+        "int32 x = (int32)_x - gInfo->shared_info->cursor_hot_x;" in cursor_move
+        and "int32 y = (int32)_y - gInfo->shared_info->cursor_hot_y;" in cursor_move,
+        "hardware cursor position must apply the correct X and Y hotspot",
     )
 
     # CPU-only 2D policy is generation-independent: every Intel 2D drawing

@@ -156,6 +156,16 @@ QueueCommands::MakeSpace(uint32 size)
 		uint32 head = read32(fRingBuffer.register_base + RING_BUFFER_HEAD)
 			& INTEL_RING_BUFFER_HEAD_MASK;
 
+		// Never interpret a stale or corrupt head pointer as available space.
+		if (head >= fRingBuffer.size
+			|| (head & (sizeof(uint32) - 1)) != 0
+			|| fRingBuffer.position >= fRingBuffer.size) {
+			ERROR("invalid ring pointers: head %" B_PRIx32
+				", tail %" B_PRIx32 ", size %" B_PRIx32 "\n",
+				head, fRingBuffer.position, fRingBuffer.size);
+			return false;
+		}
+
 		if (head <= fRingBuffer.position)
 			head += fRingBuffer.size;
 
@@ -168,7 +178,11 @@ QueueCommands::MakeSpace(uint32 size)
 
 		if (fRingBuffer.space_left < size) {
 			if (system_time() > start + 1000000LL) {
-				ERROR("engine stalled, head %" B_PRIx32 "\n", head);
+				ERROR("engine stalled: head %" B_PRIx32
+					", tail %" B_PRIx32 ", size %" B_PRIx32
+					", space_left %" B_PRIx32 ", request %" B_PRIx32 "\n",
+					head, fRingBuffer.position, fRingBuffer.size,
+					fRingBuffer.space_left, size);
 				return false;
 			}
 			spin(10);
@@ -266,7 +280,10 @@ intel_acquire_engine(uint32 capabilities, uint32 maxWait, sync_token* syncToken,
 	engine_token** _engineToken)
 {
 	CALLED();
-	*_engineToken = &sEngineToken;
+	if (_engineToken == NULL)
+		return B_BAD_VALUE;
+
+	*_engineToken = NULL;
 
 	if (acquire_lock(&gInfo->shared_info->engine_lock) != B_OK)
 		return B_ERROR;
@@ -279,6 +296,7 @@ intel_acquire_engine(uint32 capabilities, uint32 maxWait, sync_token* syncToken,
 		}
 	}
 
+	*_engineToken = &sEngineToken;
 	return B_OK;
 }
 
@@ -287,6 +305,9 @@ status_t
 intel_release_engine(engine_token* engineToken, sync_token* syncToken)
 {
 	CALLED();
+	if (engineToken != &sEngineToken)
+		return B_BAD_VALUE;
+
 	status_t status = B_OK;
 	if (syncToken != NULL)
 		status = intel_get_sync_token(engineToken, syncToken);
@@ -352,7 +373,7 @@ status_t
 intel_get_sync_token(engine_token* engineToken, sync_token* syncToken)
 {
 	CALLED();
-	if (engineToken == NULL || syncToken == NULL)
+	if (engineToken != &sEngineToken || syncToken == NULL)
 		return B_BAD_VALUE;
 
 	syncToken->engine_id = engineToken->engine_id;

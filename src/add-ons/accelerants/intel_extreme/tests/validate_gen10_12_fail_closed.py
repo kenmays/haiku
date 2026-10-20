@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Static regression checks for the Intel Extreme Gen10–12 fail-closed gate.
+"""Static checks for Intel Extreme CPU-only 2D and Gen10–12 fail-closed policy.
 
-This checks source-level guards only. It is not a build, GPU test, or proof
-that the hardware reset protocol is correct.
+These checks inspect source-level guards only. They are not a build, GPU test,
+or proof that the hardware reset protocol is correct.
 """
 
 from pathlib import Path
@@ -244,6 +244,7 @@ def main() -> int:
     for generation in (10, 11, 12):
         print(f"PASS: Gen{generation} remains behind the Gen6+ fail-closed gate")
 
+    print("PASS: CPU-only 2D drawing and engine hooks remain disabled for Gen1–12")
     print("PASS: no Gen6+ command path or completion token is enabled by these guards")
     print("NOTE: static source checks only; no build or hardware recovery test performed")
     return 0

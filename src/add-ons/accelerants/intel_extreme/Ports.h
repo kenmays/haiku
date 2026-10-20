@@ -192,6 +192,7 @@ virtual	uint32						Type() const
 
 virtual	status_t					SetPipe(Pipe* pipe);
 virtual	status_t					SetupI2c(i2c_bus *bus);
+virtual status_t					SetupI2cFallback(i2c_bus *bus);
 
 virtual	bool						IsConnected();
 

@@ -460,8 +460,9 @@ struct intel_shared_info {
 	area_id			registers_area;		// area of memory mapped registers
 	uint32			register_blocks[REGISTER_BLOCK_COUNT];
 
-	uint8*			status_page;
-	phys_addr_t		physical_status_page;
+	uint8*			status_page;		// CPU mapping of the status page
+	phys_addr_t		physical_status_page;	// physical backing address (not GGTT)
+	uint32			status_page_offset;	// GGTT/aperture-relative offset
 	uint8*			graphics_memory;
 	phys_addr_t		physical_graphics_memory;
 	uint32			graphics_memory_size;

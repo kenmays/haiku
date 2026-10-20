@@ -89,14 +89,15 @@ QueueCommands::Put(struct command &command, size_t size)
 }
 
 
-void
+bool
 QueueCommands::PutFlush()
 {
 	if (!MakeSpace(2))
-		return;
+		return false;
 
 	Write(COMMAND_FLUSH);
 	Write(COMMAND_NOOP);
+	return true;
 }
 
 
@@ -305,7 +306,8 @@ wait_engine_idle_internal(void)
 
 	{
 		QueueCommands queue(ring);
-		queue.PutFlush();
+		if (!queue.PutFlush())
+			return B_ERROR;
 	}
 
 	bigtime_t start = system_time();

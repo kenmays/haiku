@@ -468,3 +468,16 @@ A follow-up source audit found a prerequisite that must be resolved before a Gen
 - Intel Skylake PRM index and Blitter volume are linked in the pull request description.
 
 This gate deliberately prioritizes correctness over exposing a partially working acceleration path. Do not remove the Gen8+ guard or advertise `B_2D_ACCELERATION` until the submission model, address mapping, fence, publication ordering, recovery, and hardware validation are complete.
+
+### 15. GART allocation audit: status-page address domains and lifetime
+
+A source trace of `intel_allocate_memory()` and the Haiku GART module establishes these address-domain facts:
+
+- The allocator's `_base` output is the allocation's address in the mapped graphics aperture. Ring offsets are derived by subtracting `info.aperture_base`, and that relative offset is what the legacy `RING_BUFFER_START` register receives.
+- When `B_APERTURE_NEED_PHYSICAL` is requested, `_physicalBase` is separately populated from the backing page's physical address. The kernel stores this in `physical_status_page`, while `status_page` is populated from the aperture-base output cast to a pointer.
+- Therefore, `physical_status_page` is not a proven substitute for the GPU-visible GGTT offset required by Gen8+/Gen9 per-engine HWS programming. The status-page aperture-relative offset can be derived only while the mapping and its base are valid; it should be represented explicitly or derived through a documented shared mapping contract before engine setup is added. CPU pointer, physical backing address, and GGTT/aperture offset must remain distinct.
+- The GART API exposes `free_memory(aperture, base)`; it requires the original allocation base, not a physical address or an offset. The current initialization code does not retain a separate explicit ownership ledger for each optional allocation. `intel_extreme_uninit()` unmaps the aperture, which owns the GART allocations, but does not independently prove the GPU has stopped accessing them before that unmap.
+
+**Implementation gate:** before adding Gen9 HWS_PGA or completion breadcrumbs, establish and document the exact GPU-visible address representation for the status page, verify the relevant Haiku GART binding semantics, and track each successful allocation's original base and ownership. The future teardown/recovery path must prove engine quiescence before releasing/unmapping any GPU-visible memory; a timeout or failed reset must not be treated as proof of quiescence. Do not pass `physical_status_page` to HWS_PGA by assumption, and do not add a fence that writes to an unverified address domain.
+
+This is a source-level allocator audit only. No hardware fence, Gen9 submission path, build result, or HD 530 hardware test is claimed.

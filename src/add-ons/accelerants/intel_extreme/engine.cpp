@@ -262,8 +262,13 @@ intel_acquire_engine(uint32 capabilities, uint32 maxWait, sync_token* syncToken,
 	if (acquire_lock(&gInfo->shared_info->engine_lock) != B_OK)
 		return B_ERROR;
 
-	if (syncToken)
-		intel_sync_to_token(syncToken);
+	if (syncToken) {
+		status_t status = intel_sync_to_token(syncToken);
+		if (status != B_OK) {
+			release_lock(&gInfo->shared_info->engine_lock);
+			return status;
+		}
+	}
 
 	return B_OK;
 }
@@ -273,11 +278,12 @@ status_t
 intel_release_engine(engine_token* engineToken, sync_token* syncToken)
 {
 	CALLED();
+	status_t status = B_OK;
 	if (syncToken != NULL)
-		syncToken->engine_id = engineToken->engine_id;
+		status = intel_get_sync_token(engineToken, syncToken);
 
 	release_lock(&gInfo->shared_info->engine_lock);
-	return B_OK;
+	return status;
 }
 
 

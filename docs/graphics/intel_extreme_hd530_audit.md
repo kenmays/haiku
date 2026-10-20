@@ -200,3 +200,16 @@ The allocation path has now been traced from the kernel driver's GART aperture t
 **Implementation decision:** do not wire the status page into Gen6+ BCS completion yet. Choosing between physical and GGTT addresses, programming a guessed HWS_PGA register, or assuming the status page is coherent would risk hangs or false completion. The next code change must be based on the exact device-generation PRM and the GART allocator's documented mapping semantics; it must then establish page alignment/address-width checks, explicit ownership/lifetime, a monotonic breadcrumb protocol, and CPU-visible ordering before the fail-closed idle wait can be removed.
 
 This is a source audit only. It makes no claim of a working hardware status page or successful build/test.
+
+### 18. Kernel-side graphics allocation lifetime audit
+
+Tracing `intel_extreme_init()` against `intel_extreme_uninit()` found a lifecycle gap relevant to any future status-page completion implementation:
+
+- Initialization allocates the primary ring and (for Gen6+) a separate blitter ring through `intel_allocate_memory()`; it also allocates overlay-register memory, the hardware status page, and optionally cursor memory.
+- The uninitialization path removes interrupt handling, unmaps the GART aperture, and deletes the register/shared areas, but the inspected function does not call `intel_free_memory()` for those allocations before unmapping the aperture.
+- The status page is not currently used for a verified breadcrumb protocol, so this does not establish a live synchronization failure by itself. It does mean that the lifetime and cleanup of the future GPU-visible status page cannot be considered solved.
+- A cleanup patch must account for the actual allocation base expected by `gGART->free_memory()`, ensure engines/rings are stopped before their storage is freed, handle partial initialization and allocation failures, avoid double-freeing shared allocations, and free allocations before unmapping their aperture. The cursor and overlay allocations have the same ownership question.
+
+**Decision:** record this as a follow-up rather than add unconditional frees without auditing every open/close/error path. Freeing a ring while a command streamer can still fetch from it would be worse than leaking it; freeing shared state twice would be a separate correctness bug. Before changing lifecycle code, trace all callers of `intel_extreme_uninit()`, the device close path, and the accelerant's ring teardown ordering, then implement one idempotent cleanup path that handles partial initialization.
+
+This remains a source inspection finding; no runtime leak test or hardware teardown test has been performed.

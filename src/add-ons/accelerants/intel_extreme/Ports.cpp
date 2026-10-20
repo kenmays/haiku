@@ -1728,6 +1728,23 @@ DisplayPort::SetupI2c(i2c_bus *bus)
 	return _SetupDpAuxI2c(bus);
 }
 
+status_t
+DisplayPort::SetupI2cFallback(i2c_bus *bus)
+{
+	CALLED();
+
+	// SetupI2c() selects GMBUS when VBT does not identify this port as
+	// DisplayPort. If that transaction fails, retry through the port's AUX
+	// channel. Do not switch transports when AUX was already selected.
+	const uint32 deviceConfigCount = gInfo->shared_info->device_config_count;
+	if (gInfo->shared_info->device_type.Generation() >= 6
+		&& deviceConfigCount > 0 && !_IsDisplayPortInVBT()) {
+		return _SetupDpAuxI2c(bus);
+	}
+
+	return B_ERROR;
+}
+
 
 bool
 DisplayPort::IsConnected()

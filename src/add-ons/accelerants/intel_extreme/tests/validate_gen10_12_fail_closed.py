@@ -76,6 +76,25 @@ def main() -> int:
         "invalid DPMS modes must be rejected before hardware or shared-state changes",
     )
 
+    # Legacy LVDS status polling must be bounded and DPMS failures propagated.
+    lvds_panel = function_body(dpms, "enable_lvds_panel(")
+    require(
+        "elapsed <= 1000" in lvds_panel
+        and "return B_TIMED_OUT;" in lvds_panel,
+        "LVDS DPMS polling must time out rather than hang indefinitely",
+    )
+    power_function = function_body(dpms, "set_display_power_mode(")
+    require(
+        "status_t" in dpms[dpms.find("set_display_power_mode(") - 20:dpms.find("set_display_power_mode(")]
+        and "return status;" in power_function
+        and "return B_OK;" in power_function,
+        "DPMS power transitions must return panel transition failures",
+    )
+    require(
+        "extern status_t set_display_power_mode(uint32 mode);" in accelerant_header,
+        "DPMS power transition declaration must return status",
+    )
+
     # CPU-only 2D policy is generation-independent: every Intel 2D drawing
     # hook must be absent so app_server selects its software rasterizer.
     drawing_hooks = (

@@ -205,21 +205,21 @@ This is a source audit only. It makes no claim of a working hardware status page
 
 ### 18. Kernel-side graphics allocation lifetime audit
 
-Tracing `intel_extreme_init()` against `intel_extreme_uninit()` found a lifecycle gap relevant to any future status-page completion implementation:
+Tracing `intel_extreme_init()` against `intel_extreme_uninit()` identified an ownership detail that must be distinguished from a proven leak before implementing status-page completion:
 
 - Initialization allocates the primary ring and (for Gen6+) a separate blitter ring through `intel_allocate_memory()`; it also allocates overlay-register memory, the hardware status page, and optionally cursor memory.
-- The uninitialization path removes interrupt handling, unmaps the GART aperture, and deletes the register/shared areas, but the inspected function does not call `intel_free_memory()` for those allocations before unmapping the aperture.
+- The uninitialization path removes interrupt handling and unmaps the GART aperture without individually calling `intel_free_memory()` for each allocation. That alone does **not** prove a leak: aperture teardown may reclaim all allocations owned by that aperture. The exact `unmap_aperture()` contract must be verified before claiming a leak or adding per-allocation frees.
 - The status page is not currently used for a verified breadcrumb protocol, so this does not establish a live synchronization failure by itself. It does mean that the lifetime and cleanup of the future GPU-visible status page cannot be considered solved.
 - A cleanup patch must account for the actual allocation base expected by `gGART->free_memory()`, ensure engines/rings are stopped before their storage is freed, handle partial initialization and allocation failures, avoid double-freeing shared allocations, and free allocations before unmapping their aperture. The cursor and overlay allocations have the same ownership question.
 
-**Decision:** record this as a follow-up rather than add unconditional frees without auditing every open/close/error path. Freeing a ring while a command streamer can still fetch from it would be worse than leaking it; freeing shared state twice would be a separate correctness bug. Before changing lifecycle code, trace all callers of `intel_extreme_uninit()`, the device close path, and the accelerant's ring teardown ordering, then implement one idempotent cleanup path that handles partial initialization.
+**Decision:** do not add unconditional per-allocation frees yet. First verify whether `unmap_aperture()` releases all allocations associated with that aperture, and then audit open/close/error paths. Freeing a ring while a command streamer can still fetch from it would be worse than a leak; freeing shared state twice would be a separate correctness bug.
 
 This remains a source inspection finding; no runtime leak test or hardware teardown test has been performed.
 
 
 ### 19. Kernel device lifetime and graphics-allocation teardown trace
 
-This section records the call-path trace for the potential allocation leak identified above. It is a source audit, not proof of runtime behavior under every driver unload/error scenario.
+This section records the call-path trace for aperture-owned graphics allocations. The source trace alone does not establish a leak; that depends on the GART aperture teardown contract and runtime lifecycle.
 
 #### Device open/close ownership
 
@@ -247,15 +247,15 @@ The initialization path allocates or attempts to allocate:
 - one page of hardware status-page memory;
 - optional one-page cursor memory.
 
-The shared structure retains CPU pointers and/or physical addresses for these resources. The primary and BCS ring bases are translated to aperture-relative offsets. The inspected `intel_extreme_uninit()` disables/removes interrupt handling and MSI where applicable, then unmaps the aperture and deletes MMIO/shared areas, but does not visibly free these allocations through `intel_free_memory()` first.
+The shared structure retains CPU pointers and/or physical addresses for these resources. The primary and BCS ring bases are translated to aperture-relative offsets. The inspected `intel_extreme_uninit()` disables/removes interrupt handling and MSI where applicable, then unmaps the aperture and deletes MMIO/shared areas, but does not visibly free these allocations through `intel_free_memory()` first. Whether that is correct depends on whether aperture unmapping owns and reclaims all of its outstanding allocations.
 
 #### Safe conclusion and next implementation gate
 
-The source confirms a likely graphics-allocation lifetime leak on normal teardown, but does not yet justify an unconditional cleanup patch. A safe fix needs a single cleanup routine that tracks successful allocations explicitly, handles every partial-init return path, disables/stops every initialized command streamer before freeing ring storage, and frees each allocation exactly once while the aperture is still mapped. It must also account for accelerant teardown having already disabled the rings, initialization failures before shared state is fully populated, and allocation APIs whose output parameters may be unset on failure.
+The source confirms that individual allocations are not explicitly freed before aperture teardown, but this does not establish a graphics-allocation leak if `unmap_aperture()` reclaims aperture-owned allocations. Before adding cleanup, verify that contract. If individual frees are required, a safe fix needs a single cleanup routine that tracks successful allocations explicitly, handles every partial-init return path, disables/stops every initialized command streamer before freeing ring storage, and frees each allocation exactly once while the aperture is still mapped. It must also account for accelerant teardown having already disabled the rings, initialization failures before shared state is fully populated, and allocation APIs whose output parameters may be unset on failure.
 
-Before implementing that routine, audit **all** early returns in `intel_extreme_init()` and the GART allocator's exact base argument contract; initialize allocation tracking fields before the first possible failure; verify whether any display/overlay/cursor hardware can still reference its backing memory; and confirm whether the device manager guarantees final `device_free()` only after accelerant clones close. Do not free using an aperture-relative offset if `free_memory()` expects the original CPU allocation base. Do not free the status page or overlay/cursor storage until all consumers are disabled. If engine quiescence cannot be confirmed, fail safely rather than reclaiming memory that hardware may still access.
+Before implementing that routine, audit **all** early returns in `intel_extreme_init()` and the GART allocator's `unmap_aperture()` and `free_memory()` contracts; initialize allocation tracking fields before the first possible failure; verify whether any display/overlay/cursor hardware can still reference its backing memory; and confirm whether the device manager guarantees final `device_free()` only after accelerant clones close. Do not free using an aperture-relative offset if `free_memory()` expects the original CPU allocation base. Do not free the status page or overlay/cursor storage until all consumers are disabled. If engine quiescence cannot be confirmed, fail safely rather than reclaiming memory that hardware may still access.
 
-No teardown code was changed in this audit-only commit because the present source trace does not prove a complete, safe release sequence for all partial initialization and hardware-use cases.
+No teardown code was changed because the present source trace does not yet establish whether individual frees are required or prove a complete, safe release sequence for all partial initialization and hardware-use cases.
 
 
 ### 20. Initialization failure boundaries and free-address contract

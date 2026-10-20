@@ -45,7 +45,7 @@ enable_all_pipes(bool enable)
 }
 
 
-static void
+static status_t
 enable_lvds_panel(bool enable)
 {
 	bool hasPCH = (gInfo->shared_info->pch_info != INTEL_PCH_NONE);
@@ -54,36 +54,49 @@ enable_lvds_panel(bool enable)
 	int statusRegister = hasPCH ? PCH_PANEL_STATUS : INTEL_PANEL_STATUS;
 
 	uint32 control = read32(controlRegister);
-	uint32 panelStatus;
 
 	if (enable) {
 		if ((control & PANEL_CONTROL_POWER_TARGET_ON) == 0) {
 			write32(controlRegister, control | PANEL_CONTROL_POWER_TARGET_ON
 				/*| (hasPCH ? PANEL_REGISTER_UNLOCK : 0)*/);
+			read32(controlRegister);
 		}
 
 		if (!hasPCH) {
-			do {
-				panelStatus = read32(statusRegister);
-			} while ((panelStatus & PANEL_STATUS_POWER_ON) == 0);
+			// Bound status polling so a panel or firmware fault cannot hang
+			// app_server indefinitely during a DPMS transition.
+			for (uint32 elapsed = 0; elapsed <= 1000; elapsed += 50) {
+				spin(50);
+				if ((read32(statusRegister) & PANEL_STATUS_POWER_ON) != 0)
+					return B_OK;
+			}
+			ERROR("%s: LVDS panel did not power on within 1000 us!\\n",
+				__func__);
+			return B_TIMED_OUT;
 		}
 	} else {
 		if ((control & PANEL_CONTROL_POWER_TARGET_ON) != 0) {
-			write32(controlRegister, (control & ~PANEL_CONTROL_POWER_TARGET_ON)
-				/*| (hasPCH ? PANEL_REGISTER_UNLOCK : 0)*/);
+			write32(controlRegister, control & ~PANEL_CONTROL_POWER_TARGET_ON);
+			read32(controlRegister);
 		}
 
-		if (!hasPCH)
-		{
-			do {
-				panelStatus = read32(statusRegister);
-			} while ((panelStatus & PANEL_STATUS_POWER_ON) != 0);
+		if (!hasPCH) {
+			for (uint32 elapsed = 0; elapsed <= 1000; elapsed += 50) {
+				spin(50);
+				if ((read32(statusRegister) & PANEL_STATUS_POWER_ON) == 0)
+					return B_OK;
+			}
+			ERROR("%s: LVDS panel did not power off within 1000 us!\\n",
+				__func__);
+			return B_TIMED_OUT;
 		}
 	}
+
+	return B_OK;
 }
 
 
-void
+status_t
 set_display_power_mode(uint32 mode)
 {
 	uint32 monitorMode = 0;
@@ -168,11 +181,15 @@ set_display_power_mode(uint32 mode)
 		spin(150);
 	}
 
-	if ((gInfo->head_mode & HEAD_MODE_LVDS_PANEL) != 0)
-		enable_lvds_panel(mode == B_DPMS_ON);
+	if ((gInfo->head_mode & HEAD_MODE_LVDS_PANEL) != 0) {
+		status_t status = enable_lvds_panel(mode == B_DPMS_ON);
+		if (status != B_OK)
+			return status;
+	}
 
 	read32(INTEL_DISPLAY_A_BASE);
 		// flush the possibly cached PCI bus writes
+	return B_OK;
 }
 
 
@@ -209,9 +226,11 @@ intel_set_dpms_mode(uint32 mode)
 		return B_BAD_VALUE;
 	}
 
-	set_display_power_mode(mode);
-	gInfo->shared_info->dpms_mode = mode;
+	status_t status = set_display_power_mode(mode);
+	if (status != B_OK)
+		return status;
 
+	gInfo->shared_info->dpms_mode = mode;
 	return B_OK;
 }
 

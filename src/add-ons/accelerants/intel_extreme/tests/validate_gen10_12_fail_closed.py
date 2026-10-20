@@ -160,7 +160,7 @@ def main() -> int:
     # no host-observed completion contract before the backing allocation can
     # be freed. Keep this lifecycle blocker explicit until a real completion
     # and serialization implementation is reviewed.
-    hide_overlay = function_body(overlay, "hide_overlay()")
+    hide_overlay = function_body(overlay, "hide_overlay(void)")
     queue_destructor = function_body(engine, "QueueCommands::~QueueCommands()")
     require(
         "queue.PutWaitFor(COMMAND_WAIT_FOR_OVERLAY_FLIP);" in hide_overlay

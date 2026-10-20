@@ -196,6 +196,28 @@ def main() -> int:
         "graphics memory free must report ioctl failures to overlay lifetime management",
     )
 
+    # Legacy overlay commands depend on the primary ring, which is not
+    # initialized on Gen6+. Keep all overlay hooks unavailable there.
+    overlay_gate = hooks.find("if (gInfo->shared_info->device_type.Generation() >= 6)")
+    overlay_cases = (
+        "B_OVERLAY_COUNT",
+        "B_OVERLAY_SUPPORTED_SPACES",
+        "B_OVERLAY_SUPPORTED_FEATURES",
+        "B_ALLOCATE_OVERLAY_BUFFER",
+        "B_RELEASE_OVERLAY_BUFFER",
+        "B_GET_OVERLAY_CONSTRAINTS",
+        "B_ALLOCATE_OVERLAY",
+        "B_RELEASE_OVERLAY",
+        "B_CONFIGURE_OVERLAY",
+    )
+    require(overlay_gate >= 0, "overlay hooks must be gated on Gen6+")
+    overlay_gate_block = hooks[overlay_gate:hooks.find("\\n\\tswitch (feature) {", overlay_gate + 1)]
+    require(
+        all(case in overlay_gate_block for case in overlay_cases)
+        and "return NULL;" in overlay_gate_block,
+        "all legacy overlay hooks must fail closed on Gen6+",
+    )
+
     # With every hardware drawing hook disabled, do not expose an engine
     # interface whose idle-wait/token semantics are incomplete or unused.
     engine_start = hooks.find("/* engine/synchronization */")

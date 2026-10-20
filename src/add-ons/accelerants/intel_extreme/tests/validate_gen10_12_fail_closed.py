@@ -213,7 +213,7 @@ def main() -> int:
             f"{feature} must remain unavailable for CPU-only 2D rendering",
         )
     require(
-        "CPU-only 2D policy" in hooks and "Gen1 through Gen12" in hooks,
+        "CPU-only 2D policy" in hooks and "Gen2 through Gen12" in hooks,
         "hooks must document the all-generation software-rendering policy",
     )
 

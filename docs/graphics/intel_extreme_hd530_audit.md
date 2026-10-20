@@ -128,3 +128,7 @@ The ring-space wait now checks that the ring remains enabled and that the hardwa
 This is diagnostic hardening, not a recovery implementation. The ring head/tail relationship cannot establish that all prior GPU work has completed, and the new log does not identify the precise command that stalled. Capture these values alongside a full MMIO dump and the matching Gen9 engine status/error registers when reproducing the issue on physical HD Graphics 530 hardware.
 
 The status-page/breadcrumb implementation remains deliberately blocked until the exact Skylake Gen9 BCS MI_FLUSH_DW encoding, HWS address-space requirements, and mapping lifetime are verified. Linux i915 Gen8+ code is a useful cross-check for the command shape, but is not sufficient by itself to prove a proposed sequence is valid for Haiku's current GGTT/status-page setup or the BCS engine on this device. Do not remove the Gen6+ B_NOT_SUPPORTED idle-wait guard or enable B_2D_ACCELERATION based on this change.
+
+### 8. Ring publication barrier local initialization
+
+The ring publisher's local variable passed to `atomic_add()` is now initialized before the operation. This removes an uninitialized read-modify-write operand from the publication path. It is only a local correctness fix: it does **not** establish that the ring memory is flushed correctly on every CPU/mapping type, nor does it provide a GPU completion fence. The write-combining ordering and required Haiku memory-barrier primitive should still be verified against the platform's memory-mapping and synchronization APIs.

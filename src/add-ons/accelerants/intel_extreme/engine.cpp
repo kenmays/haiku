@@ -190,12 +190,13 @@ QueueCommands::MakeSpace(uint32 size)
 		if (head >= fRingBuffer.size
 			|| (head & (sizeof(uint32) - 1)) != 0
 			|| fRingBuffer.position >= fRingBuffer.size
-			|| hardwareTail != fRingBuffer.position) {
+			|| hardwareTail != fInitialPosition) {
 			ERROR("invalid ring pointers: head %" B_PRIx32
-				", hardware tail %" B_PRIx32 ", software tail %"
-				B_PRIx32 ", size %" B_PRIx32 ", control %" B_PRIx32 "\n",
-				head, hardwareTail, fRingBuffer.position, fRingBuffer.size,
-				control);
+				", hardware tail %" B_PRIx32 ", published tail %"
+				B_PRIx32 ", software tail %" B_PRIx32 ", size %"
+				B_PRIx32 ", control %" B_PRIx32 "\n",
+				head, hardwareTail, fInitialPosition, fRingBuffer.position,
+				fRingBuffer.size, control);
 			return false;
 		}
 

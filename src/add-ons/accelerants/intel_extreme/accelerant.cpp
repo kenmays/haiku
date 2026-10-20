@@ -639,9 +639,9 @@ intel_uninit_accelerant(void)
 
 	if (!gInfo->is_clone) {
 		intel_shared_info &info = *gInfo->shared_info;
-		uninit_lock(&info.accelerant_lock);
-		uninit_lock(&info.engine_lock);
 		uninit_ring_buffer(info.primary_ring_buffer);
+		uninit_lock(&info.engine_lock);
+		uninit_lock(&info.accelerant_lock);
 	}
 	uninit_common();
 }

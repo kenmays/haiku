@@ -473,6 +473,51 @@ def main() -> int:
         "overlay shutdown completion and teardown limitations must remain documented",
     )
 
+    # The PCI table is an explicit allowlist and must stop at i830/Gen2.
+    # Reject regressions that re-enable pre-i830 i810/i815-era adapters.
+    table_start = driver.find("kSupportedDevices[] = {")
+    table_end = driver.find("};", table_start)
+    require(table_start >= 0 and table_end > table_start,
+        "could not locate the supported PCI device allowlist")
+    device_table = driver[table_start:table_end]
+    first_device = device_table[device_table.find("{", device_table.find("{") + 1):]
+    require(
+        '{0x3577, INTEL_GROUP_83x, "i830GM"}' in device_table
+        and '{0x2562, INTEL_GROUP_83x, "i845G"}' in device_table,
+        "minimum supported devices must begin with i830/i845 (Gen2)",
+    )
+    require(
+        "i810" not in device_table.lower()
+        and "i815" not in device_table.lower()
+        and "0x7121" not in device_table.lower()
+        and "0x1132" not in device_table.lower(),
+        "pre-i830 Intel GPU support must remain absent from the PCI allowlist",
+    )
+
+    # Ensure representative Gen9–Gen12 families remain identified while
+    # all 2D drawing and Gen6+ engine submission stay fail-closed.
+    for pci_id, family in (
+        ("0x1912", "Skylake Gen9"),
+        ("0x5a52", "Cannon Lake Gen10"),
+        ("0x8a51", "Ice Lake Gen11"),
+        ("0x4c8a", "Rocket Lake Gen12"),
+        ("0x46a0", "Alder Lake Gen12"),
+    ):
+        require(pci_id in device_table, f"missing {family} device ID {pci_id}")
+    require(
+        all("return NULL;" in hooks[hooks.find(f"case {feature}:"):
+            hooks.find("\\n\\t\\tcase ", hooks.find(f"case {feature}:") + 1)
+            if hooks.find("\\n\\t\\tcase ", hooks.find(f"case {feature}:") + 1) >= 0
+            else len(hooks)]
+            for feature in (
+                "B_SCREEN_TO_SCREEN_BLIT", "B_FILL_RECTANGLE",
+                "B_INVERT_RECTANGLE", "B_FILL_SPAN",
+            )),
+        "Gen9–Gen12 must retain CPU-only drawing hooks",
+    )
+    print("PASS: Gen9–Gen12 device families are listed but 2D drawing stays CPU-only")
+    print("PASS: pre-i830 GPUs remain excluded from the explicit PCI allowlist")
+
     # Keep the selected Gen10 review candidate explicit and disabled. A PCI
     # allowlist entry is identification only; it must not bypass the BCS gate.
     require(

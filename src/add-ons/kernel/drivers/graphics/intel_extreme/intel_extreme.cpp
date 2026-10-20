@@ -734,6 +734,12 @@ intel_extreme_init(intel_info &info)
 	// commands must be submitted to its ring, not the render ring.
 	if (info.device_type.Generation() >= 6) {
 		ring_buffer &blitter = info.shared_info->blitter_ring_buffer;
+		blitter.base = NULL;
+		blitter.register_base = 0;
+		blitter.size = 0;
+		blitter.offset = 0;
+		blitter.position = 0;
+		blitter.space_left = 0;
 		if (intel_allocate_memory(info, 16 * B_PAGE_SIZE, 0, 0,
 				(addr_t*)&blitter.base) == B_OK) {
 			blitter.register_base = INTEL_BLITTER_RING_BUFFER;

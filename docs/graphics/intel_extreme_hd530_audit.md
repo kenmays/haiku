@@ -187,3 +187,16 @@ This calculation is a conservative producer-side bound, not a substitute for the
 
 This validates the driver's allocation geometry only; it does not establish correct cache attributes, publication ordering, status-page setup, GPU completion, or engine recovery. Build validation remains outstanding.
 
+### 17. Status-page mapping and ownership trace (follow-up)
+
+The allocation path has now been traced from the kernel driver's GART aperture through the shared driver state into the accelerant:
+
+- `intel_extreme_init()` maps the GART aperture and stores its CPU base and size in shared state. Ring allocations are made through `gGART->allocate_memory()`; their CPU-visible `base` is converted to a GGTT-relative `offset` by subtracting `aperture_base`.
+- The hardware status page is separately allocated with `B_APERTURE_NEED_PHYSICAL`. The shared structure stores both its CPU-visible pointer (`status_page`) and allocator-returned physical address (`physical_status_page`). The pointer-output bug is fixed, and allocation failure is logged.
+- The accelerant clones the shared-info area and accesses the status-page pointer through shared state. This is a shared CPU mapping, not evidence that the GPU can address that mapping using the same address value.
+- The current code does not establish a documented per-generation HWS_PGA programming value/address space, initialize a completion sequence, or prove that CPU reads observe GPU writes with the required cache/coherency rules. Nor does it prove the status-page allocation remains valid for every engine and lifecycle transition.
+- Ring command storage is allocated separately from the status page. The existing ring aperture checks validate ring geometry but do not validate the status page's GPU-visible address or its lifetime relative to engine enable/disable and teardown.
+
+**Implementation decision:** do not wire the status page into Gen6+ BCS completion yet. Choosing between physical and GGTT addresses, programming a guessed HWS_PGA register, or assuming the status page is coherent would risk hangs or false completion. The next code change must be based on the exact device-generation PRM and the GART allocator's documented mapping semantics; it must then establish page alignment/address-width checks, explicit ownership/lifetime, a monotonic breadcrumb protocol, and CPU-visible ordering before the fail-closed idle wait can be removed.
+
+This is a source audit only. It makes no claim of a working hardware status page or successful build/test.

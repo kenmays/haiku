@@ -67,6 +67,8 @@ Source reviewed on this branch:
 - [Intel Extreme teardown and allocation wrappers](https://github.com/kenmays/haiku/blob/work/intel-extreme-hd530-edid-2d/src/add-ons/kernel/drivers/graphics/intel_extreme/intel_extreme.cpp)
 - [GART aperture unmap and destructor](https://github.com/kenmays/haiku/blob/work/intel-extreme-hd530-edid-2d/src/add-ons/kernel/bus_managers/agp_gart/agp_gart.cpp)
 
+A separate accelerant-side lifetime issue was also found in `intel_release_overlay_buffer()`: it previously ignored the return values from GART frees and unconditionally freed the overlay descriptor. It now frees the optional i965 state allocation first, checks each status, clears a field only after a successful free, and retains the descriptor if either free fails so ownership is not silently discarded. The regression checker now guards this failure path as well. This does not by itself prove overlay shutdown is complete or that the overlay engine is quiescent; that remains part of the full device-lifecycle audit.
+
 The source-level regression checker now asserts that the aperture unmap is conditional on the quarantine decision. This assertion has not yet been run from a local checkout; it is not a build or hardware test.
 
 ## Required implementation sequence

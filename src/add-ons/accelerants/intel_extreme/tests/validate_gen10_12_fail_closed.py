@@ -95,10 +95,17 @@ def main() -> int:
         )
     require(
         "return NULL;" in engine_block
-        and "(void*)intel_acquire_engine" not in engine_block
-        and "(void*)intel_wait_engine_idle" not in engine_block
-        and "(void*)intel_get_sync_token" not in engine_block
-        and "(void*)intel_sync_to_token" not in engine_block,
+        and all(
+            f"(void*){implementation}" not in engine_block
+            for implementation in (
+                "intel_accelerant_engine_count",
+                "intel_acquire_engine",
+                "intel_release_engine",
+                "intel_wait_engine_idle",
+                "intel_get_sync_token",
+                "intel_sync_to_token",
+            )
+        ),
         "hardware engine/synchronization hooks must stay disabled in CPU-only mode",
     )
 

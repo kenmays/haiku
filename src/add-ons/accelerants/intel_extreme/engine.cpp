@@ -432,7 +432,7 @@ setup_ring_buffer(ring_buffer &ringBuffer, const char* name)
 	// accelerant has no generation-correct status-page breadcrumb or
 	// bounded recovery path yet. Keep all Gen6+ hardware 2D disabled.
 	if (gInfo->shared_info->device_type.Generation() >= 6) {
-		ERROR("Gen6+ BCS completion/recovery is not implemented; ring disabled\\n");
+		ERROR("Gen6+ BCS completion/recovery is not implemented; ring disabled\n");
 		ringBuffer.size = 0;
 		ringBuffer.register_base = 0;
 		return B_NOT_SUPPORTED;

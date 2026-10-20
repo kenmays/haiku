@@ -377,3 +377,10 @@ The following cases should be covered by a Haiku build/test run before this bran
 - Verify pre-Gen6 primary-ring teardown separately from Gen6+ BCS teardown, and confirm Gen6+ startup does not touch the unused primary ring.
 
 **Acceptance criteria:** no successful hardware-acceleration capability advertisement until the above regressions pass and a generation-correct completion fence is implemented; no Gen6+ completion claim based solely on ring HEAD/TAIL equality; no GPU-visible allocation is reclaimed on an unverified stop/reset path.
+
+
+### 12. Revalidate ring ownership immediately before tail publication
+
+Commit `db62740` adds a final MMIO-state check in the `QueueCommands` destructor before publishing a non-empty batch. It verifies that the ring remains enabled, the configured size still matches, the hardware tail still equals the batch's original published tail, and START still points at the expected aperture offset. If any check fails, the batch is discarded by restoring the saved software position and space accounting; the code does not advance the hardware tail.
+
+This narrows the window in which a ring disable/reprogram or unexpected tail change could receive a stale submission. It does not close races with a reset path that fails to use the same ring lock, does not establish CPU/WC-memory ordering, and does not prove GPU completion. Those remain explicit requirements; hardware acceleration stays disabled.

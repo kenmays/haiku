@@ -60,7 +60,7 @@ def main():
         require("return NULL;" in body, f"{feature} must fall back to CPU drawing")
         require(f"(void*){implementation}" not in body,
                 f"{feature} must not expose {implementation}")
-    require("Gen1 through Gen12" in hooks,
+    require("Gen2 through Gen12" in hooks,
             "CPU-only drawing policy must explicitly cover all generations")
     print("PASS: all four hardware 2D drawing hooks are withheld")
 

@@ -11,14 +11,19 @@
 #include "accelerant.h"
 
 
-// The Skylake-family blitter path is not considered reliable until the
-// Gen9 command submission and engine-idle issues are resolved. Keep the
-// display driver active but let app_server use its CPU/software renderer.
+// Hardware 2D is enabled only for generations whose legacy command path
+// has a usable completion/synchronization implementation. The current
+// engine code deliberately returns B_NOT_SUPPORTED from its idle-wait path
+// on Gen6+, so exposing blit hooks there can report work as submitted without
+// a reliable completion fence. Keep display modesetting available and let
+// app_server use its CPU/software renderer until the generation-specific
+// Blitter Command Streamer setup and completion fence are implemented.
 static bool
 use_software_2d()
 {
 	const DeviceType& type = gInfo->shared_info->device_type;
-	return type.InFamily(INTEL_FAMILY_LAKE)
+	return type.Generation() >= 6
+		|| type.InFamily(INTEL_FAMILY_LAKE)
 		|| type.InFamily(INTEL_FAMILY_SOC0);
 }
 

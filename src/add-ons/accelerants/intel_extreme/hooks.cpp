@@ -99,18 +99,16 @@ get_accelerant_hook(uint32 feature, void* data)
 			return NULL;
 
 		/* engine/synchronization */
+		// No hardware drawing hooks are exposed in CPU-only 2D mode, so do
+		// not advertise a hardware engine or its incomplete synchronization
+		// contract to app_server either.
 		case B_ACCELERANT_ENGINE_COUNT:
-			return (void*)intel_accelerant_engine_count;
 		case B_ACQUIRE_ENGINE:
-			return (void*)intel_acquire_engine;
 		case B_RELEASE_ENGINE:
-			return (void*)intel_release_engine;
 		case B_WAIT_ENGINE_IDLE:
-			return (void*)intel_wait_engine_idle;
 		case B_GET_SYNC_TOKEN:
-			return (void*)intel_get_sync_token;
 		case B_SYNC_TO_TOKEN:
-			return (void*)intel_sync_to_token;
+			return NULL;
 
 		/* 2D acceleration */
 		case B_SCREEN_TO_SCREEN_BLIT:

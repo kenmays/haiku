@@ -202,7 +202,7 @@ uninit_ring_buffer(ring_buffer &ringBuffer)
 }
 
 
-void
+status_t
 setup_ring_buffer(ring_buffer &ringBuffer, const char* name)
 {
 	TRACE("Setup ring buffer %s, offset %lx, size %lx\n", name,
@@ -218,14 +218,15 @@ setup_ring_buffer(ring_buffer &ringBuffer, const char* name)
 		if (ringBuffer.register_base != 0)
 			write32(ringBuffer.register_base + RING_BUFFER_CONTROL, 0);
 		ringBuffer.size = 0;
-		return;
+		return B_BAD_VALUE;
 	}
 
-	if (init_lock(&ringBuffer.lock, name) < B_OK) {
+	status_t status = init_lock(&ringBuffer.lock, name);
+	if (status < B_OK) {
 		// A ring without a usable lock must not remain enabled.
 		write32(ringBuffer.register_base + RING_BUFFER_CONTROL, 0);
 		ringBuffer.size = 0;
-		return;
+		return status;
 	}
 
 	uint32 ring = ringBuffer.register_base;
@@ -238,6 +239,7 @@ setup_ring_buffer(ring_buffer &ringBuffer, const char* name)
 	write32(ring + RING_BUFFER_CONTROL,
 		((ringBuffer.size - B_PAGE_SIZE) & INTEL_RING_BUFFER_SIZE_MASK)
 		| INTEL_RING_BUFFER_ENABLED);
+	return B_OK;
 }
 
 

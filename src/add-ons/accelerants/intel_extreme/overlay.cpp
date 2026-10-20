@@ -436,11 +436,31 @@ intel_release_overlay_buffer(const overlay_buffer* buffer)
 	if (gInfo->current_overlay == overlay)
 		hide_overlay();
 
-	intel_free_memory(overlay->buffer_base);
-	if (gInfo->shared_info->device_type.IsModel(INTEL_MODEL_965))
-		intel_free_memory(overlay->state_base);
-	free(overlay);
+	// Free the optional state allocation first. If either GART free fails,
+	// retain the overlay descriptor so ownership is not silently lost and a
+	// later release can retry the remaining allocation.
+	if (gInfo->shared_info->device_type.IsModel(INTEL_MODEL_965)
+		&& overlay->state_base != 0) {
+		status_t status = intel_free_memory(overlay->state_base);
+		if (status != B_OK) {
+			ERROR("could not free overlay state allocation: %s\n",
+				strerror(status));
+			return status;
+		}
+		overlay->state_base = 0;
+	}
 
+	if (overlay->buffer_base != 0) {
+		status_t status = intel_free_memory(overlay->buffer_base);
+		if (status != B_OK) {
+			ERROR("could not free overlay buffer allocation: %s\n",
+				strerror(status));
+			return status;
+		}
+		overlay->buffer_base = 0;
+	}
+
+	free(overlay);
 	return B_OK;
 }
 

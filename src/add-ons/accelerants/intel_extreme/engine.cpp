@@ -195,7 +195,7 @@ QueueCommands::MakeSpace(uint32 size)
 		|| fRingBuffer.space_left > fRingBuffer.size - sizeof(uint64)
 		|| size > (fRingBuffer.size - sizeof(uint64)) / sizeof(uint32)
 		|| fRingBuffer.base == NULL || fRingBuffer.register_base == 0) {
-		ERROR("invalid ring buffer state or oversized command request\\n");
+		ERROR("invalid ring buffer state or oversized command request\n");
 		return false;
 	}
 

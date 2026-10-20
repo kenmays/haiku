@@ -99,6 +99,7 @@ static 	status_t					_DpAuxSendReceiveHook(const struct i2c_bus *bus,
 		Pipe*						fPipe;
 
 		status_t					fEDIDState;
+		uint8						fEDIDReadAttempts;
 		edid1_info					fEDIDInfo;
 
 private:

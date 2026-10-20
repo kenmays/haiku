@@ -378,7 +378,7 @@ intel_set_display_mode(display_mode* mode)
 
 	addr_t base;
 	if (intel_allocate_memory(bytesPerRow * target.virtual_height, 0,
-			base) < B_OK) {
+			base) != B_OK) {
 		// Keep the previous mode usable when its framebuffer can be restored.
 		// The display is still powered off at this point, so only re-enable it
 		// after a valid framebuffer base has been programmed.

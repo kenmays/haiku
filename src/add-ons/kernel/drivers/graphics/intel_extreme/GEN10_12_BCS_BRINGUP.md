@@ -54,6 +54,21 @@ Inspection of the current branch confirms these implementation constraints:
 
 These findings intentionally do not claim that the existing generic status page is suitable for a Gen10 BCS completion write, or that the current GART API alone can guarantee safe teardown after a hang.
 
+## Teardown/GART lifetime audit
+
+A follow-up audit found that ring-level quarantine is insufficient unless aperture teardown respects it:
+
+- `intel_free_memory()` delegates to `gGART->free_memory()`. A successful explicit free removes that allocation; a failed free leaves ownership unresolved.
+- `intel_extreme_uninit()` eventually calls `gGART->unmap_aperture()`. In the matching GART manager, `unmap_aperture()` removes and deletes the aperture object, and `Aperture::~Aperture()` calls `DeleteMemory()` for every allocation still tracked by that aperture. Therefore, skipping an explicit free while the ring is active does not preserve the allocation if the aperture is subsequently unmapped.
+- The teardown path now checks the legacy primary ring's enable state even when its allocation was unavailable. If the ring remains enabled, or freeing its allocation fails, it leaves the entire aperture mapped rather than invoking the GART destructor and potentially releasing GPU-visible memory. This intentionally leaks/quarantines the aperture; it does not prove engine recovery or establish that the device can be reopened cleanly.
+- This conservative path is limited to the legacy primary ring and allocation lifetime. It is not a general proof that all display, overlay, cursor, or future BCS resources are quiescent. Before enabling BCS, teardown must also define how all engine and display references are stopped or quarantined and how failed initialization is unwound.
+
+Source reviewed on this branch:
+- [Intel Extreme teardown and allocation wrappers](https://github.com/kenmays/haiku/blob/work/intel-extreme-hd530-edid-2d/src/add-ons/kernel/drivers/graphics/intel_extreme/intel_extreme.cpp)
+- [GART aperture unmap and destructor](https://github.com/kenmays/haiku/blob/work/intel-extreme-hd530-edid-2d/src/add-ons/kernel/bus_managers/agp_gart/agp_gart.cpp)
+
+The source-level regression checker now asserts that the aperture unmap is conditional on the quarantine decision. This assertion has not yet been run from a local checkout; it is not a build or hardware test.
+
 ## Required implementation sequence
 
 1. **Identify the device.** Record PCI ID, platform codename, graphics IP version, BCS instance/register base, aperture/GGTT properties, and the exact PRM revision used. Reject unknown IDs.

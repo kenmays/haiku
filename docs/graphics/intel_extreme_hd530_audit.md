@@ -388,7 +388,7 @@ This narrows the window in which a ring disable/reprogram or unexpected tail cha
 
 ### 13. Cross-generation 2D hardware-acceleration gap analysis (Gen1–Gen12)
 
-**Scope and status.** This is a source-level gap inventory, not a claim that every listed family is currently bound by this driver or that hardware was tested. Generation labels and product codenames do not always align one-to-one; support must be keyed to PCI ID, platform stepping, and documented engine capabilities. The current branch intentionally advertises **zero** hardware 2D capabilities. Its Gen6+ command-selection rule routes XY blits to BCS, but that routing rule is not proof that every Gen6–12 device is supported.
+**Scope and status.** This is a source-level gap inventory, not a claim that every listed family is currently bound by this driver or that hardware was tested. Generation labels and product codenames do not always align one-to-one; support must be keyed to PCI ID, platform stepping, and documented engine capabilities. The current branch intentionally advertises **zero** hardware 2D capabilities. Its Gen6+ command-selection rule routes XY blits to BCS, but that routing rule is not proof that every Gen6–12 device is supported. The current kernel driver's PCI-ID table does contain entries for several later families (including Cannon Lake, Ice Lake, Tiger Lake, Rocket Lake, and Alder Lake); this establishes device enumeration coverage for those IDs, **not** validated 2D acceleration or complete display/engine support.
 
 #### Cross-generation blockers that affect every family
 

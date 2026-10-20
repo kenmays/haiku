@@ -318,3 +318,9 @@ This is intentionally a requirements record, not a claim that recovery or full a
 The primary and Gen6+ blitter ring descriptors are now initialized to an unavailable state before allocation. On allocation failure, their base pointers remain null, register bases and sizes remain zero, and a diagnostic is emitted. Overlay, status-page, and cursor output fields are also initialized before allocation; cursor allocation failure is logged and both cursor address forms are reset to invalid values.
 
 This hardens partial initialization and prevents a failed optional allocation from leaving a stale or partially returned address in shared state. It does **not** free successful allocations, establish GPU quiescence, or solve teardown ownership. A failed primary ring allocation must continue to leave acceleration unavailable; it must not be treated as a usable ring.
+
+### 26. Avoid initializing the unused legacy render ring on Gen6+
+
+The accelerant's 2D command path selects the BCS ring for Generation 6 and later; the primary ring is selected only for earlier generations. Primary-ring setup therefore no longer gates accelerant initialization on Gen6+. Its teardown is likewise skipped there because this accelerant instance never initialized that ring. BCS setup remains optional for display initialization and its failure leaves hardware blits unavailable.
+
+This removes an unnecessary failure dependency and avoids touching an unused render engine during Gen6+ accelerant startup/shutdown. It does not enable Gen6+ blits: the completion-fence and publication-ordering prerequisites remain unresolved. This change should be validated on legacy pre-Gen6 devices and Gen6+ devices, including BCS allocation/setup failure.

@@ -105,7 +105,7 @@ extern void set_display_power_mode(uint32 mode);
 
 // engine.cpp
 extern void uninit_ring_buffer(ring_buffer &ringBuffer);
-extern void setup_ring_buffer(ring_buffer &ringBuffer, const char* name);
+extern status_t setup_ring_buffer(ring_buffer &ringBuffer, const char* name);
 
 // modes.cpp
 extern void wait_for_vblank(void);

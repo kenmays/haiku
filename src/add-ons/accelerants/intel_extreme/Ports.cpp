@@ -816,6 +816,8 @@ Port::_DpAuxTransfer(dp_aux_msg* message)
 					result--;
 					if (message->buffer != NULL)
 						memcpy(message->buffer, receiveBuffer + 1, result);
+					if (result != (ssize_t)message->size)
+						return B_IO_ERROR;
 				}
 				break;
 			default:

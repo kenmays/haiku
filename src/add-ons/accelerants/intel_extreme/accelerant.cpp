@@ -540,6 +540,16 @@ intel_init_accelerant(int device)
 		return status;
 	}
 
+	// A dedicated BCS ring is required for Gen6+ XY blit commands. Keep
+	// display initialization alive if its allocation/setup failed; callers
+	// will then leave hardware blit hooks unavailable.
+	if (info.device_type.Generation() >= 6) {
+		status = setup_ring_buffer(info.blitter_ring_buffer,
+			"intel blitter ring buffer");
+		if (status != B_OK)
+			ERROR("Blitter ring unavailable; hardware blits disabled\n");
+	}
+
 	// Probe all ports
 	status = probe_ports();
 
@@ -556,6 +566,8 @@ intel_init_accelerant(int device)
 
 	status = create_mode_list();
 	if (status != B_OK) {
+		if (info.blitter_ring_buffer.size >= B_PAGE_SIZE)
+			uninit_ring_buffer(info.blitter_ring_buffer);
 		uninit_ring_buffer(info.primary_ring_buffer);
 		uninit_lock(&info.engine_lock);
 		uninit_lock(&info.accelerant_lock);
@@ -639,6 +651,8 @@ intel_uninit_accelerant(void)
 
 	if (!gInfo->is_clone) {
 		intel_shared_info &info = *gInfo->shared_info;
+		if (info.blitter_ring_buffer.size >= B_PAGE_SIZE)
+			uninit_ring_buffer(info.blitter_ring_buffer);
 		uninit_ring_buffer(info.primary_ring_buffer);
 		uninit_lock(&info.engine_lock);
 		uninit_lock(&info.accelerant_lock);

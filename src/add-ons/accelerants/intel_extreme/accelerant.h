@@ -101,7 +101,7 @@ void dump_registers(void);
 
 // dpms.cpp
 extern void enable_display_plane(bool enable);
-extern void set_display_power_mode(uint32 mode);
+extern status_t set_display_power_mode(uint32 mode);
 
 // engine.cpp
 extern void uninit_ring_buffer(ring_buffer &ringBuffer);

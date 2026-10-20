@@ -228,6 +228,17 @@ const struct supported_device {
 	{0x4e61, INTEL_MODEL_JSL,	"JasperLake"},
 	{0x4e71, INTEL_MODEL_JSLM,	"JasperLake"},
 
+	// Elkhart Lake (Gen11 low-power SoC graphics).
+	{0x4555, INTEL_MODEL_EHL,  "ElkhartLake GT1"},
+	{0x4557, INTEL_MODEL_EHL,  "ElkhartLake"},
+	{0x4570, INTEL_MODEL_EHL,  "ElkhartLake GT1"},
+	{0x4571, INTEL_MODEL_EHL,  "ElkhartLake GT1"},
+
+	// Lakefield (Gen11 hybrid SoC graphics).
+	{0x9840, INTEL_MODEL_LKF,  "Lakefield"},
+	{0x9841, INTEL_MODEL_LKFM, "Lakefield"},
+	{0x9842, INTEL_MODEL_LKFM, "Lakefield"},
+
 	{0x9a49, INTEL_MODEL_TGLM,	"TigerLake"},
 	{0x9a78, INTEL_MODEL_TGLM,	"TigerLake"},
 	{0x9a40, INTEL_MODEL_TGLM,	"TigerLake"},
@@ -241,14 +252,44 @@ const struct supported_device {
 	{0x4c90, INTEL_MODEL_RKL,  "RocketLake UHD Graphics P750"},
 	{0x4c9a, INTEL_MODEL_RKL,  "RocketLake UHD Graphics"},
 
+	// Alder Lake-P/M/N (Gen12 Xe-LP). Device IDs are cross-checked against
+	// public i915 PCI tables; all remain on the software 2D path until BCS
+	// submission and completion fencing are implemented.
+	{0x4626, INTEL_MODEL_ALDM, "Alder Lake-P"},
+	{0x4628, INTEL_MODEL_ALDM, "Alder Lake-P"},
+	{0x462a, INTEL_MODEL_ALDM, "Alder Lake-P"},
+	{0x46a0, INTEL_MODEL_ALDM, "Alder Lake-P GT2"},
 	{0x46a1, INTEL_MODEL_ALDM, "Alder Lake-P"},
+	{0x46a2, INTEL_MODEL_ALDM, "Alder Lake-P"},
+	{0x46a3, INTEL_MODEL_ALDM, "Alder Lake-P GT1"},
+	{0x46a6, INTEL_MODEL_ALDM, "Alder Lake-P GT2"},
+	{0x46a8, INTEL_MODEL_ALDM, "Alder Lake-UP3 GT2"},
+	{0x46aa, INTEL_MODEL_ALDM, "Alder Lake-UP4 GT2"},
+	{0x46b0, INTEL_MODEL_ALDM, "Alder Lake-P"},
 	{0x46b1, INTEL_MODEL_ALDM, "Alder Lake-P"},
-	{0x46c1, INTEL_MODEL_ALDM, "Alder Lake-P"},
-	{0x46a6, INTEL_MODEL_ALDM,  "Alder Lake-P GT2"},
-	{0x46d1, INTEL_MODEL_ALDM,  "Alder Lake-N"},
-#if 0
-	{0x46a8, INTEL_MODEL_ALDM,  "Alder Lake-UP3 GT2"},
-#endif
+	{0x46b2, INTEL_MODEL_ALDM, "Alder Lake-P"},
+	{0x46b3, INTEL_MODEL_ALDM, "Alder Lake-P GT1"},
+	{0x46c0, INTEL_MODEL_ALDM, "Alder Lake-M"},
+	{0x46c1, INTEL_MODEL_ALDM, "Alder Lake-M"},
+	{0x46c2, INTEL_MODEL_ALDM, "Alder Lake-M"},
+	{0x46c3, INTEL_MODEL_ALDM, "Alder Lake-M GT1"},
+	{0x46d0, INTEL_MODEL_ALDM, "Alder Lake-N"},
+	{0x46d1, INTEL_MODEL_ALDM, "Alder Lake-N"},
+	{0x46d2, INTEL_MODEL_ALDM, "Alder Lake-N"},
+
+	// Alder Lake-S/HX (Gen12 Xe-LP desktop graphics).
+	{0x4680, INTEL_MODEL_ALDM, "Alder Lake-S GT1"},
+	{0x4681, INTEL_MODEL_ALDM, "Alder Lake-S"},
+	{0x4682, INTEL_MODEL_ALDM, "Alder Lake-S GT1"},
+	{0x4683, INTEL_MODEL_ALDM, "Alder Lake-S"},
+	{0x4688, INTEL_MODEL_ALDM, "Alder Lake-HX GT1"},
+	{0x4689, INTEL_MODEL_ALDM, "Alder Lake-HX"},
+	{0x468a, INTEL_MODEL_ALDM, "Alder Lake-S"},
+	{0x468b, INTEL_MODEL_ALDM, "Alder Lake-S"},
+	{0x4690, INTEL_MODEL_ALDM, "Alder Lake-S GT1"},
+	{0x4691, INTEL_MODEL_ALDM, "Alder Lake-S"},
+	{0x4692, INTEL_MODEL_ALDM, "Alder Lake-S GT1"},
+	{0x4693, INTEL_MODEL_ALDM, "Alder Lake-S GT1"}
 
 };
 

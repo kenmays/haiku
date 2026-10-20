@@ -312,3 +312,9 @@ A cleanup change should therefore:
 - If hardware quiescence cannot be established, fail closed and keep acceleration unavailable rather than releasing potentially active DMA memory.
 
 This is intentionally a requirements record, not a claim that recovery or full allocation cleanup is complete. The next safe implementation depends on verifying the applicable engine reset/HWS procedures and confirming GART allocator behavior, then testing partial-init, normal teardown, stalled engine, and reset-failure paths.
+
+### 25. Allocation-failure state made explicit in kernel initialization
+
+The primary and Gen6+ blitter ring descriptors are now initialized to an unavailable state before allocation. On allocation failure, their base pointers remain null, register bases and sizes remain zero, and a diagnostic is emitted. Overlay, status-page, and cursor output fields are also initialized before allocation; cursor allocation failure is logged and both cursor address forms are reset to invalid values.
+
+This hardens partial initialization and prevents a failed optional allocation from leaving a stale or partially returned address in shared state. It does **not** free successful allocations, establish GPU quiescence, or solve teardown ownership. A failed primary ring allocation must continue to leave acceleration unavailable; it must not be treated as a usable ring.

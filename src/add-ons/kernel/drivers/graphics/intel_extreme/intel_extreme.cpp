@@ -741,7 +741,7 @@ intel_extreme_init(intel_info &info)
 			// must not infer readiness from a register address or stale
 			// allocation state.
 			primary.base = NULL;
-			ERROR("could not allocate primary ring buffer: %s\\n",
+			ERROR("could not allocate primary ring buffer: %s\n",
 				strerror(primaryRingStatus));
 		}
 	} else {

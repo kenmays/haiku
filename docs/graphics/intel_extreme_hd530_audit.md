@@ -441,3 +441,30 @@ A generation may be marked hardware-accelerated only after all of these are true
 - Upstream i915 register definitions: https://github.com/torvalds/linux/blob/master/drivers/gpu/drm/i915/i915_reg.h
 
 These are reference implementations and register indexes, not substitutes for the relevant Intel Programmer's Reference Manual or proof that Haiku's allocator and memory mappings have equivalent semantics.
+
+
+### 14. Gen9 fence implementation gate: submission model and publication ordering
+
+A follow-up source audit found a prerequisite that must be resolved before a Gen9 BCS breadcrumb can be called verified:
+
+- The accelerant's `setup_ring_buffer()` directly programs the legacy ring START/HEAD/TAIL/CONTROL registers and writes the tail MMIO register to submit work.
+- Gen8+ upstream i915/xe reference code uses logical-ring/execlist submission and programs per-engine context/status-page state. The upstream i915 legacy ring implementation explicitly limits its legacy ring default-vfunc path to pre-Gen8 hardware; this is a warning against assuming that a Gen9 BCS engine is operational merely because the legacy register block exists.
+- A breadcrumb packet appended to an unverified submission model would not establish completion. Therefore, the code now fails closed for Gen8+ ring initialization instead of enabling this unverified direct-MMIO path. Hardware 2D remains disabled, and the Gen9 BCS completion fence is **not implemented yet**.
+
+**Publication ordering improvement:** the ring tail-publication path now issues an x86 `SFENCE` after command memory writes and immediately before the MMIO tail doorbell. This is the appropriate architectural store-ordering primitive for draining prior write-combining stores before later stores; it closes the previously documented missing ordering step for the legacy ring path. It is not a completion fence, does not establish that the GPU-visible mapping is coherent, and does not make the Gen9 legacy submission model valid.
+
+**Required next steps for a real Gen9 completion path:**
+
+1. Implement or establish a supported Gen8+/Gen9 BCS submission model (including any required logical ring context/execlist setup), rather than layering a breadcrumb onto unverified direct ring submission.
+2. Establish the exact status-page GGTT offset from Haiku's GART allocator and validate the status-page mapping/coherency contract. `B_APERTURE_NEED_PHYSICAL` alone does not prove the GPU address used by Gen8+ per-engine HWS_PGA.
+3. Program the Gen9 BCS HWS_PGA register at the correct engine register base, with a verified GGTT address and posting readback, only as part of that supported engine initialization path.
+4. Emit the Gen8+ BCS breadcrumb using the documented MI_FLUSH_DW GGTT store form and any applicable Skylake workarounds, as one atomic submission with the work it fences. Validate the address alignment constraints (including the documented address bit restriction) against the Skylake PRM.
+5. Read the GPU-written sequence from the correct CPU mapping using the required read/cache ordering, compare wrap-safely, and bound the wait. On timeout, capture engine state and keep acceleration disabled unless a documented reset and post-reset validation succeed.
+6. Build the kernel driver and accelerant together and test on real Skylake/HD 530 hardware. No build or physical-hardware result is claimed by this source change.
+
+**References used for this gate (cross-checks, not a replacement for the Skylake PRM):**
+- Upstream i915 engine register definitions: https://github.com/torvalds/linux/blob/master/drivers/gpu/drm/i915/gt/intel_engine_regs.h (`RING_HWS_PGA(base)` is at engine base + `0x80`).
+- Upstream i915 Gen8 breadcrumb/flush sequence: https://code.googlesource.com/linux/torvalds/linux/+/e387dc122fc7c70c2a5df2567f4e2d1114f5a5da/drivers/gpu/drm/i915/intel_lrc.c
+- Intel Skylake PRM index and Blitter volume are linked in the pull request description.
+
+This gate deliberately prioritizes correctness over exposing a partially working acceleration path. Do not remove the Gen8+ guard or advertise `B_2D_ACCELERATION` until the submission model, address mapping, fence, publication ordering, recovery, and hardware validation are complete.

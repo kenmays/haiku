@@ -51,7 +51,8 @@ QueueCommands::QueueCommands(ring_buffer &ring)
 	fRingBuffer(ring),
 	fInitialPosition(0),
 	fInitialSpaceLeft(0),
-	fLockAcquired(false)
+	fLockAcquired(false),
+	fFailed(false)
 {
 	fLockAcquired = acquire_lock(&fRingBuffer.lock) == B_OK;
 	if (fLockAcquired) {
@@ -66,10 +67,17 @@ QueueCommands::~QueueCommands()
 	if (!fLockAcquired)
 		return;
 
+	// Any failed reservation invalidates the whole batch: publishing a
+	// prefix could leave an incomplete command stream in the ring.
+	if (fFailed) {
+		fRingBuffer.position = fInitialPosition;
+		fRingBuffer.space_left = fInitialSpaceLeft;
+	}
+
 	// Commands are published by updating the tail. If the batch cannot be
 	// padded to the required 8-byte alignment, discard the unsubmitted batch
 	// instead of writing an unreserved NOOP into a possibly full ring.
-	if (fRingBuffer.position & 0x07) {
+	if (!fFailed && (fRingBuffer.position & 0x07)) {
 		if (MakeSpace(2)) {
 			Write(COMMAND_NOOP);
 		} else {
@@ -78,7 +86,7 @@ QueueCommands::~QueueCommands()
 		}
 	}
 
-	if (fRingBuffer.position != fInitialPosition) {
+	if (!fFailed && fRingBuffer.position != fInitialPosition) {
 		// Publish the batch only after writing its command words. The
 		// required CPU/WC-memory-to-MMIO ordering primitive is not yet
 		// verified for this mapping; do not substitute a local atomic op.
@@ -96,8 +104,10 @@ QueueCommands::Put(struct command &command, size_t size)
 	uint32 count = size / sizeof(uint32);
 	uint32 *data = command.Data();
 
-	if (!MakeSpace(count))
+	if (!MakeSpace(count)) {
+		fFailed = true;
 		return;
+	}
 
 	for (uint32 i = 0; i < count; i++) {
 		Write(data[i]);
@@ -108,8 +118,10 @@ QueueCommands::Put(struct command &command, size_t size)
 bool
 QueueCommands::PutFlush()
 {
-	if (!MakeSpace(2))
+	if (!MakeSpace(2)) {
+		fFailed = true;
 		return false;
+	}
 
 	Write(COMMAND_FLUSH);
 	Write(COMMAND_NOOP);
@@ -120,8 +132,10 @@ QueueCommands::PutFlush()
 void
 QueueCommands::PutWaitFor(uint32 event)
 {
-	if (!MakeSpace(2))
+	if (!MakeSpace(2)) {
+		fFailed = true;
 		return;
+	}
 
 	Write(COMMAND_WAIT_FOR_EVENT | event);
 	Write(COMMAND_NOOP);
@@ -131,8 +145,10 @@ QueueCommands::PutWaitFor(uint32 event)
 void
 QueueCommands::PutOverlayFlip(uint32 mode, bool updateCoefficients)
 {
-	if (!MakeSpace(2))
+	if (!MakeSpace(2)) {
+		fFailed = true;
 		return;
+	}
 
 	Write(COMMAND_OVERLAY_FLIP | mode);
 

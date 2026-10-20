@@ -345,3 +345,9 @@ The kernel-side initialization in `src/add-ons/kernel/drivers/graphics/intel_ext
 - Status-page and cursor allocation failures should leave both pointer and address fields invalid. Optional cursor failure may fall back to software; status-page failure must block any future fence-enabled path rather than silently substituting head/tail polling.
 
 These are review findings and implementation gates, not claims that the missing fence or recovery path has been completed.
+
+### 10. Engine capability negotiation hardening
+
+Commit `d699a6e` updates `intel_acquire_engine()` to reject any requested capability not advertised by `sEngineToken.capabilities`. The token currently advertises zero hardware capabilities, so requests for `B_2D_ACCELERATION` return `B_NOT_SUPPORTED` rather than receiving a token that cannot satisfy the request. This closes a gap where acquisition ignored the caller's capability mask despite acceleration being intentionally disabled.
+
+This change is defensive API behavior, not a substitute for testing the app_server/accelerant fallback path. Confirm that the software renderer is selected correctly when the acquire hook returns `B_NOT_SUPPORTED`; only advertise `B_2D_ACCELERATION` after the BCS fence, publication ordering, and recovery path are verified end-to-end.

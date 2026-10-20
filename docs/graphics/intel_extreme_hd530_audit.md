@@ -213,3 +213,44 @@ Tracing `intel_extreme_init()` against `intel_extreme_uninit()` found a lifecycl
 **Decision:** record this as a follow-up rather than add unconditional frees without auditing every open/close/error path. Freeing a ring while a command streamer can still fetch from it would be worse than leaking it; freeing shared state twice would be a separate correctness bug. Before changing lifecycle code, trace all callers of `intel_extreme_uninit()`, the device close path, and the accelerant's ring teardown ordering, then implement one idempotent cleanup path that handles partial initialization.
 
 This remains a source inspection finding; no runtime leak test or hardware teardown test has been performed.
+
+
+### 19. Kernel device lifetime and graphics-allocation teardown trace
+
+This section records the call-path trace for the potential allocation leak identified above. It is a source audit, not proof of runtime behavior under every driver unload/error scenario.
+
+#### Device open/close ownership
+
+In `src/add-ons/kernel/drivers/graphics/intel_extreme/device.cpp`:
+
+- `device_open()` serializes initialization with `gLock`. When `open_count == 0`, it calls `intel_extreme_init()`; on success it increments `open_count` and returns the shared `intel_info` as the cookie.
+- `device_close()` is a no-op and does not decrement the count.
+- `device_free()` decrements `open_count`; when the prior count was one, it marks initialization unavailable and calls `intel_extreme_uninit()`.
+- The private graphics-memory ioctl allocates/frees through the mapped GART aperture, so these operations depend on the device remaining initialized while callers use the file descriptor.
+
+Thus the final file-cookie release, rather than `device_close()`, is the visible teardown boundary. The count is managed under `gLock`. This does not establish that every accelerant has finished using shared rings before final release; that depends on the userspace accelerant lifecycle and file-descriptor ownership.
+
+#### Accelerant ring teardown
+
+In `src/add-ons/accelerants/intel_extreme/accelerant.cpp`, primary accelerant initialization sets up the primary ring and, on Gen6+, attempts a separate BCS ring. If mode-list creation fails, it tears down initialized ring locks before `uninit_common()`. `intel_uninit_accelerant()` similarly tears down the BCS ring (when its size indicates setup), then the primary ring, and destroys engine/accelerant locks for the primary instance. A clone does not tear down these shared rings.
+
+In `engine.cpp`, `uninit_ring_buffer()` serializes against producers with the ring lock, waits briefly for head/tail equality, logs on timeout, disables the ring and destroys its lock. Head/tail equality is not a verified engine-completion fence; the timeout path disables the ring anyway. The allocation backing each ring is not freed there: the kernel driver's GART allocator owns it for the lifetime of the device initialization.
+
+#### Allocations visible in kernel initialization
+
+The initialization path allocates or attempts to allocate:
+- the primary render ring;
+- a separate Gen6+ BCS ring;
+- one page of overlay-register memory;
+- one page of hardware status-page memory;
+- optional one-page cursor memory.
+
+The shared structure retains CPU pointers and/or physical addresses for these resources. The primary and BCS ring bases are translated to aperture-relative offsets. The inspected `intel_extreme_uninit()` disables/removes interrupt handling and MSI where applicable, then unmaps the aperture and deletes MMIO/shared areas, but does not visibly free these allocations through `intel_free_memory()` first.
+
+#### Safe conclusion and next implementation gate
+
+The source confirms a likely graphics-allocation lifetime leak on normal teardown, but does not yet justify an unconditional cleanup patch. A safe fix needs a single cleanup routine that tracks successful allocations explicitly, handles every partial-init return path, disables/stops every initialized command streamer before freeing ring storage, and frees each allocation exactly once while the aperture is still mapped. It must also account for accelerant teardown having already disabled the rings, initialization failures before shared state is fully populated, and allocation APIs whose output parameters may be unset on failure.
+
+Before implementing that routine, audit **all** early returns in `intel_extreme_init()` and the GART allocator's exact base argument contract; initialize allocation tracking fields before the first possible failure; verify whether any display/overlay/cursor hardware can still reference its backing memory; and confirm whether the device manager guarantees final `device_free()` only after accelerant clones close. Do not free using an aperture-relative offset if `free_memory()` expects the original CPU allocation base. Do not free the status page or overlay/cursor storage until all consumers are disabled. If engine quiescence cannot be confirmed, fail safely rather than reclaiming memory that hardware may still access.
+
+No teardown code was changed in this audit-only commit because the present source trace does not prove a complete, safe release sequence for all partial initialization and hardware-use cases.

@@ -33,16 +33,22 @@ QueueCommands::QueueCommands(ring_buffer &ring)
 	:
 	fRingBuffer(ring),
 	fInitialPosition(0),
-	fInitialSpaceLeft(0)
+	fInitialSpaceLeft(0),
+	fLockAcquired(false)
 {
-	acquire_lock(&fRingBuffer.lock);
-	fInitialPosition = fRingBuffer.position;
-	fInitialSpaceLeft = fRingBuffer.space_left;
+	fLockAcquired = acquire_lock(&fRingBuffer.lock) == B_OK;
+	if (fLockAcquired) {
+		fInitialPosition = fRingBuffer.position;
+		fInitialSpaceLeft = fRingBuffer.space_left;
+	}
 }
 
 
 QueueCommands::~QueueCommands()
 {
+	if (!fLockAcquired)
+		return;
+
 	// Commands are published by updating the tail. If the batch cannot be
 	// padded to the required 8-byte alignment, discard the unsubmitted batch
 	// instead of writing an unreserved NOOP into a possibly full ring.
@@ -128,6 +134,9 @@ bool
 QueueCommands::MakeSpace(uint32 size)
 {
 	ASSERT((size & 1) == 0);
+
+	if (!fLockAcquired)
+		return false;
 
 	// Fail closed if the ring is unavailable or a request cannot fit.
 	// A timeout must never permit overwriting commands the GPU has not

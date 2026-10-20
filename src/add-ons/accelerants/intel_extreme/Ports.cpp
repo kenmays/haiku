@@ -610,8 +610,13 @@ Port::_SetupDpAuxI2c(i2c_bus *bus)
 			return B_OK;
 
 		write32(ICL_PWR_WELL_CTL_AUX2, value | HSW_PWR_WELL_CTL_REQ(0));
-		if (!wait_for_set(ICL_PWR_WELL_CTL_AUX2, HSW_PWR_WELL_CTL_STATE(0), 1000))
-			ERROR("%s: %s AUX didn't power on within 1000us!\n", __func__, PortName());
+		if (!wait_for_set(ICL_PWR_WELL_CTL_AUX2, HSW_PWR_WELL_CTL_STATE(0), 1000)) {
+			ERROR("%s: %s AUX didn't power on within 1000us!\n", __func__,
+				PortName());
+			// Do not report a usable AUX bus when its power well never became
+			// active. The caller can then try an alternate DDC transport.
+			return B_TIMED_OUT;
+		}
 	}
 	return B_OK;
 }

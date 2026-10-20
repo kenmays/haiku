@@ -170,16 +170,32 @@ QueueCommands::MakeSpace(uint32 size)
 	bigtime_t start = system_time();
 
 	while (fRingBuffer.space_left < size) {
+		uint32 control = read32(fRingBuffer.register_base
+			+ RING_BUFFER_CONTROL);
+		if ((control & INTEL_RING_BUFFER_ENABLED) == 0) {
+			ERROR("ring disabled while waiting for space: control %"
+				B_PRIx32 ", software tail %" B_PRIx32 "\n",
+				control, fRingBuffer.position);
+			return false;
+		}
+
 		uint32 head = read32(fRingBuffer.register_base + RING_BUFFER_HEAD)
 			& INTEL_RING_BUFFER_HEAD_MASK;
+		uint32 hardwareTail = read32(fRingBuffer.register_base
+			+ RING_BUFFER_TAIL) & INTEL_RING_BUFFER_HEAD_MASK;
 
-		// Never interpret a stale or corrupt head pointer as available space.
+		// Never interpret stale, corrupt, or externally modified ring state
+		// as available space. A producer owns this ring lock, so the MMIO tail
+		// should still match the software tail until this batch is published.
 		if (head >= fRingBuffer.size
 			|| (head & (sizeof(uint32) - 1)) != 0
-			|| fRingBuffer.position >= fRingBuffer.size) {
+			|| fRingBuffer.position >= fRingBuffer.size
+			|| hardwareTail != fRingBuffer.position) {
 			ERROR("invalid ring pointers: head %" B_PRIx32
-				", tail %" B_PRIx32 ", size %" B_PRIx32 "\n",
-				head, fRingBuffer.position, fRingBuffer.size);
+				", hardware tail %" B_PRIx32 ", software tail %"
+				B_PRIx32 ", size %" B_PRIx32 ", control %" B_PRIx32 "\n",
+				head, hardwareTail, fRingBuffer.position, fRingBuffer.size,
+				control);
 			return false;
 		}
 
@@ -195,11 +211,16 @@ QueueCommands::MakeSpace(uint32 size)
 
 		if (fRingBuffer.space_left < size) {
 			if (system_time() > start + 1000000LL) {
+				uint32 ringStart = read32(fRingBuffer.register_base
+					+ RING_BUFFER_START);
 				ERROR("engine stalled: head %" B_PRIx32
-					", tail %" B_PRIx32 ", size %" B_PRIx32
-					", space_left %" B_PRIx32 ", request %" B_PRIx32 "\n",
-					head, fRingBuffer.position, fRingBuffer.size,
-					fRingBuffer.space_left, size);
+					", hardware tail %" B_PRIx32 ", software tail %"
+					B_PRIx32 ", start %" B_PRIx32 ", size %" B_PRIx32
+					", control %" B_PRIx32 ", space_left %" B_PRIx32
+					", request %" B_PRIx32 "\n",
+					head & INTEL_RING_BUFFER_HEAD_MASK, hardwareTail,
+					fRingBuffer.position, ringStart, fRingBuffer.size,
+					control, fRingBuffer.space_left, size);
 				return false;
 			}
 			spin(10);

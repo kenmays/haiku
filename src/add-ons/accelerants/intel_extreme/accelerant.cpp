@@ -531,13 +531,18 @@ intel_init_accelerant(int device)
 		return status;
 	}
 
-	status = setup_ring_buffer(info.primary_ring_buffer,
-		"intel primary ring buffer");
-	if (status != B_OK) {
-		uninit_lock(&info.engine_lock);
-		uninit_lock(&info.accelerant_lock);
-		uninit_common();
-		return status;
+	// Gen6+ 2D blits use the dedicated BCS ring. Do not initialize
+	// the legacy render ring on these generations: it is not used by the
+	// 2D hooks, and failure to allocate it must not prevent display setup.
+	if (info.device_type.Generation() < 6) {
+		status = setup_ring_buffer(info.primary_ring_buffer,
+			"intel primary ring buffer");
+		if (status != B_OK) {
+			uninit_lock(&info.engine_lock);
+			uninit_lock(&info.accelerant_lock);
+			uninit_common();
+			return status;
+		}
 	}
 
 	// A dedicated BCS ring is required for Gen6+ XY blit commands. Keep
@@ -568,7 +573,8 @@ intel_init_accelerant(int device)
 	if (status != B_OK) {
 		if (info.blitter_ring_buffer.size >= B_PAGE_SIZE)
 			uninit_ring_buffer(info.blitter_ring_buffer);
-		uninit_ring_buffer(info.primary_ring_buffer);
+		if (info.device_type.Generation() < 6)
+			uninit_ring_buffer(info.primary_ring_buffer);
 		uninit_lock(&info.engine_lock);
 		uninit_lock(&info.accelerant_lock);
 		uninit_common();
@@ -653,7 +659,8 @@ intel_uninit_accelerant(void)
 		intel_shared_info &info = *gInfo->shared_info;
 		if (info.blitter_ring_buffer.size >= B_PAGE_SIZE)
 			uninit_ring_buffer(info.blitter_ring_buffer);
-		uninit_ring_buffer(info.primary_ring_buffer);
+		if (info.device_type.Generation() < 6)
+			uninit_ring_buffer(info.primary_ring_buffer);
 		uninit_lock(&info.engine_lock);
 		uninit_lock(&info.accelerant_lock);
 	}

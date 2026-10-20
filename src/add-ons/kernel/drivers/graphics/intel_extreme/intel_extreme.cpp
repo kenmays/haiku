@@ -729,18 +729,30 @@ intel_extreme_init(intel_info &info)
 	primary.offset = 0;
 	primary.position = 0;
 	primary.space_left = 0;
-	status_t primaryRingStatus = intel_allocate_memory(info,
-		16 * B_PAGE_SIZE, 0, 0, (addr_t*)&primary.base);
-	if (primaryRingStatus == B_OK) {
-		primary.register_base = INTEL_PRIMARY_RING_BUFFER;
-		primary.size = 16 * B_PAGE_SIZE;
-		primary.offset = (addr_t)primary.base - info.aperture_base;
+	if (info.device_type.Generation() < 6) {
+		status_t primaryRingStatus = intel_allocate_memory(info,
+			16 * B_PAGE_SIZE, 0, 0, (addr_t*)&primary.base);
+		if (primaryRingStatus == B_OK) {
+			primary.register_base = INTEL_PRIMARY_RING_BUFFER;
+			primary.size = 16 * B_PAGE_SIZE;
+			primary.offset = (addr_t)primary.base - info.aperture_base;
+		} else {
+			// Leave the ring explicitly unavailable. Accelerant-side code
+			// must not infer readiness from a register address or stale
+			// allocation state.
+			primary.base = NULL;
+			ERROR("could not allocate primary ring buffer: %s\\n",
+				strerror(primaryRingStatus));
+		}
 	} else {
-		// Leave the ring explicitly unavailable. Accelerant-side code must
-		// not infer readiness from a register address or a stale allocation.
+		// Gen6+ XY blits use the dedicated BCS ring. The accelerant does not
+		// initialize or submit work to the legacy render ring, so do not
+		// allocate an unused graphics-aperture region that cannot be safely
+		// reclaimed until GPU-quiescence and GART ownership are verified.
 		primary.base = NULL;
-		ERROR("could not allocate primary ring buffer: %s\n",
-			strerror(primaryRingStatus));
+		primary.register_base = 0;
+		primary.size = 0;
+		primary.offset = 0;
 	}
 
 	// Gen6 introduced a separate Blitter Command Streamer. XY_*_BLIT

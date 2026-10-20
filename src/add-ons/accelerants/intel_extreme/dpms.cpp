@@ -70,7 +70,7 @@ enable_lvds_panel(bool enable)
 				if ((read32(statusRegister) & PANEL_STATUS_POWER_ON) != 0)
 					return B_OK;
 			}
-			ERROR("%s: LVDS panel did not power on within 1000 us!\\n",
+			ERROR("%s: LVDS panel did not power on within 1000 us!\n",
 				__func__);
 			return B_TIMED_OUT;
 		}
@@ -86,7 +86,7 @@ enable_lvds_panel(bool enable)
 				if ((read32(statusRegister) & PANEL_STATUS_POWER_ON) == 0)
 					return B_OK;
 			}
-			ERROR("%s: LVDS panel did not power off within 1000 us!\\n",
+			ERROR("%s: LVDS panel did not power off within 1000 us!\n",
 				__func__);
 			return B_TIMED_OUT;
 		}

@@ -36,6 +36,7 @@ class QueueCommands {
 		uint32			fInitialPosition;
 		uint32			fInitialSpaceLeft;
 		bool			fLockAcquired;
+		bool			fFailed;
 };
 
 

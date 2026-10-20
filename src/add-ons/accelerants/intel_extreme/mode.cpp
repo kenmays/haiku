@@ -249,7 +249,7 @@ create_mode_list(void)
 		mode.virtual_height = mode.timing.v_display;
 		mode.h_display_start = 0;
 		mode.v_display_start = 0;
-		mode.flags = 0;
+		mode.flags = B_PARALLEL_ACCESS;
 
 		// TODO: support lower modes via scaling and windowing
 		gInfo->mode_list_area = create_display_modes("intel extreme modes", NULL, &mode, 1,
@@ -265,6 +265,13 @@ create_mode_list(void)
 		return gInfo->mode_list_area;
 
 	gInfo->mode_list = list;
+
+	// The framebuffer is CPU-mapped system graphics memory. The CPU can
+	// access it while display scanout is active, so advertise parallel
+	// framebuffer access for every mode returned by this accelerant.
+	for (uint32 i = 0; i < count; i++)
+		gInfo->mode_list[i].flags |= B_PARALLEL_ACCESS;
+
 	gInfo->shared_info->mode_list_area = gInfo->mode_list_area;
 	gInfo->shared_info->mode_count = count;
 
@@ -328,7 +335,7 @@ intel_propose_display_mode(display_mode* target, const display_mode* low,
 	}
 	// (most) modeflags are outputs from us (the driver). So we should
 	// set them depending on the mode and the current hardware config
-	target->flags |= B_SCROLL;
+	target->flags |= B_SCROLL | B_PARALLEL_ACCESS;
 
 	return is_display_mode_within_bounds(*target, *low, *high)
 		? B_OK : B_BAD_VALUE;
@@ -555,7 +562,7 @@ intel_get_preferred_mode(display_mode* preferredMode)
 	mode.virtual_height = mode.timing.v_display;
 	mode.h_display_start = 0;
 	mode.v_display_start = 0;
-	mode.flags = 0;
+	mode.flags = B_PARALLEL_ACCESS;
 	memcpy(preferredMode, &mode, sizeof(mode));
 	return B_OK;
 }

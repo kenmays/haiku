@@ -23,13 +23,12 @@ def fail(message: str) -> None:
 driver = DRIVER.read_text(encoding="utf-8")
 hooks = HOOKS.read_text(encoding="utf-8")
 
-# Rocket Lake is already listed, but listing is not equivalent to validation.
 for device_id in ("0x4c8a", "0x4c8b", "0x4c90", "0x4c9a"):
     if device_id not in driver.lower():
         fail(f"Rocket Lake allowlist entry {device_id} disappeared")
 
-# Exact known Alchemist and Battlemage IDs must not be claimed until their
-# display-engine model and register paths have been implemented and reviewed.
+# Keep exact known Alchemist/Battlemage IDs unclaimed until their display-engine
+# model and register paths are implemented and reviewed.
 for device_id in (
     "0x56a0", "0x56a1", "0x56a2", "0x56a5", "0x56a6",
     "0x5690", "0x5691", "0x5692", "0x5693", "0x5694",
@@ -39,7 +38,6 @@ for device_id in (
     if re.search(r"\{\s*" + re.escape(device_id) + r"\s*,", driver, re.IGNORECASE):
         fail(f"unvalidated Alchemist/Battlemage device {device_id} was allowlisted")
 
-# All four drawing hooks must return NULL. Scope each check to its case arm.
 for feature in (
     "B_SCREEN_TO_SCREEN_BLIT",
     "B_FILL_RECTANGLE",
@@ -47,7 +45,7 @@ for feature in (
     "B_FILL_SPAN",
 ):
     match = re.search(
-        r"case\s+" + feature + r"\s*:(.*?)(?=\n\s*case\s+|\n\s*//|\n\s*/\*)",
+        r"case\s+" + feature + r"\s*:(.*?)(?=\n\s*case\s+[A-Z_]+|\n\s*default\s*:)",
         hooks,
         re.DOTALL,
     )

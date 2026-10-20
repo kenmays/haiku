@@ -829,6 +829,8 @@ Port::_DpAuxTransfer(dp_aux_msg* message)
 			continue;
 		else if (result < B_OK)
 			return result;
+		else if (result == 0)
+			return B_IO_ERROR;
 
 		switch (message->reply & DP_AUX_NATIVE_REPLY_MASK) {
 			case DP_AUX_NATIVE_REPLY_ACK:

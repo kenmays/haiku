@@ -55,6 +55,17 @@ def main() -> int:
         "ring setup must reject Gen6+ before programming the ring",
     )
 
+    # The Gen6+ rejection must precede lock setup and every MMIO access.
+    # This keeps an unsupported generation from touching a possibly live ring.
+    gen6_gate = setup.find("if (gInfo->shared_info->device_type.Generation() >= 6)")
+    require(gen6_gate >= 0, "ring setup is missing the Gen6+ gate")
+    for operation in ("init_lock(", "read32(", "write32("):
+        operation_at = setup.find(operation)
+        require(
+            operation_at < 0 or gen6_gate < operation_at,
+            f"Gen6+ setup gate must precede {operation}",
+        )
+
     idle = function_body(engine, "wait_engine_idle_internal()")
     require(
         "Generation() >= 6" in idle and "return B_NOT_SUPPORTED;" in idle,

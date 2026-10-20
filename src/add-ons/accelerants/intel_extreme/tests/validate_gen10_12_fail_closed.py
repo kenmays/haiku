@@ -16,6 +16,7 @@ DRIVER_PATH = ROOT / "src/add-ons/kernel/drivers/graphics/intel_extreme/driver.c
 BRINGUP_PATH = ROOT / "src/add-ons/kernel/drivers/graphics/intel_extreme/GEN10_12_BCS_BRINGUP.md"
 OVERLAY_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/overlay.cpp"
 HOOKS_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/hooks.cpp"
+MODE_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/mode.cpp"
 
 
 def function_body(source: str, signature: str) -> str:
@@ -49,6 +50,7 @@ def main() -> int:
     bringup = BRINGUP_PATH.read_text(encoding="utf-8")
     overlay = OVERLAY_PATH.read_text(encoding="utf-8")
     hooks = HOOKS_PATH.read_text(encoding="utf-8")
+    mode = MODE_PATH.read_text(encoding="utf-8")
 
     # CPU-only 2D policy is generation-independent: every Intel 2D drawing
     # hook must be absent so app_server selects its software rasterizer.
@@ -70,6 +72,30 @@ def main() -> int:
     require(
         "CPU-only 2D policy" in hooks and "Gen1 through Gen12" in hooks,
         "hooks must document the all-generation software-rendering policy",
+    )
+
+    # If a mode change cannot allocate its new framebuffer, only resume
+    # scanout after the fallback framebuffer is allocated and programmed.
+    mode_start = mode.find("intel_set_display_mode(")
+    alloc_start = mode.find(
+        "if (intel_allocate_memory(bytesPerRow * target.virtual_height", mode_start
+    )
+    alloc_end = mode.find("// clear frame buffer before using it", alloc_start)
+    require(
+        mode_start >= 0 and alloc_start > mode_start and alloc_end > alloc_start,
+        "could not locate framebuffer allocation failure path",
+    )
+    allocation_failure = mode[alloc_start:alloc_end]
+    restored = allocation_failure.find("set_frame_buffer_base();")
+    restored_power = allocation_failure.find("set_display_power_mode(sharedInfo.dpms_mode);")
+    failed_restore = allocation_failure.find("sharedInfo.frame_buffer = 0;")
+    require(
+        restored >= 0 and restored_power > restored,
+        "fallback scanout must resume only after the framebuffer base is restored",
+    )
+    require(
+        failed_restore >= 0 and "sharedInfo.frame_buffer_offset = 0;" in allocation_failure,
+        "failed fallback allocation must clear stale CPU framebuffer pointers",
     )
 
     # With every hardware drawing hook disabled, do not expose an engine

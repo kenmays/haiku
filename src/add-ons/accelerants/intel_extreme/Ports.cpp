@@ -247,7 +247,7 @@ Port::GetEDID(edid1_info* edid, bool forceRead)
 
 		fEDIDState = status;
 		if (fEDIDState == B_OK) {
-			TRACE("%s: found EDID information!\\n", PortName());
+			TRACE("%s: found EDID information!\n", PortName());
 			edid_dump(&fEDIDInfo);
 		}
 	}

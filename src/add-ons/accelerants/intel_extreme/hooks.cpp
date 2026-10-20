@@ -22,6 +22,25 @@
 extern "C" void*
 get_accelerant_hook(uint32 feature, void* data)
 {
+	// Legacy overlay commands use the primary ring, which is intentionally
+	// not initialized on Gen6+ until command submission and completion are
+	// validated for those generations. Do not advertise an unusable overlay
+	// API on those devices.
+	if (gInfo->shared_info->device_type.Generation() >= 6) {
+		switch (feature) {
+			case B_OVERLAY_COUNT:
+			case B_OVERLAY_SUPPORTED_SPACES:
+			case B_OVERLAY_SUPPORTED_FEATURES:
+			case B_ALLOCATE_OVERLAY_BUFFER:
+			case B_RELEASE_OVERLAY_BUFFER:
+			case B_GET_OVERLAY_CONSTRAINTS:
+			case B_ALLOCATE_OVERLAY:
+			case B_RELEASE_OVERLAY:
+			case B_CONFIGURE_OVERLAY:
+				return NULL;
+		}
+	}
+
 	switch (feature) {
 		/* general */
 		case B_INIT_ACCELERANT:

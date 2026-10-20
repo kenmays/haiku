@@ -90,6 +90,7 @@ Port::Port(port_index index, const char* baseName)
 	:
 	fPipe(NULL),
 	fEDIDState(B_NO_INIT),
+	fEDIDReadAttempts(0),
 	fPortIndex(index),
 	fPortName(NULL)
 {
@@ -116,8 +117,12 @@ Port::~Port()
 bool
 Port::HasEDID()
 {
-	if (fEDIDState == B_NO_INIT)
-		GetEDID(NULL);
+	// Retry one failed EDID read on a later connection query. Keep this
+	// bounded: connection polling must not issue unending DDC/AUX traffic.
+	if (fEDIDReadAttempts == 0
+		|| (fEDIDState != B_OK && fEDIDReadAttempts < 2)) {
+		GetEDID(NULL, fEDIDReadAttempts != 0);
+	}
 
 	return fEDIDState == B_OK;
 }
@@ -225,6 +230,11 @@ Port::GetEDID(edid1_info* edid, bool forceRead)
 	CALLED();
 
 	if (fEDIDState == B_NO_INIT || forceRead) {
+		// Count only the two automatic attempts; explicit forceRead calls
+		// remain available for a caller that intentionally refreshes EDID.
+		if (fEDIDReadAttempts < 2)
+			fEDIDReadAttempts++;
+
 		TRACE("%s: trying to read EDID\n", PortName());
 
 		i2c_bus bus;

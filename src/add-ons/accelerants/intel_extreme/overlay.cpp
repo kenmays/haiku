@@ -351,6 +351,10 @@ intel_allocate_overlay_buffer(color_space colorSpace, uint16 width,
 	TRACE("%s(width %u, height %u, colorSpace %lu)\n", __func__, width,
 		height, colorSpace);
 
+	// Reject empty surfaces before calculating stride or requesting GART memory.
+	if (width == 0 || height == 0)
+		return NULL;
+
 	intel_shared_info &sharedInfo = *gInfo->shared_info;
 	uint32 bytesPerPixel;
 
@@ -389,8 +393,15 @@ intel_allocate_overlay_buffer(color_space colorSpace, uint16 width,
 	buffer->height = height;
 	buffer->bytes_per_row = (width * bytesPerPixel + alignment) & ~alignment;
 
-	status_t status = intel_allocate_memory(buffer->bytes_per_row * height,
-		0, overlay->buffer_base);
+	// Check the multiplication before it is evaluated in the allocation call;
+	// uint32 stride * uint16 height can overflow on 32-bit builds.
+	if (buffer->bytes_per_row > ((size_t)-1) / height) {
+		free(overlay);
+		return NULL;
+	}
+	size_t bufferSize = (size_t)buffer->bytes_per_row * height;
+
+	status_t status = intel_allocate_memory(bufferSize, 0, overlay->buffer_base);
 	if (status != B_OK) {
 		free(overlay);
 		return NULL;

@@ -72,6 +72,26 @@ def main() -> int:
         "hooks must document the all-generation software-rendering policy",
     )
 
+    # With every hardware drawing hook disabled, do not expose an engine
+    # interface whose idle-wait/token semantics are incomplete or unused.
+    engine_hooks = (
+        "B_ACCELERANT_ENGINE_COUNT",
+        "B_ACQUIRE_ENGINE",
+        "B_RELEASE_ENGINE",
+        "B_WAIT_ENGINE_IDLE",
+        "B_GET_SYNC_TOKEN",
+        "B_SYNC_TO_TOKEN",
+    )
+    for feature in engine_hooks:
+        start = hooks.find(f"case {feature}:")
+        require(start >= 0, f"missing engine/synchronization hook case: {feature}")
+        next_case = hooks.find("\\n\\t\\tcase ", start + 1)
+        body = hooks[start:next_case if next_case >= 0 else len(hooks)]
+        require(
+            "return NULL;" in body,
+            f"{feature} must remain unavailable in CPU-only 2D mode",
+        )
+
     engine_token = function_body(engine, "intel_acquire_engine(")
     require(
         "= {1, 0 /*B_2D_ACCELERATION*/, NULL}" in engine

@@ -12,6 +12,14 @@ This checklist records the safety gates that must be satisfied before enabling d
 - Fail closed when generation-specific ring setup or synchronization prerequisites are not met.
 - Do not treat a CPU-side wait or a submitted command as proof of GPU completion.
 
+## Latest code gate (2026-10-20)
+
+- Gen6+ BCS allocation is now explicitly omitted during kernel initialization; shared ring fields are initialized as unavailable.
+- The accelerant refuses to select a Gen6+ BCS ring even if stale shared state contains a ring description.
+- Ring setup rejects Gen6+ before touching the BCS registers. This covers Gen6/7 as well as Gen8–12 and avoids submitting commands without a completion fence and bounded recovery.
+- These changes are a fail-closed safety measure, not implementation of BCS acceleration. Gen1–5 still needs a separate audit of completion-token semantics, ring shutdown, and allocation lifetime.
+- No successful Haiku build, runtime test, or HD 530 hardware test has been established for this branch.
+
 ## Required before Gen9 BCS can be enabled
 
 1. **Allocation ownership and teardown**

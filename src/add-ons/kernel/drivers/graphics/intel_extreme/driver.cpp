@@ -276,20 +276,22 @@ const struct supported_device {
 	{0x46d0, INTEL_MODEL_ALDM, "Alder Lake-N"},
 	{0x46d1, INTEL_MODEL_ALDM, "Alder Lake-N"},
 	{0x46d2, INTEL_MODEL_ALDM, "Alder Lake-N"},
+	{0x46d3, INTEL_MODEL_ALDM, "Twin Lake"},
+	{0x46d4, INTEL_MODEL_ALDM, "Twin Lake"},
 
 	// Alder Lake-S/HX (Gen12 Xe-LP desktop graphics).
-	{0x4680, INTEL_MODEL_ALDM, "Alder Lake-S GT1"},
-	{0x4681, INTEL_MODEL_ALDM, "Alder Lake-S"},
-	{0x4682, INTEL_MODEL_ALDM, "Alder Lake-S GT1"},
-	{0x4683, INTEL_MODEL_ALDM, "Alder Lake-S"},
-	{0x4688, INTEL_MODEL_ALDM, "Alder Lake-HX GT1"},
-	{0x4689, INTEL_MODEL_ALDM, "Alder Lake-HX"},
-	{0x468a, INTEL_MODEL_ALDM, "Alder Lake-S"},
-	{0x468b, INTEL_MODEL_ALDM, "Alder Lake-S"},
-	{0x4690, INTEL_MODEL_ALDM, "Alder Lake-S GT1"},
-	{0x4691, INTEL_MODEL_ALDM, "Alder Lake-S"},
-	{0x4692, INTEL_MODEL_ALDM, "Alder Lake-S GT1"},
-	{0x4693, INTEL_MODEL_ALDM, "Alder Lake-S GT1"}
+	{0x4680, INTEL_MODEL_ALD, "Alder Lake-S GT1"},
+	{0x4681, INTEL_MODEL_ALD, "Alder Lake-S"},
+	{0x4682, INTEL_MODEL_ALD, "Alder Lake-S GT1"},
+	{0x4683, INTEL_MODEL_ALD, "Alder Lake-S"},
+	{0x4688, INTEL_MODEL_ALD, "Alder Lake-HX GT1"},
+	{0x4689, INTEL_MODEL_ALD, "Alder Lake-HX"},
+	{0x468a, INTEL_MODEL_ALD, "Alder Lake-S"},
+	{0x468b, INTEL_MODEL_ALD, "Alder Lake-S"},
+	{0x4690, INTEL_MODEL_ALD, "Alder Lake-S GT1"},
+	{0x4691, INTEL_MODEL_ALD, "Alder Lake-S"},
+	{0x4692, INTEL_MODEL_ALD, "Alder Lake-S GT1"},
+	{0x4693, INTEL_MODEL_ALD, "Alder Lake-S GT1"}
 
 };
 

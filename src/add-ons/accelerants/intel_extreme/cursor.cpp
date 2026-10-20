@@ -88,7 +88,7 @@ void
 intel_move_cursor(uint16 _x, uint16 _y)
 {
 	int32 x = (int32)_x - gInfo->shared_info->cursor_hot_x;
-	int32 y = (int32)_y - gInfo->shared_info->cursor_hot_x;
+	int32 y = (int32)_y - gInfo->shared_info->cursor_hot_y;
 
 	if (x < 0)
 		x = -x | CURSOR_POSITION_NEGATIVE;

@@ -186,9 +186,16 @@ QueueCommands::MakeSpace(uint32 size)
 	// A timeout must never permit overwriting commands the GPU has not
 	// consumed.
 	if (fRingBuffer.size < B_PAGE_SIZE
+		|| (fRingBuffer.size & (fRingBuffer.size - 1)) != 0
+		|| (fRingBuffer.size & (B_PAGE_SIZE - 1)) != 0
+		|| fRingBuffer.position >= fRingBuffer.size
+		|| (fRingBuffer.position & (sizeof(uint32) - 1)) != 0
+		|| fInitialPosition >= fRingBuffer.size
+		|| (fInitialPosition & (sizeof(uint32) - 1)) != 0
+		|| fRingBuffer.space_left > fRingBuffer.size - sizeof(uint64)
 		|| size > (fRingBuffer.size - sizeof(uint64)) / sizeof(uint32)
 		|| fRingBuffer.base == NULL || fRingBuffer.register_base == 0) {
-		ERROR("invalid ring buffer or oversized command request\n");
+		ERROR("invalid ring buffer state or oversized command request\\n");
 		return false;
 	}
 

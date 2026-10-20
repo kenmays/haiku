@@ -867,7 +867,7 @@ intel_extreme_init(intel_info &info)
 		(addr_t*)&info.shared_info->status_page,
 		&info.shared_info->physical_status_page);
 	if (statusPageStatus != B_OK) {
-		ERROR("could not allocate hardware status page: %s\\n",
+		ERROR("could not allocate hardware status page: %s\n",
 			strerror(statusPageStatus));
 	}
 	if (hardwareCursor) {

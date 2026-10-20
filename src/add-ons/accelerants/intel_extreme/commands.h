@@ -24,7 +24,7 @@ class QueueCommands {
 		~QueueCommands();
 
 		void Put(struct command &command, size_t size);
-		void PutFlush();
+		bool PutFlush();
 		void PutWaitFor(uint32 event);
 		void PutOverlayFlip(uint32 code, bool updateCoefficients);
 

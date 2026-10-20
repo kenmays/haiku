@@ -33,6 +33,8 @@ class QueueCommands {
 
 	private:
 		ring_buffer	&fRingBuffer;
+		uint32			fInitialPosition;
+		uint32			fInitialSpaceLeft;
 };
 
 

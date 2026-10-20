@@ -1586,8 +1586,12 @@ HDMIPort::IsConnected()
 	//  is only programmed for LVDS, DVI and VGA while we detect presence only for DP and HDMI.
 	//
 	//if ((read32(portRegister) & DISPLAY_MONITOR_PORT_DETECTED) == 0)
-	if ((read32(portRegister) & DISPLAY_MONITOR_PORT_ENABLED) == 0)
+	if ((read32(portRegister) & DISPLAY_MONITOR_PORT_ENABLED) == 0) {
+		// A confirmed disconnect starts a new bounded EDID retry sequence.
+		fEDIDState = B_NO_INIT;
+		fEDIDReadAttempts = 0;
 		return false;
+	}
 
 	return HasEDID();
 }
@@ -1803,6 +1807,9 @@ DisplayPort::IsConnected()
 	//if ((read32(portRegister) & DISPLAY_MONITOR_PORT_DETECTED) == 0) {
 	if ((read32(portRegister) & DISPLAY_MONITOR_PORT_ENABLED) == 0) {
 		TRACE("%s: %s link not detected\n", __func__, PortName());
+		// A confirmed disconnect starts a new bounded EDID retry sequence.
+		fEDIDState = B_NO_INIT;
+		fEDIDReadAttempts = 0;
 		return false;
 	}
 

@@ -384,3 +384,60 @@ The following cases should be covered by a Haiku build/test run before this bran
 Commit `db62740` adds a final MMIO-state check in the `QueueCommands` destructor before publishing a non-empty batch. It verifies that the ring remains enabled, the configured size still matches, the hardware tail still equals the batch's original published tail, and START still points at the expected aperture offset. If any check fails, the batch is discarded by restoring the saved software position and space accounting; the code does not advance the hardware tail.
 
 This narrows the window in which a ring disable/reprogram or unexpected tail change could receive a stale submission. It does not close races with a reset path that fails to use the same ring lock, does not establish CPU/WC-memory ordering, and does not prove GPU completion. Those remain explicit requirements; hardware acceleration stays disabled.
+
+
+### 13. Cross-generation 2D hardware-acceleration gap analysis (Gen1–Gen12)
+
+**Scope and status.** This is a source-level gap inventory, not a claim that every listed family is currently bound by this driver or that hardware was tested. Generation labels and product codenames do not always align one-to-one; support must be keyed to PCI ID, platform stepping, and documented engine capabilities. The current branch intentionally advertises **zero** hardware 2D capabilities. Its Gen6+ command-selection rule routes XY blits to BCS, but that routing rule is not proof that every Gen6–12 device is supported.
+
+#### Cross-generation blockers that affect every family
+
+1. **Capability gating and fallback:** Keep `B_2D_ACCELERATION` disabled until a generation-specific implementation passes build, regression, and hardware validation. Verify the app_server actually falls back to software when acquisition returns `B_NOT_SUPPORTED`.
+2. **Command legality:** Validate every opcode, packet length, pitch/tiling interpretation, pixel format, coordinate bound, source/destination address form, and required flush for the selected engine and generation. A command legal on one ring/family must not be assumed legal on another.
+3. **GPU address domain:** Establish how each allocation becomes GPU-visible (GGTT/aperture offset, physical address, or other platform-specific form). CPU virtual pointers, physical addresses, and aperture offsets are not interchangeable.
+4. **Publication ordering:** Prove the correct Haiku primitive for writes to the ring mapping before MMIO tail publication, including WC/cache behavior and required MMIO readbacks. The current final ring-state check only validates ownership; it is not a memory barrier.
+5. **Completion semantics:** Implement a real monotonically increasing breadcrumb/fence, generation-correct status-page programming, cache/read ordering, wrap-safe comparisons, and bounded waits. Ring HEAD/TAIL equality alone is not a completion fence.
+6. **Reset and recovery:** Implement per-generation, per-engine quiesce/reset/reinitialize/validate state machines with bounded polling and error capture. If recovery cannot prove the engine is stopped, keep acceleration unavailable and do not free potentially DMA-visible allocations.
+7. **Ownership and teardown:** Track original allocator bases and successful allocations explicitly. Serialize producers, reset, shutdown, and memory reclamation; handle failed initialization and stalled-engine paths without double-free or unsafe reclamation.
+8. **Validation coverage:** Add tests for reservation rollback, tail publication, fence timeout, sequence wrap/reset, malformed commands, allocation failures, and software fallback. Run Haiku builds and test on actual hardware for each claimed platform class.
+
+#### Generation matrix
+
+| Generation / representative family | Current 2D assessment | Main gaps before hardware acceleration can be claimed |
+|---|---|---|
+| **Gen1 / earliest 8xx-class** | Unverified; do not assume supported. This branch provides no evidence of a complete tested Gen1 path. | Confirm PCI-ID binding, chipset-specific command streamer/ring model, legal BLT packets, address/fence registers, aperture and cache rules. If hardware lacks a usable compatible BLT path, keep software fallback. |
+| **Gen2 / 8xx-class (e.g. 845/865-era)** | Legacy path only; not covered by Gen6+ BCS changes. | Prove legacy ring initialization, command encodings, alignment, tiling/fence handling, completion and reset semantics per chipset. Do not treat the existing legacy flush/HEAD-TAIL wait as universally sufficient without platform validation. |
+| **Gen3 / 915–945-era** | Legacy path; no new cross-generation validation established. | Validate supported PCI IDs and per-family BLT formats, pitch/tiling rules, synchronization, address width, ring geometry and teardown. Add tests on actual 915/945-class devices. |
+| **Gen4 / 965 and G4x** | Legacy path; not proven by the HD530 work. | Verify chipset-specific blit packets, fence/tiling behavior, cache flushes, address interpretation, ring startup and completion. Avoid inheriting assumptions from earlier 8xx/9xx families. |
+| **Gen5 / Ironlake** | Legacy/pre-Gen6 path; no hardware proof in this branch. | Validate Ironlake ring and command behavior separately, including status/fence semantics and reset. Confirm generation classifier and supported-ID table agree. |
+| **Gen6 / Sandy Bridge** | BCS routing exists in source, but hardware 2D is disabled. | Implement and verify BCS HWS/status-page setup, GPU-visible address, completion breadcrumb, ordering, timeout diagnostics, reset/recovery and BCS-specific command legality. |
+| **Gen7 / Ivy Bridge and Haswell** | BCS routing may select the right engine, but no fence-enabled acceleration is claimed. | Validate per-platform command restrictions/workarounds, BCS register layout, HWS programming, flush/fence semantics, cache coherency and reset behavior; do not assume Ivy and Haswell are identical. |
+| **Gen8 / Broadwell** | BCS route exists in the common Gen6+ branch; no completed end-to-end acceleration path. | Check generation-specific address width and command/address encoding, ring registers, status-page semantics, ordering, engine workarounds, and reset/recovery. |
+| **Gen9 / Skylake (HD 530 target)** | **Primary development target; hardware 2D intentionally disabled.** Defensive ring validation and BCS routing exist, but no verified completion fence. | Highest priority: verify Skylake BCS HWS_PGA and address-domain semantics against the PRM and Haiku GART mapping; identify the correct memory-order primitive; implement atomic flush + breadcrumb submission, monotonic sync tokens, bounded completion waits, and safe reset/recovery. Then build and test on real HD 530 hardware. |
+| **Gen10 / Cannon Lake-era** | No evidence from this work that a complete Gen10-specific path is validated. | Confirm exact PCI-ID support and generation classification first. Audit BCS availability, command packets, register bases, address width, HWS/fence rules, workarounds and reset sequence independently. |
+| **Gen11 / Ice Lake** | Do not infer 2D support from display modesetting or device detection. | Confirm PCI IDs and BCS availability; verify generation-specific ring/command/HWS/address behavior, memory ordering, power/forcewake requirements and recovery. Add a separate hardware test target. |
+| **Gen12 / Tiger Lake and later Gen12-class platforms** | Unverified for this branch. A generic `Generation() >= 6` test is too broad to establish compatibility. | Validate exact platform/device family and engine topology, register definitions, address forms, command restrictions, cache/fence rules, power management, reset scope and possible additional blitter instances. Do not enable a single-ring BCS implementation where topology or required setup differs. |
+
+#### Recommended implementation order
+
+**P0 — keep acceleration safely disabled (already in place):** zero capability advertisement; reject unsupported capability requests; preserve software fallback. Do not relax this gate based on static inspection alone.
+
+**P1 — close the Gen9/HD530 proof gap:** document authoritative Skylake BCS command/HWS_PGA requirements and Haiku GART address semantics; locate and validate the Haiku-supported CPU/WC-to-MMIO ordering primitive; implement a fence as part of the same atomic submission batch; add wrap-safe sequence tracking and timeout diagnostics. The exact register/command sequence remains a blocker until independently verified against the platform reference.
+
+**P2 — recovery and lifetime:** capture documented engine error state; implement bounded Gen9 BCS reset and post-reset validation; serialize reset with submissions; track allocation ownership; only reclaim ring/status-page memory after a proven stop/reset state.
+
+**P3 — expand by family, not by a broad generation comparison:** add a platform capability table keyed by device family/stepping and engine availability; give each family its own command/fence/flush/reset operations where required. Start with the closest validated generations, and add Gen10, Gen11, Gen12 only after the same acceptance suite passes.
+
+**P4 — legacy families:** audit Gen1–Gen5 separately. They must not inherit the Gen6+ BCS implementation, nor should a legacy HEAD/TAIL wait be upgraded to a “fence” without proving completion semantics. Decide per chipset whether a safe legacy acceleration path is supportable or software fallback is the correct outcome.
+
+#### Acceptance criteria for each supported generation
+
+A generation may be marked hardware-accelerated only after all of these are true: (a) exact PCI IDs and engine capabilities are enumerated; (b) valid 2D operations pass command-validation tests; (c) publication ordering is established for the actual ring-memory mapping; (d) a GPU-written completion fence is observed correctly under load and wrap/reset conditions; (e) timeout and engine-hang paths fail closed and recover or disable the engine safely; (f) allocation lifetime and teardown are tested; (g) software fallback works when acceleration is disabled or fails; and (h) the kernel driver and accelerant build together and pass hardware testing on that family. Until then, mark the family **unverified**, not supported.
+
+#### Reference points for follow-up verification
+
+- Linux i915 engine overview (RCS/BCS and command submission): https://www.kernel.org/doc/html/latest/gpu/i915.html
+- Upstream i915 engine register definitions (cross-generation register differences): https://github.com/torvalds/linux/blob/master/drivers/gpu/drm/i915/gt/intel_engine_regs.h
+- Upstream i915 register definitions: https://github.com/torvalds/linux/blob/master/drivers/gpu/drm/i915/i915_reg.h
+
+These are reference implementations and register indexes, not substitutes for the relevant Intel Programmer's Reference Manual or proof that Haiku's allocator and memory mappings have equivalent semantics.

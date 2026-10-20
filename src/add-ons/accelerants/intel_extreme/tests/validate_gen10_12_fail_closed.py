@@ -152,6 +152,19 @@ def main() -> int:
         "EDID reads must account for bounded automatic retries",
     )
 
+    # A physical unplug must reset the bounded retry budget so a later replug
+    # can recover EDID; this must not turn ordinary polling into infinite I/O.
+    dp_connected = function_body(ports, "DisplayPort::IsConnected(")
+    hdmi_connected = function_body(ports, "HDMIPort::IsConnected(")
+    for name, body in (("DisplayPort", dp_connected), ("HDMI", hdmi_connected)):
+        disconnected = body.find("DISPLAY_MONITOR_PORT_ENABLED) == 0")
+        require(
+            disconnected >= 0
+            and "fEDIDState = B_NO_INIT;" in body[disconnected:]
+            and "fEDIDReadAttempts = 0;" in body[disconnected:],
+            f"{name} disconnect must reset EDID state and retry budget for replug",
+        )
+
     # DisplayPort I2C chunks must not advance after exhausting all bounded
     # I2C-DEFER retries. Both write and read paths require an explicit ACK.
     aux_i2c = function_body(ports, "Port::_DpAuxSendReceive(")

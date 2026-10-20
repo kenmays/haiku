@@ -98,6 +98,17 @@ def main() -> int:
         "failed fallback allocation must clear stale CPU framebuffer pointers",
     )
 
+    require(
+        "base) != B_OK)" in allocation_failure,
+        "framebuffer allocation must treat every nonzero status as failure",
+    )
+    overlay_allocator = function_body(overlay, "intel_allocate_overlay_buffer(")
+    require(
+        overlay_allocator.count("if (status != B_OK)") == 2
+        and "if (status < B_OK)" not in overlay_allocator,
+        "overlay allocations must handle positive errno values as failures",
+    )
+
     # With every hardware drawing hook disabled, do not expose an engine
     # interface whose idle-wait/token semantics are incomplete or unused.
     engine_start = hooks.find("/* engine/synchronization */")

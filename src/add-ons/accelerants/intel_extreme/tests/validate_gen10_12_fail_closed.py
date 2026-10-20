@@ -140,6 +140,9 @@ def main() -> int:
         "fallback scanout must resume only after the framebuffer base is restored",
     )
     mode_setter = function_body(mode, "intel_set_display_mode(")
+    power_off_status = mode_setter.find(
+        "status_t powerStatus = set_display_power_mode(B_DPMS_OFF);"
+    )
     free_status = mode_setter.find(
         "status_t freeStatus = intel_free_memory(sharedInfo.frame_buffer);"
     )
@@ -151,7 +154,9 @@ def main() -> int:
         "if (intel_allocate_memory(bytesPerRow * target.virtual_height", free_status
     )
     require(
-        free_status >= 0 and free_failure > free_status
+        power_off_status >= 0 and free_status > power_off_status
+        and "return powerStatus;" in mode_setter[power_off_status:free_status]
+        and free_status >= 0 and free_failure > free_status
         and free_restore_dpms > free_failure
         and new_framebuffer_alloc > free_restore_dpms,
         "mode switch must preserve old framebuffer and restore DPMS if its free fails",

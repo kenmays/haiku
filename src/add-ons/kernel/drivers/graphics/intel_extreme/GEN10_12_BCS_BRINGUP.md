@@ -26,6 +26,22 @@ These are safety gates, not evidence of command execution, GPU completion, or su
 
 “Gen10”, “Gen11”, and “Gen12” here refer to graphics-generation buckets, not a promise that all devices in a bucket use identical BCS command or reset behavior. The device allowlist must be narrower than a generation comparison when the hardware evidence requires it.
 
+## First implementation target: Gen10 Cannon Lake
+
+The repository's kernel PCI allowlist in `src/add-ons/kernel/drivers/graphics/intel_extreme/driver.cpp` already names Cannon Lake Gen10 IDs, including `0x5a52` (`CannonLake GT2`). Use `0x5a52` as a **candidate for source review only**, not as an enabled or hardware-validated target. The allowlist entry proves only that the kernel recognizes the PCI ID; it does not prove the BCS register layout, command encoding, reset protocol, or device availability for testing.
+
+Before writing submission/reset code for this candidate, record and review all of the following:
+
+- The exact Cannon Lake PRM revision covering the BCS engine, MI command structures, status page, engine reset, and applicable workarounds. Do not substitute Ice Lake (Gen11) or a generic Gen9 document.
+- The candidate's BCS MMIO base/instance and supported ring configuration, with register definitions traced to the matching PRM.
+- The exact completion operation and status-page address semantics, including whether the intended post-sync operation is legal for this engine and address space.
+- The reset domain and all prepare/request/acknowledgement steps, plus the condition that proves the engine can no longer access ring/status-page allocations.
+- Availability of a real Cannon Lake test machine and the build/test path. If no such hardware is available, leave the code disabled and treat any emulator or source tests as non-hardware evidence.
+
+**Current blocker:** the repository inspection establishes that `0x5a52` is an allowlisted Cannon Lake candidate, but does not establish the matching PRM evidence, test-hardware availability, or a verified completion/reset sequence. Therefore no Gen10 BCS implementation or reset routine is added in this step.
+
+For comparison—not as a substitute for the Gen10 manual—Intel publishes an Ice Lake (Gen11) PRM index with a dedicated Volume 10, Copy Engine: https://www.intel.com/content/www/us/en/docs/graphics-for-linux/developer-reference/1-0/ice-lake.html. The existence of separate platform manuals reinforces that command and reset details must be tied to the exact platform.
+
 ## Required implementation sequence
 
 1. **Identify the device.** Record PCI ID, platform codename, graphics IP version, BCS instance/register base, aperture/GGTT properties, and the exact PRM revision used. Reject unknown IDs.

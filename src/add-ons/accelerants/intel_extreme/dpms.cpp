@@ -199,8 +199,18 @@ status_t
 intel_set_dpms_mode(uint32 mode)
 {
 	CALLED();
-	gInfo->shared_info->dpms_mode = mode;
+
+	// Accept only the four DPMS states implemented by set_display_power_mode.
+	// Reject invalid values before changing shared state or touching registers.
+	if (mode != B_DPMS_ON && mode != B_DPMS_STAND_BY
+		&& mode != B_DPMS_SUSPEND && mode != B_DPMS_OFF) {
+		ERROR("%s: Unsupported DPMS mode 0x%" B_PRIx32 "\\n", __func__,
+			mode);
+		return B_BAD_VALUE;
+	}
+
 	set_display_power_mode(mode);
+	gInfo->shared_info->dpms_mode = mode;
 
 	return B_OK;
 }

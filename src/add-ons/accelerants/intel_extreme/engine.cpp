@@ -87,11 +87,36 @@ QueueCommands::~QueueCommands()
 	}
 
 	if (!fFailed && fRingBuffer.position != fInitialPosition) {
-		// Publish the batch only after writing its command words. The
-		// required CPU/WC-memory-to-MMIO ordering primitive is not yet
-		// verified for this mapping; do not substitute a local atomic op.
-		write32(fRingBuffer.register_base + RING_BUFFER_TAIL,
-			fRingBuffer.position);
+		// Revalidate the hardware owner state immediately before publishing.
+		// A ring disabled or reprogrammed while this batch was being built
+		// must never receive a stale tail update.
+		uint32 control = read32(fRingBuffer.register_base
+			+ RING_BUFFER_CONTROL);
+		uint32 hardwareTail = read32(fRingBuffer.register_base
+			+ RING_BUFFER_TAIL) & INTEL_RING_BUFFER_HEAD_MASK;
+		uint32 ringStart = read32(fRingBuffer.register_base
+			+ RING_BUFFER_START);
+		uint32 expectedSize = (fRingBuffer.size - B_PAGE_SIZE)
+			& INTEL_RING_BUFFER_SIZE_MASK;
+		if ((control & INTEL_RING_BUFFER_ENABLED) == 0
+			|| (control & INTEL_RING_BUFFER_SIZE_MASK) != expectedSize
+			|| hardwareTail != fInitialPosition
+			|| ringStart != fRingBuffer.offset) {
+			ERROR("discarding batch before publication: control %"
+				B_PRIx32 ", hardware tail %" B_PRIx32
+				", expected tail %" B_PRIx32 ", start %" B_PRIx32
+				", expected start %" B_PRIx32 "\\n",
+				control, hardwareTail, fInitialPosition, ringStart,
+				fRingBuffer.offset);
+			fRingBuffer.position = fInitialPosition;
+			fRingBuffer.space_left = fInitialSpaceLeft;
+		} else {
+			// The required CPU/WC-memory-to-MMIO ordering primitive is not yet
+			// verified for this mapping. This validation is defensive only;
+			// it does not establish safe publication ordering or completion.
+			write32(fRingBuffer.register_base + RING_BUFFER_TAIL,
+				fRingBuffer.position);
+		}
 	}
 
 	release_lock(&fRingBuffer.lock);

@@ -80,7 +80,7 @@ QueueCommands::~QueueCommands()
 
 	if (fRingBuffer.position != fInitialPosition) {
 		// Flush write-combined ring memory before publishing the new tail.
-		int32 flush;
+		int32 flush = 0;
 		atomic_add(&flush, 1);
 
 		write32(fRingBuffer.register_base + RING_BUFFER_TAIL,

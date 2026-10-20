@@ -2438,27 +2438,12 @@ DigitalDisplayInterface::IsConnected()
 	}
 
 	if (edidDetected) {
-		for (uint32 pipeCnt = 0; pipeCnt < 3; pipeCnt++) {
-			uint32 pipeReg = 0;
-			switch (pipeCnt) {
-				case 1:
-					pipeReg = PIPE_DDI_FUNC_CTL_B;
-					break;
-				case 2:
-					pipeReg = PIPE_DDI_FUNC_CTL_C;
-					break;
-				default:
-					pipeReg = PIPE_DDI_FUNC_CTL_A;
-					break;
-			}
-			pipeState = read32(pipeReg);
-			if ((pipeState & PIPE_DDI_FUNC_CTL_ENABLE) == 0) {
-				TRACE("%s: Connected but port down\n", __func__);
-				return false;
-			}
-			return true;
-		}
-		TRACE("%s: No pipe available, ignoring connected screen\n", __func__);
+		// EDID alone is not sufficient here: the port must also be selected
+		// by an enabled DDI pipe. The port-specific scan above already checked
+		// that association; do not infer this port's state from an unrelated
+		// pipe's enable bit.
+		TRACE("%s: EDID detected, but no enabled pipe is routed to this port\n",
+			__func__);
 	}
 
 	TRACE("%s: Not connected\n", __func__);

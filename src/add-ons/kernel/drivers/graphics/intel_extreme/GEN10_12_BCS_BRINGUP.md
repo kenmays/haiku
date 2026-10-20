@@ -1,0 +1,52 @@
+# Intel Extreme Gen10–12 BCS bring-up and recovery gate
+
+Branch: `work/intel-extreme-hd530-edid-2d`
+
+Status: **design/review checklist only; command submission remains disabled.**
+
+This document separates what the current source proves from what must be established before enabling the Blitter Command Streamer (BCS) on Gen10, Gen11, or Gen12. A generation number alone is not enough to select a command encoding or reset recipe; exact platform/device identification and the applicable Intel PRM must be recorded for every supported device.
+
+## Current fail-closed contract
+
+- The accelerant does not advertise `B_2D_ACCELERATION` in its engine token.
+- Gen6+ ring selection returns unavailable, and ring setup returns `B_NOT_SUPPORTED` before lock initialization or MMIO access.
+- Engine-idle and sync-token operations do not report unsupported completion as success.
+- The kernel does not allocate or publish a Gen6+ BCS ring.
+- Drawing hooks cannot submit a command batch without a validated ring.
+
+These are safety gates, not evidence of command execution, GPU completion, or successful recovery. Keep them in place until every gate below is satisfied.
+
+## Generation matrix
+
+| Graphics generation | Command-submission evidence required | Recovery evidence required | Current decision |
+|---|---|---|---|
+| Gen10 | Exact platform/device ID; BCS register map; supported XY blit packet encoding and length; address width/tiling/pitch constraints; valid status-page mapping and post-sync completion sequence; ordering/flush requirements from the matching PRM | Correct reset domain and register protocol for the exact platform; engine stop/prepare behavior; bounded request/ack polling; post-reset ring and breadcrumb reinitialization; proof of GPU quiescence before resource reuse | Disabled |
+| Gen11 | All Gen10 evidence, independently checked against the Gen11 PRM and device ID; do not infer packet/fence equivalence from a Gen9 path | Gen11-specific reset-domain selection and any required shared-engine/media-resource coordination; bounded polling and cleanup for every partial-failure path | Disabled |
+| Gen12 | Exact platform/sub-generation and engine instance; verify command support, address/format constraints, engine topology, and completion semantics from the matching documentation | Reset domains and any platform workarounds verified for the exact device; do not assume all Gen12 sub-generations share one reset recipe | Disabled |
+
+“Gen10”, “Gen11”, and “Gen12” here refer to graphics-generation buckets, not a promise that all devices in a bucket use identical BCS command or reset behavior. The device allowlist must be narrower than a generation comparison when the hardware evidence requires it.
+
+## Required implementation sequence
+
+1. **Identify the device.** Record PCI ID, platform codename, graphics IP version, BCS instance/register base, aperture/GGTT properties, and the exact PRM revision used. Reject unknown IDs.
+2. **Prove the memory model.** Document allocation owner and lifetime for ring, status page, and any batch storage; validate GPU-visible addresses and register widths; do not conflate CPU virtual, physical, and GGTT addresses.
+3. **Implement submission separately per validated platform family.** Check every command dword, packet length, surface pitch/format, bounds, alignment, and wraparound. Publish command writes only after the appropriate memory-ordering barrier and then update the hardware tail through the supported MMIO accessor.
+4. **Implement a real completion fence.** Use a PRM-supported status-page/breadcrumb sequence for that engine and generation. Use a monotonic sequence value, correct GPU-visible address, required cache/flush semantics, and a bounded wait. Ring head/tail equality alone is not completion.
+5. **Implement bounded recovery.** Stop new submissions; serialize against submission and teardown; follow the documented reset preparation/request/ack/cancel sequence; bound every poll; verify reset completion; reinitialize state only after quiescence is proven. If reset times out or quiescence is ambiguous, quarantine potentially referenced allocations and permanently disable acceleration for that device instance.
+6. **Validate failures, not just success.** Exercise repeated commands, wraparound, stale/corrupt head and tail, command reservation failure, fence timeout, reset-prepare timeout, reset-ack timeout, teardown during outstanding work, and partial initialization unwind. Confirm all waits are bounded and no GPU-referenced memory is freed or reused.
+7. **Enable narrowly.** Add one device/platform allowlist entry only after source review, successful target build, repeatable software/emulator tests where meaningful, and physical hardware results are recorded. Keep all unvalidated devices fail-closed.
+
+## Upstream reference interpretation
+
+The Linux i915 reset implementation is useful for identifying review questions, not as a register-sequence recipe to copy. In the cited implementation, Gen8-family reset preparation has a bounded ready-for-reset wait, reset requests are cancelled on exit, and the selected reset body uses a Gen11-specific implementation for graphics version 11 and later rather than routing every Gen8+ device through one identical body. Linux also contains platform workarounds and engine coordination not represented by this Haiku accelerant.
+
+Reference source:
+- Linux i915 reset implementation: https://linux.googlesource.com/linux/kernel/git/torvalds/linux/%2B/1f57f68c4dd101e5e8ffc9ffa6428f45bcdd776a/drivers/gpu/drm/i915/gt/intel_reset.c
+- Linux i915 engine and command-submission overview: https://docs.kernel.org/gpu/i915.html
+- Intel Graphics for Linux developer-reference index / platform PRMs: https://www.intel.com/content/www/us/en/docs/graphics-for-linux/developer-reference/1-0/rocket-lake.html
+
+Do not infer that the Linux reset implementation alone documents Haiku's required command submission, fence, power-management, or allocation-lifetime behavior. Check the exact Intel PRM and existing Haiku driver abstractions before implementation.
+
+## Release gate
+
+No Gen10–12 BCS submission or reset/recovery should be enabled until all applicable steps above are evidenced for the exact supported device. A source-level regression test proves only that the fail-closed gates remain in place; it does not prove hardware functionality.

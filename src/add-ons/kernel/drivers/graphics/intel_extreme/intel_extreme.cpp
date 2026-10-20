@@ -755,8 +755,10 @@ intel_extreme_init(intel_info &info)
 		primary.offset = 0;
 	}
 
-	// Gen6 introduced a separate Blitter Command Streamer. XY_*_BLIT
-	// commands must be submitted to its ring, not the render ring.
+	// Gen6+ BCS submission is fail-closed until a generation-correct
+	// completion breadcrumb, bounded wait/recovery, and safe teardown are
+	// implemented. Do not allocate a ring that could be mistaken for a
+	// ready engine by the accelerant.
 	if (info.device_type.Generation() >= 6) {
 		ring_buffer &blitter = info.shared_info->blitter_ring_buffer;
 		blitter.base = NULL;
@@ -765,21 +767,7 @@ intel_extreme_init(intel_info &info)
 		blitter.offset = 0;
 		blitter.position = 0;
 		blitter.space_left = 0;
-		status_t blitterRingStatus = intel_allocate_memory(info,
-			16 * B_PAGE_SIZE, 0, 0, (addr_t*)&blitter.base);
-		if (blitterRingStatus == B_OK) {
-			blitter.register_base = INTEL_BLITTER_RING_BUFFER;
-			blitter.size = 16 * B_PAGE_SIZE;
-			blitter.offset = (addr_t)blitter.base - info.aperture_base;
-		} else {
-			// Keep the Gen6+ blitter unavailable rather than exposing a
-			// partially initialized ring to the accelerant.
-			blitter.base = NULL;
-			ERROR("could not allocate blitter ring buffer: %s\n",
-				strerror(blitterRingStatus));
-		}
 	}
-
 	// Enable clock gating
 	intel_en_gating(info);
 

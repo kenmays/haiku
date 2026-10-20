@@ -17,6 +17,8 @@ BRINGUP_PATH = ROOT / "src/add-ons/kernel/drivers/graphics/intel_extreme/GEN10_1
 OVERLAY_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/overlay.cpp"
 HOOKS_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/hooks.cpp"
 MODE_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/mode.cpp"
+MEMORY_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/memory.cpp"
+ACCELERANT_HEADER_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/accelerant.h"
 
 
 def function_body(source: str, signature: str) -> str:
@@ -51,6 +53,8 @@ def main() -> int:
     overlay = OVERLAY_PATH.read_text(encoding="utf-8")
     hooks = HOOKS_PATH.read_text(encoding="utf-8")
     mode = MODE_PATH.read_text(encoding="utf-8")
+    memory = MEMORY_PATH.read_text(encoding="utf-8")
+    accelerant_header = ACCELERANT_HEADER_PATH.read_text(encoding="utf-8")
 
     # CPU-only 2D policy is generation-independent: every Intel 2D drawing
     # hook must be absent so app_server selects its software rasterizer.
@@ -107,6 +111,15 @@ def main() -> int:
         overlay_allocator.count("if (status != B_OK)") == 2
         and "if (status < B_OK)" not in overlay_allocator,
         "overlay allocations must handle positive errno values as failures",
+    )
+
+    free_memory = function_body(memory, "intel_free_memory(")
+    require(
+        "status_t" in memory[memory.find("status_t\\nintel_free_memory"):memory.find("status_t\\nintel_allocate_memory")]
+        and "return errno;" in free_memory
+        and "return B_OK;" in free_memory
+        and "extern status_t intel_free_memory(addr_t base);" in accelerant_header,
+        "graphics memory free must report ioctl failures to overlay lifetime management",
     )
 
     # With every hardware drawing hook disabled, do not expose an engine

@@ -650,7 +650,7 @@ Port::_DpAuxSendReceive(uint32 slaveAddress,
 				message.request &= ~DP_AUX_I2C_MOT;
 
 			bool acknowledged = false;
-			for (int attempt = 0; attempt < 7; attempt++) {
+			for (int attempt = 0; attempt < 8; attempt++) {
 				ssize_t result = _DpAuxTransfer(&message);
 				if (result < 0) {
 					ERROR("%s: aux_ch transaction failed!\n", __func__);
@@ -701,7 +701,7 @@ Port::_DpAuxSendReceive(uint32 slaveAddress,
 				message.request &= ~DP_AUX_I2C_MOT;
 
 			bool acknowledged = false;
-			for (int attempt = 0; attempt < 7; attempt++) {
+			for (int attempt = 0; attempt < 8; attempt++) {
 				result = _DpAuxTransfer(&message);
 				if (result < 0) {
 					ERROR("%s: aux_ch transaction failed!\n", __func__);
@@ -787,7 +787,7 @@ Port::_DpAuxTransfer(dp_aux_msg* message)
 	transmitBuffer[3] = message->size != 0 ? (message->size - 1) : 0;
 
 	uint8 retry;
-	for (retry = 0; retry < 7; retry++) {
+	for (retry = 0; retry < 8; retry++) {
 		ssize_t result = B_ERROR;
 		switch(message->request & ~DP_AUX_I2C_MOT) {
 			case DP_AUX_NATIVE_WRITE:

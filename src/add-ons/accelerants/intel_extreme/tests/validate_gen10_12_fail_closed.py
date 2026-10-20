@@ -44,9 +44,7 @@ def main() -> int:
 
     engine_token = function_body(engine, "intel_acquire_engine(")
     require(
-        "B_2D_ACCELERATION" not in engine.split(
-            "static engine_token sEngineToken", 1
-        )[1].split(";", 1)[0]
+        "= {1, 0 /*B_2D_ACCELERATION*/, NULL}" in engine
         and "capabilities & ~sEngineToken.capabilities" in engine_token
         and "return B_NOT_SUPPORTED;" in engine_token,
         "accelerant must not advertise unsupported 2D engine capabilities",

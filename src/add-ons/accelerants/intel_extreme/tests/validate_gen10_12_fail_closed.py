@@ -84,7 +84,7 @@ def main() -> int:
         "LVDS DPMS polling must time out rather than hang indefinitely",
     )
     power_signature = dpms.find("set_display_power_mode(uint32 mode)")
-    power_end = dpms.find("uint32\\nintel_dpms_capabilities", power_signature)
+    power_end = dpms.find("uint32\nintel_dpms_capabilities", power_signature)
     power_function = dpms[power_signature:power_end]
     require(
         power_signature >= 0

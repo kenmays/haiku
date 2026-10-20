@@ -1058,7 +1058,7 @@ intel_extreme_uninit(intel_info &info)
 					&& start == primary.offset;
 			}
 			if (referencedByEnabledRing) {
-				ERROR("quarantining primary ring allocation still referenced by enabled hardware\\n");
+				ERROR("quarantining primary ring allocation still referenced by enabled hardware\n");
 			} else {
 				status_t freeStatus = intel_free_memory(info,
 					(addr_t)primary.base);
@@ -1070,7 +1070,7 @@ intel_extreme_uninit(intel_info &info)
 					primary.position = 0;
 					primary.space_left = 0;
 				} else {
-					ERROR("could not free primary ring allocation: %s\\n",
+					ERROR("could not free primary ring allocation: %s\n",
 						strerror(freeStatus));
 				}
 			}

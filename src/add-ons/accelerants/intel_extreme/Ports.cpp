@@ -1909,6 +1909,22 @@ DisplayPort::_SetPortLinkGen4(const display_timing& timing)
 	uint32 bitsPerPixel = 24;	//fixme: always so?
 	uint32 lanes = 4;			//fixme: always so?
 
+	// Gen12 currently uses a fixed 2.7 Gbit/s DP link reference and does
+	// not implement rate selection or retraining. Reject modes that exceed
+	// that link's payload capacity instead of programming a knowingly invalid
+	// M/N ratio. Reserve 5% headroom as the older DP path does.
+	if (gInfo->shared_info->device_type.Generation() >= 12
+		&& (((pipeFunc & PIPE_DDI_MODESEL_MASK) >> PIPE_DDI_MODESEL_SHIFT)
+			>= PIPE_DDI_MODE_DP_SST)) {
+		uint64 required = (uint64)timing.pixel_clock * bitsPerPixel * 21 / 20;
+		uint64 capacity = (uint64)lanes * linkBandwidth * 8;
+		if (required > capacity) {
+			ERROR("%s: Mode exceeds fixed Gen12 DP link capacity (%" B_PRIu64
+				" > %" B_PRIu64 ")\n", __func__, required, capacity);
+			return B_NOT_SUPPORTED;
+		}
+	}
+
 	//Setup Data M/N
 	uint64 linkspeed = lanes * linkBandwidth * 8;
 	uint64 ret_n = 1;
@@ -2587,13 +2603,29 @@ DigitalDisplayInterface::_SetPortLinkGen8(const display_timing& timing, uint32 p
 	TRACE("%s: DDI Link Colordepth: %" B_PRIu32 "\n", __func__, bitsPerPixel);
 
 	uint32 lanes = 4;
-	// Only DP modes supports less than 4 lanes: read current config
+	// DP lane-width encodings are not a linear lane count: code 2 means
+	// four lanes, not three. Reject reserved encodings instead of calculating
+	// incorrect M/N ratios from them.
 	if (((pipeFunc & PIPE_DDI_MODESEL_MASK) >> PIPE_DDI_MODESEL_SHIFT) >= PIPE_DDI_MODE_DP_SST) {
-		// On gen 9.5 IceLake 3x mode exists (DSI only), earlier models: reserved value.
-		lanes = ((pipeFunc & PIPE_DDI_DP_WIDTH_MASK) >> PIPE_DDI_DP_WIDTH_SHIFT) + 1;
-		TRACE("%s: DDI in DP mode with %" B_PRIx32 " lane(s) in use\n", __func__, lanes);
+		uint32 width = (pipeFunc & PIPE_DDI_DP_WIDTH_MASK) >> PIPE_DDI_DP_WIDTH_SHIFT;
+		switch (width) {
+			case PIPE_DDI_DP_WIDTH_1:
+				lanes = 1;
+				break;
+			case PIPE_DDI_DP_WIDTH_2:
+				lanes = 2;
+				break;
+			case PIPE_DDI_DP_WIDTH_4:
+				lanes = 4;
+				break;
+			default:
+				ERROR("%s: Invalid DDI DP lane-width encoding %" B_PRIu32 "\n",
+					__func__, width);
+				return B_BAD_VALUE;
+		}
+		TRACE("%s: DDI in DP mode with %" B_PRIu32 " lane(s) in use\n", __func__, lanes);
 	} else {
-		TRACE("%s: DDI in non-DP mode with %" B_PRIx32 " lane(s) in use\n", __func__, lanes);
+		TRACE("%s: DDI in non-DP mode with %" B_PRIu32 " lane(s) in use\n", __func__, lanes);
 	}
 
 	//Setup Data M/N

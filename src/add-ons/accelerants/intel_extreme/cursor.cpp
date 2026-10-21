@@ -17,8 +17,11 @@ status_t
 intel_set_cursor_shape(uint16 width, uint16 height, uint16 hotX, uint16 hotY,
 	uint8* andMask, uint8* xorMask)
 {
-	if (width > 64 || height > 64)
+	if (width == 0 || height == 0 || width > 64 || height > 64
+		|| andMask == NULL || xorMask == NULL
+		|| gInfo->shared_info->cursor_memory == NULL) {
 		return B_BAD_VALUE;
+	}
 
 	write32(INTEL_CURSOR_CONTROL, 0);
 		// disable cursor

@@ -230,10 +230,8 @@ intel_cpu_sync_to_token(sync_token* syncToken)
 	// releasing the engine lock provides the synchronization boundary.
 	if (gInfo == NULL || gInfo->shared_info == NULL)
 		return B_NO_INIT;
-	status_t status = acquire_lock(&gInfo->shared_info->engine_lock);
-	if (status != B_OK)
-		return status;
-	release_lock(&gInfo->shared_info->engine_lock);
+	// All operations in this backend are synchronous and write directly to
+	// mapped scanout memory; there is no deferred work to wait for.
 	return B_OK;
 }
 

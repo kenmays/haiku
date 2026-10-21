@@ -141,4 +141,4 @@ Additional source changes after the earlier checkpoint:
 
 ### Qualification status
 
-These are source-level corrections and guardrails only. The Haiku source checkout could not be cloned into this execution environment because GitHub DNS resolution failed, and no GitHub Actions run was visible after adding the workflow. Therefore the Python validators and C++ build remain **not executed here**; do not interpret the workflow file or source inspection as a passing CI/build result. Physical Rocket Lake DP/HDMI testing is still required.
+These are source-level corrections and guardrails only. The three Python source validators passed in GitHub Actions at commit `1e87b3b08e769a4258cf11d9f4756579caa6ca10` ([run 39530427418](https://github.com/kenmays/haiku/actions/runs/39530427418)). This is static source validation, not a C++ build or runtime test. The Haiku source checkout could not be cloned into this execution environment because GitHub DNS resolution failed, so a supported Haiku build and physical Rocket Lake DP/HDMI testing are still required.

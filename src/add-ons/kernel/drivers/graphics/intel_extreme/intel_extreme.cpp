@@ -923,7 +923,7 @@ intel_extreme_init(intel_info &info)
 	}
 	info.shared_info->cursor_memory = NULL;
 	info.shared_info->physical_cursor_memory = 0;
-	if (hardwareCursor) {
+	if (hardwareCursor && info.device_type.Generation() < 12) {
 		status_t cursorStatus = intel_allocate_memory(info, B_PAGE_SIZE, 0,
 			B_APERTURE_NEED_PHYSICAL,
 			(addr_t*)&info.shared_info->cursor_memory,
@@ -936,6 +936,8 @@ intel_extreme_init(intel_info &info)
 			ERROR("could not allocate cursor memory: %s\n",
 				strerror(cursorStatus));
 		}
+	} else if (hardwareCursor) {
+		TRACE("Gen12+ hardware cursor remains disabled until per-pipe cursor planes are validated\n");
 	}
 
 	edid1_info* edidInfo = (edid1_info*)get_boot_item(VESA_EDID_BOOT_INFO,

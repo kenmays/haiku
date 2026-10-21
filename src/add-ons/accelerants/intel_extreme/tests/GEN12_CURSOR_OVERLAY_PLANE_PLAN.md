@@ -91,3 +91,16 @@ This is architectural corroboration, not a register-programming recipe to copy v
 - Strengthened `validate_rkl_alchemist_battlemage.py` to assert that all nine overlay hooks are inside the Gen6+ fail-closed gate and that cursor shape/move/show each retain an explicit Gen12 gate.
 - These are source guardrails only. The validator has not been run in this execution environment after the latest edit; the configured GitHub Actions workflow is the authoritative next check.
 - Do not claim a Gen12 cursor or overlay implementation from this documentation update. The actual register-map and runtime implementation tasks remain open.
+
+
+### Cursor-specific upstream comparison
+
+A further review of upstream i915's `intel_cursor.c` and `intel_cursor_regs.h` identifies several concrete differences from Haiku's legacy cursor path:
+- i915 advertises an ARGB8888 cursor format, whereas Haiku currently builds a monochrome AND/XOR bitmap and programs a two-color palette. The format must not be assumed compatible with Gen12 cursor control.
+- i915 derives the cursor surface address from the platform's memory-addressing requirements and the framebuffer plane offset; a CPU pointer or a legacy physical-address assumption is not enough to validate Haiku's cursor allocation.
+- i915 documents platform-dependent update-arm behavior involving cursor control, position, and base writes. Register write ordering matters; a correct offset alone does not guarantee that a cursor move or shape update latches.
+- The upstream implementation also has explicit clipping/position handling and plane-state validation. Haiku must preserve its own API semantics while validating coordinates and memory bounds before MMIO.
+
+Reference: https://github.com/torvalds/linux/blob/master/drivers/gpu/drm/i915/display/intel_cursor.c
+
+**Implementation gate:** before enabling Gen12 cursor hooks, resolve the exact Rocket Lake cursor-control format bits and CURBASE address requirements from the matching register definitions, and implement a Gen12-specific path with explicit ARGB8888 conversion (or another documented supported format), checked buffer sizing/alignment, signed position encoding, and documented update-arm order. Do not remove the existing generation gate based on this architectural comparison alone.

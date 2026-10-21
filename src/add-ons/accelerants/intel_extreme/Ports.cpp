@@ -228,10 +228,14 @@ Port::GetEDID(edid1_info* edid, bool forceRead)
 		TRACE("%s: trying to read EDID\n", PortName());
 
 		i2c_bus bus;
-		if (SetupI2c(&bus) != B_OK)
-			return fEDIDState;
-
-		fEDIDState = ddc2_read_edid1(&bus, &fEDIDInfo, NULL, NULL);
+		status_t setupStatus = SetupI2c(&bus);
+		if (setupStatus != B_OK) {
+			// Do not return a previously cached B_OK when a forced EDID
+			// refresh cannot even initialize the bus.
+			fEDIDState = setupStatus;
+		} else {
+			fEDIDState = ddc2_read_edid1(&bus, &fEDIDInfo, NULL, NULL);
+		}
 
 		if (fEDIDState == B_OK) {
 			TRACE("%s: found EDID information!\n", PortName());
@@ -604,8 +608,11 @@ Port::_SetupDpAuxI2c(i2c_bus *bus)
 			return B_OK;
 
 		write32(ICL_PWR_WELL_CTL_AUX2, value | HSW_PWR_WELL_CTL_REQ(0));
-		if (!wait_for_set(ICL_PWR_WELL_CTL_AUX2, HSW_PWR_WELL_CTL_STATE(0), 1000))
-			ERROR("%s: %s AUX didn't power on within 1000us!\n", __func__, PortName());
+		if (!wait_for_set(ICL_PWR_WELL_CTL_AUX2, HSW_PWR_WELL_CTL_STATE(0), 1000)) {
+			ERROR("%s: %s AUX didn't power on within 1000us!\n", __func__,
+				PortName());
+			return B_ERROR;
+		}
 	}
 	return B_OK;
 }

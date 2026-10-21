@@ -2151,8 +2151,9 @@ DisplayPort::SetDisplayMode(display_mode* target, uint32 colorMode)
 		}
 	}
 
-	// Set fCurrentMode to our set display mode
-	memcpy(&fCurrentMode, target, sizeof(display_mode));
+	// Do not publish a mode as active if link configuration failed.
+	if (result == B_OK)
+		memcpy(&fCurrentMode, target, sizeof(display_mode));
 
 	return result;
 }

@@ -253,6 +253,12 @@ decode_cta_block(edid1_info *edid, const cta_raw *raw)
 {
 	unsigned int i, j;
 
+	// A CTA extension has a 4-byte header. Offset zero means that no
+	// detailed timing descriptors are present; other offsets must point
+	// inside the 128-byte extension block.
+	if (raw->offset != 0 && (raw->offset < 4 || raw->offset > 127))
+		return;
+
 	edid->cta_block.tag = raw->tag;
 	edid->cta_block.revision = raw->revision;
 	edid->cta_block.num_native_detailed = raw->num_native_detailed;
@@ -262,17 +268,35 @@ decode_cta_block(edid1_info *edid, const cta_raw *raw)
 	edid->cta_block.underscan = raw->underscan;
 	edid->cta_block.num_data_blocks = 0;
 
-	for (i = 4; i < raw->offset;) {
-		cta_data_block* block = (cta_data_block*)&((uint8*)raw)[i];
-		memcpy(&edid->cta_block.data_blocks[edid->cta_block.num_data_blocks++],
-			block, block->length + 1);
-		i += block->length + 1;
+	if (raw->offset >= 4) {
+		for (i = 4; i < raw->offset;) {
+			cta_data_block* block;
+			size_t blockLength;
+
+			block = (cta_data_block*)&((const uint8*)raw)[i];
+			blockLength = (block->length & 0x1f) + 1;
+			if (i + blockLength > raw->offset)
+				return;
+
+			if (edid->cta_block.num_data_blocks
+				>= sizeof(edid->cta_block.data_blocks)
+					/ sizeof(edid->cta_block.data_blocks[0])) {
+				break;
+			}
+
+			memcpy(&edid->cta_block.data_blocks[
+				edid->cta_block.num_data_blocks++], block, blockLength);
+			i += blockLength;
+		}
 	}
 
-	for (i = raw->offset, j = 0; i + sizeof(edid1_detailed_timing_raw) - 1 < 128;
+	// edid1_info has storage for at most six CTA detailed timings.
+	for (i = raw->offset, j = 0; i + sizeof(edid1_detailed_timing_raw) <= 127
+		&& j < sizeof(edid->cta_block.detailed_timing)
+			/ sizeof(edid->cta_block.detailed_timing[0]);
 		i += sizeof(edid1_detailed_timing_raw), j++) {
 		const edid1_detailed_timing_raw* timing =
-			(const edid1_detailed_timing_raw*)&((uint8*)raw)[i];
+			(const edid1_detailed_timing_raw*)&((const uint8*)raw)[i];
 		decode_detailed_timing(&edid->cta_block.detailed_timing[j], timing);
 	}
 }

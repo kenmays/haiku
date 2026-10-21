@@ -41,7 +41,7 @@
 #define CALLED(x...) TRACE("CALLED %s\n", __PRETTY_FUNCTION__)
 
 
-static void
+static status_t
 get_color_space_format(const display_mode &mode, uint32 &colorMode,
 	uint32 &bytesPerRow, uint32 &bitsPerPixel)
 {
@@ -76,7 +76,6 @@ get_color_space_format(const display_mode &mode, uint32 &colorMode,
 			bitsPerPixel = 15;
 			break;
 		case B_CMAP8:
-		default:
 			if (gInfo->shared_info->device_type.InFamily(INTEL_FAMILY_LAKE)) {
 				colorMode = DISPLAY_CONTROL_CMAP8_SKY;
 			} else {
@@ -85,6 +84,8 @@ get_color_space_format(const display_mode &mode, uint32 &colorMode,
 			bytesPerPixel = 1;
 			bitsPerPixel = 8;
 			break;
+		default:
+			return B_BAD_VALUE;
 	}
 
 	bytesPerRow = mode.virtual_width * bytesPerPixel;
@@ -92,6 +93,8 @@ get_color_space_format(const display_mode &mode, uint32 &colorMode,
 	// Make sure bytesPerRow is a multiple of 64
 	if ((bytesPerRow & 63) != 0)
 		bytesPerRow = (bytesPerRow + 63) & ~63;
+
+	return B_OK;
 }
 
 
@@ -350,7 +353,10 @@ intel_set_display_mode(display_mode* mode)
 		return B_BAD_VALUE;
 
 	uint32 colorMode, bytesPerRow, bitsPerPixel;
-	get_color_space_format(target, colorMode, bytesPerRow, bitsPerPixel);
+	status_t status = get_color_space_format(target, colorMode, bytesPerRow,
+		bitsPerPixel);
+	if (status != B_OK)
+		return status;
 
 	// TODO: do not go further if the mode is identical to the current one.
 	// This would avoid the screen being off when switching workspaces when they
@@ -365,29 +371,21 @@ intel_set_display_mode(display_mode* mode)
 	// TODO: This may not be neccesary
 	set_display_power_mode(B_DPMS_OFF);
 
-	// free old and allocate new frame buffer in graphics memory
-
-	intel_free_memory(sharedInfo.frame_buffer);
+	// Allocate the replacement before releasing the current framebuffer.
+	// If allocation fails, the old framebuffer and shared state remain valid.
 
 	addr_t base;
-	if (intel_allocate_memory(bytesPerRow * target.virtual_height, 0,
-			base) < B_OK) {
-		// oh, how did that happen? Unfortunately, there is no really good way
-		// back. Try to restore a framebuffer for the previous mode, at least.
-		if (intel_allocate_memory(sharedInfo.current_mode.virtual_height
-				* sharedInfo.bytes_per_row, 0, base) == B_OK) {
-			sharedInfo.frame_buffer = base;
-			sharedInfo.frame_buffer_offset = base
-				- (addr_t)sharedInfo.graphics_memory;
-			set_frame_buffer_base();
-		}
-
-		ERROR("%s: Failed to allocate framebuffer !\n", __func__);
-		return B_NO_MEMORY;
+	status = intel_allocate_memory(bytesPerRow * target.virtual_height, 0,
+		base);
+	if (status < B_OK) {
+		ERROR("%s: Failed to allocate framebuffer!\\n", __func__);
+		set_display_power_mode(sharedInfo.dpms_mode);
+		return status;
 	}
 
-	// clear frame buffer before using it
+	// Clear the replacement before switching the shared framebuffer pointer.
 	memset((uint8*)base, 0, bytesPerRow * target.virtual_height);
+	intel_free_memory(sharedInfo.frame_buffer);
 	sharedInfo.frame_buffer = base;
 	sharedInfo.frame_buffer_offset = base - (addr_t)sharedInfo.graphics_memory;
 

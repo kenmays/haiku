@@ -160,7 +160,7 @@ for feature in overlay_features:
 # movement/show calls from reaching legacy registers on unvalidated Gen12.
 for feature in ("B_SET_CURSOR_SHAPE", "B_MOVE_CURSOR", "B_SHOW_CURSOR"):
     match = re.search(
-        r"case\s+" + feature + r"\s*:(.*?)(?=\n\s*case\s+[A-Z_]+|\n\s*/\\*)",
+        r"case\s+" + feature + r"\s*:(.*?)(?=\n\s*case\s+[A-Z_]+)",
         hooks,
         re.DOTALL,
     )

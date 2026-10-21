@@ -54,7 +54,8 @@ A targeted review of `DigitalDisplayInterface::SetDisplayMode()` and `TigerLakeP
 - **Fixed in the follow-up implementation checkpoint below:** the Gen12 DDI path now checks the returned status from `ProgramPLL(chosenPLL, p, q, k, dco)` and returns immediately on failure, before port-clock routing and timing programming.
 - **Fixed in the follow-up implementation checkpoint below:** the unlock, power-state, and lock polls in `ProgramPLL()` now have 100 ms bounded waits and return `B_TIMED_OUT` on failure. Linux i915's corresponding DPLL code remains useful corroboration for bounded waits (see `intel_dpll_mgr.c`), but the Haiku change still needs a build and hardware test.
 - **Fixed in the follow-up implementation checkpoint below:** the register header defines the DDIA and DDIB clock-select masks as fields at bits 1:0 and 3:2, respectively. The old `config &= TGL_DPCLKA_DDIA_CLOCK_SELECT` / `config &= TGL_DPCLKA_DDIB_CLOCK_SELECT` expressions discarded unrelated CFGCR0 fields, including other port selections and clock-off controls. They now clear only the selected port's field (`config &= ~...`) before setting its selection, preserving unrelated bits. This correction is source-reviewed against the local macro definitions; the full platform sequence still needs hardware validation.
-- **DisplayPort DPLL choice is provisional.** The current code uses a fixed DisplayPort DPLL parameter set and a simplistic port-index choice (PLL 1 only for port index 7, otherwise PLL 0). The source itself notes the assignment is TODO. That is not sufficient evidence for concurrent outputs or all DDI ports.
+- **The unsafe port-index heuristic has been removed.** The current Gen12 combo-PHY path explicitly maps DDI A to DPLL0 and DDI B to DPLL1, and rejects DDI C and later ports with `B_NOT_SUPPORTED` until their TC/MG PHY-specific PLL path is implemented. This is a conservative supported subset, not full multi-port support.
+- **DP link-rate selection and retraining remain unimplemented.** The current Gen12 path uses the fixed 2.7 Gbit/s DP reference; it now validates 1/2/4-lane encodings and rejects modes whose 24/30/18/36-bpp payload exceeds the configured lane capacity with 5% headroom. The bandwidth check runs before modeset register writes. This avoids knowingly programming an over-capacity mode but does not implement higher DP link rates or link training.
 
 ### Safe next implementation step
 
@@ -96,7 +97,8 @@ Hardware cursor and hardware video overlay are separate from the general-purpose
 
 The following source-level guardrails have now been implemented on this branch:
 
-- `TigerLakePLL.cpp` replaces the three unbounded DPLL unlock, power-state, and lock polls with bounded waits (100 ms maximum per transition) and returns `B_TIMED_OUT` when a transition does not complete.
+- `TigerLakePLL.cpp` replaces the three unbounded DPLL unlock, power-state, and lock polls with bounded waits (100 ms maximum per transition) and returns `B_TIMED_OUT` when a transition does not complete. Power-up and lock timeout paths attempt bounded rollback; failure to unlock is reported without an unbounded wait.
+- PLL parameter inputs and reference frequency are validated before MMIO. DCO fractional rounding carries into the integer field instead of spilling a 16th fractional bit into a reserved register bit.
 - `DigitalDisplayInterface::SetDisplayMode()` checks and propagates `ProgramPLL()` failure before continuing with DDI port-clock routing and timing programming. The outer per-port modeset path already preserves the first returned port error.
 - The legacy cursor hooks are gated off for Generation 12 and newer because the current register set and pipe routing have not been demonstrated to be Gen12-correct.
 - Legacy cursor shape inputs reject zero dimensions, dimensions above 64x64, null AND/XOR masks, and a missing cursor allocation.
@@ -106,8 +108,8 @@ The following source-level guardrails have now been implemented on this branch:
 ### Still open / not claimed fixed
 
 - The `TGL_DPCLKA_CFGCR0` field-mask bug has been corrected against the definitions in `headers/private/graphics/intel_extreme/intel_extreme.h`; static validators now reject the old destructive masks. The complete clock-routing sequence still needs physical validation.
-- DisplayPort DPLL parameters and PLL-to-port assignment are still provisional. The current fixed DP DPLL and port-index heuristic are not evidence of reliable multi-output behavior.
-- The mode-set sequence still needs a full Rocket Lake audit of transcoder selection, DDI link training, data/link M/N programming, pipe enable/disable order, and recovery after an intermediate failure.
+- The fixed-rate Gen12 DP path still does not train or retrain the link, select among higher DP rates, or verify a fresh link-training completion state. DDI C and Type-C/MG PHY ports remain explicitly unsupported in this path. The A/B PLL mapping is source-level only until tested on Rocket Lake hardware.
+- The mode-set sequence still needs a full Rocket Lake audit of transcoder selection, DDI link training, data/link M/N programming, pipe enable/disable order, and recovery after an intermediate failure. The `_SetPortLinkGen8()` status is now propagated, and DP lane-width encodings are decoded explicitly as 1/2/4 rather than `encoded + 1`.
 - No source validator, Haiku build, boot/runtime test, or physical Rocket Lake display test is claimed as passing by this checkpoint. Run the validator and supported build/test stages before treating these edits as verified.
 
 

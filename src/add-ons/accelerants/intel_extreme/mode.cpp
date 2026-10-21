@@ -488,7 +488,7 @@ intel_set_display_mode(display_mode* mode)
 		status_t currentStatus = gInfo->ports[i]->SetDisplayMode(&target,
 			colorMode);
 		if (currentStatus != B_OK) {
-			ERROR("%s: Unable to set display mode on port %u (status %d)!\\n",
+			ERROR("%s: Unable to set display mode on port %u (status %d)!\n",
 				__func__, i, (int)currentStatus);
 			if (portStatus == B_OK)
 				portStatus = currentStatus;
@@ -505,7 +505,7 @@ intel_set_display_mode(display_mode* mode)
 		return portStatus;
 	}
 
-	TRACE("%s: Port configuration completed successfully!\\n", __func__);
+	TRACE("%s: Port configuration completed successfully!\n", __func__);
 
 	// The new mode was accepted by all connected ports; release the old
 	// framebuffer only after that point.

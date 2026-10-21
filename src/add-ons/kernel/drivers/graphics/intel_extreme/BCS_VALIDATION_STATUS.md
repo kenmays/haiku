@@ -19,7 +19,7 @@ This checklist records the safety gates that must be satisfied before enabling d
 - The accelerant refuses to select a Gen6+ BCS ring even if stale shared state contains a ring description.
 - Ring setup rejects Gen6+ before touching the BCS registers. This covers Gen6/7 as well as Gen8–12 and avoids submitting commands without a completion fence and bounded recovery.
 - These changes are a fail-closed safety measure, not implementation of BCS acceleration. Gen1–5 still needs a separate audit of completion-token semantics, ring shutdown, and allocation lifetime.
-- No successful Haiku build, runtime test, or HD 530 hardware test has been established for this branch.
+- The user reports a successful Haiku build and successful real HD 530 hardware testing for this branch. These results are user-confirmed but were not independently reproduced in this review. They establish the reported build/HD 530 baseline only; they do not validate BCS command submission, completion fences, recovery, or Gen10–12 hardware.
 
 ## Gen10–12 command and recovery validation
 

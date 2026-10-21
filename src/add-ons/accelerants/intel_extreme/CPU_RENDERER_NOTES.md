@@ -90,3 +90,9 @@ Required invariants:
 Intel PRMs explicitly distinguish a flip request from flip completion. For example, the Ironlake-era `MI_DISPLAY_FLIP` documentation notes that command-stream progress / `MI_FLUSH` does not by itself guarantee that a pending display flip has completed; the documented flip-pending or wait-for-event synchronization is required. This is not a universal recipe: command support, packet fields, cache flush requirements, and completion mechanisms differ by generation. See the [Ironlake PRM excerpt](https://kiwitree.net/~lina/intel-gfx-docs/prm/ilk/ilk_ihd_os_vol1_part3r2.pdf) and the [Intel Open Source Graphics PRM archive](https://github.com/Igalia/intel-osrc-gfx-prm).
 
 Until the state machine above exists and has hardware evidence, the robust behavior is to retain one scanout buffer, avoid speculative flips, and state plainly that tearing may occur.
+
+## Multihead / multimonitor status
+
+The current modeset path still has one shared mode and framebuffer. It programs A/B plane scanout banks with one common surface; it is not independent extended-desktop support. The modeset path now rejects a connected port assigned to pipe C or D with `B_NOT_SUPPORTED` rather than returning success after failing to program that pipe's scanout surface. This is a safety guard, not C/D support.
+
+See `docs/develop/graphics/intel_multihead_multimonitor_design.md` for the per-head state model, per-generation scanout requirements, transactional modeset/rollback design, clone versus extended-desktop distinction, and hardware acceptance matrix. Full independent multi-monitor support requires a versioned shared-state ABI, per-head mode/surface allocation, validated per-pipe plane programming, and Haiku display enumeration integration. Do not claim that feature until those pieces are implemented and tested.

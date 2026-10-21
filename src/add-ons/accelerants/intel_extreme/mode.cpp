@@ -268,6 +268,12 @@ create_mode_list(void)
 	if (gInfo->mode_list_area < B_OK)
 		return gInfo->mode_list_area;
 
+	// The framebuffer is mapped for CPU access and the accelerant provides
+	// synchronous CPU drawing hooks. Advertise parallel access consistently
+	// in the enumerated modes, not only in modes passed through propose.
+	for (uint32 i = 0; i < count; i++)
+		list[i].flags |= B_PARALLEL_ACCESS;
+
 	gInfo->mode_list = list;
 	gInfo->shared_info->mode_list_area = gInfo->mode_list_area;
 	gInfo->shared_info->mode_count = count;

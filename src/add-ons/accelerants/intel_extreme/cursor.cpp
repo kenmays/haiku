@@ -9,8 +9,59 @@
 
 #include "accelerant_protos.h"
 #include "accelerant.h"
+#include "Ports.h"
 
 #include <string.h>
+
+
+// Cursor registers are pipe-local. The current framebuffer/modeset path uses
+// clone-style scanout, so the same cursor position and bitmap are programmed
+// on each pipe attached to a connected port. Gen12+ is gated in hooks.cpp
+// until its cursor plane format and register path are validated.
+static uint32
+get_cursor_pipe_offsets(uint32* offsets, uint32 maxOffsets)
+{
+	uint32 count = 0;
+	for (uint32 i = 0; i < gInfo->port_count; i++) {
+		Port* port = gInfo->ports[i];
+		if (port == NULL || !port->IsConnected() || port->GetPipe() == NULL)
+			continue;
+
+		uint32 offset;
+		switch (port->GetPipe()->Index()) {
+			case INTEL_PIPE_A:
+				offset = 0;
+				break;
+			case INTEL_PIPE_B:
+				offset = 0x1000;
+				break;
+			case INTEL_PIPE_C:
+				offset = 0x2000;
+				break;
+			case INTEL_PIPE_D:
+				offset = 0xf000;
+				break;
+			default:
+				continue;
+		}
+
+		bool duplicate = false;
+		for (uint32 j = 0; j < count; j++) {
+			if (offsets[j] == offset) {
+				duplicate = true;
+				break;
+			}
+		}
+		if (!duplicate && count < maxOffsets)
+			offsets[count++] = offset;
+	}
+
+	// Before connector routing is available, preserve the legacy pipe-A
+	// behavior rather than leaving register selection undefined.
+	if (count == 0 && maxOffsets > 0)
+		offsets[count++] = 0;
+	return count;
+}
 
 
 status_t
@@ -24,8 +75,11 @@ intel_set_cursor_shape(uint16 width, uint16 height, uint16 hotX, uint16 hotY,
 		return B_BAD_VALUE;
 	}
 
-	write32(INTEL_CURSOR_CONTROL, 0);
-		// disable cursor before changing shape memory or registers
+	uint32 pipeOffsets[4];
+	uint32 pipeCount = get_cursor_pipe_offsets(pipeOffsets, 4);
+	for (uint32 i = 0; i < pipeCount; i++)
+		write32(INTEL_CURSOR_CONTROL + pipeOffsets[i], 0);
+		// disable cursors before changing shape memory or registers
 
 	// In two-color mode, the data is ordered as follows (always 64 bit per
 	// line):
@@ -54,21 +108,22 @@ intel_set_cursor_shape(uint16 width, uint16 height, uint16 hotX, uint16 hotY,
 		}
 	}
 
-	// set palette entries to white/black
-	write32(INTEL_CURSOR_PALETTE + 0, 0x00ffffff);
-	write32(INTEL_CURSOR_PALETTE + 4, 0);
-
+	// Set palette, size, base, and control on each active pipe.
 	gInfo->shared_info->cursor_format = CURSOR_FORMAT_2_COLORS;
+	for (uint32 i = 0; i < pipeCount; i++) {
+		uint32 offset = pipeOffsets[i];
+		write32(INTEL_CURSOR_PALETTE + offset + 0, 0x00ffffff);
+		write32(INTEL_CURSOR_PALETTE + offset + 4, 0);
+		write32(INTEL_CURSOR_SIZE + offset, height << 12 | width);
+		write32(INTEL_CURSOR_BASE + offset,
+			(uint32)gInfo->shared_info->physical_graphics_memory
+				+ gInfo->shared_info->cursor_buffer_offset);
 
-	write32(INTEL_CURSOR_SIZE, height << 12 | width);
-	write32(INTEL_CURSOR_BASE,
-		(uint32)gInfo->shared_info->physical_graphics_memory
-		+ gInfo->shared_info->cursor_buffer_offset);
-
-	// Shape changes must preserve visibility: a hidden cursor stays hidden.
-	write32(INTEL_CURSOR_CONTROL,
-		(gInfo->shared_info->cursor_visible ? CURSOR_ENABLED : 0)
-			| gInfo->shared_info->cursor_format);
+		// Shape changes must preserve visibility: a hidden cursor stays hidden.
+		write32(INTEL_CURSOR_CONTROL + offset,
+			(gInfo->shared_info->cursor_visible ? CURSOR_ENABLED : 0)
+				| gInfo->shared_info->cursor_format);
+	}
 
 	// changing the hot point changes the cursor position, too
 
@@ -123,7 +178,12 @@ move_cursor(int32 x, int32 y)
 	// coordinate with its sign bit set can overflow signed int32.
 	uint32 encodedX = (uint32)x;
 	uint32 encodedY = (uint32)y;
-	write32(INTEL_CURSOR_POSITION, (encodedY << 16) | encodedX);
+	uint32 pipeOffsets[4];
+	uint32 pipeCount = get_cursor_pipe_offsets(pipeOffsets, 4);
+	for (uint32 i = 0; i < pipeCount; i++) {
+		write32(INTEL_CURSOR_POSITION + pipeOffsets[i],
+			(encodedY << 16) | encodedX);
+	}
 }
 
 
@@ -137,19 +197,26 @@ intel_move_cursor(uint16 _x, uint16 _y)
 void
 intel_show_cursor(bool isVisible)
 {
+	uint32 pipeOffsets[4];
+	uint32 pipeCount = get_cursor_pipe_offsets(pipeOffsets, 4);
 	if (gInfo->shared_info->cursor_visible == isVisible) {
-		// Explicit hide requests also clear a cursor that may have been left
+		// Explicit hide requests also clear cursors that may have been left
 		// enabled by firmware before the accelerant initialized.
-		if (!isVisible)
-			write32(INTEL_CURSOR_CONTROL, 0);
+		if (!isVisible) {
+			for (uint32 i = 0; i < pipeCount; i++)
+				write32(INTEL_CURSOR_CONTROL + pipeOffsets[i], 0);
+		}
 		return;
 	}
 
-	write32(INTEL_CURSOR_CONTROL, (isVisible ? CURSOR_ENABLED : 0)
-		| gInfo->shared_info->cursor_format);
-	write32(INTEL_CURSOR_BASE,
-		(uint32)gInfo->shared_info->physical_graphics_memory
-		+ gInfo->shared_info->cursor_buffer_offset);
+	for (uint32 i = 0; i < pipeCount; i++) {
+		uint32 offset = pipeOffsets[i];
+		write32(INTEL_CURSOR_CONTROL + offset,
+			(isVisible ? CURSOR_ENABLED : 0) | gInfo->shared_info->cursor_format);
+		write32(INTEL_CURSOR_BASE + offset,
+			(uint32)gInfo->shared_info->physical_graphics_memory
+				+ gInfo->shared_info->cursor_buffer_offset);
+	}
 
 	gInfo->shared_info->cursor_visible = isVisible;
 }

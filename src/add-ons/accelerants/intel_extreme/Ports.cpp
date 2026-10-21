@@ -1827,14 +1827,13 @@ DisplayPort::_ProbePconCapabilities()
 		return;
 	}
 
+	static const uint32 kFrlRates[] = {0, 9, 18, 24, 32, 40, 48};
 	uint8 maxFrl = (frlCapabilities >> 2) & 0x07;
-	if (maxFrl == 0) {
-		TRACE("%s: downstream converter does not advertise HDMI FRL on %s\n",
+	if (maxFrl == 0 || maxFrl >= B_COUNT_OF(kFrlRates)) {
+		TRACE("%s: downstream converter has no usable HDMI FRL capability on %s\n",
 			__func__, PortName());
 		return;
 	}
-
-	static const uint32 kFrlRates[] = {0, 9, 18, 24, 32, 40, 48};
 	TRACE("%s: HDMI PCON advertises FRL up to %" B_PRIu32
 		" Gbit/s on %s%s\n", __func__, kFrlRates[maxFrl], PortName(),
 		(frlCapabilities & (1 << 5)) != 0 ? " (source-controlled mode)" : "");

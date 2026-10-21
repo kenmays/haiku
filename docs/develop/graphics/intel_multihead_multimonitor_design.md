@@ -103,6 +103,40 @@ Important limitations and remaining work:
 
 Do not confuse this bridge with the per-head architecture below. Independent extended desktop still requires per-head mode/framebuffer state and app_server integration.
 
+## app_server and accelerant API capability review
+
+This review was checked against the current branch's app_server and Screen preferences sources, especially `src/servers/app/ScreenManager.cpp`, `VirtualScreen.cpp`, `Screen.cpp`, `Desktop.cpp`, `ServerApp.cpp`, `headers/os/interface/Screen.h`, and `src/preferences/screen/multimon.cpp`.
+
+### What Haiku already has
+
+- `BScreen` and app_server protocol messages carry a `screen_id`; desktop configuration code stores screen configurations by ID, and `VirtualScreen` can hold multiple `Screen` objects. That is useful infrastructure, but it does not make one accelerant's separate pipes into separate screens automatically.
+- The legacy Screen preferences combine UI selects virtual-desktop spanning modes by `B_SCROLL` plus virtual width/height exactly twice the visible timing. Its multi-monitor capability probe is specifically Radeon-private: `TestMultiMonSupport()` sends `RADEON_MODE_MULTIMON_REQUEST` through `ProposeMode()` and expects a Radeon reply marker. Intel cannot truthfully pass this probe without a documented cross-driver protocol or a corresponding UI/API change.
+- `Desktop::SetScreenMode()` resolves a screen ID to one `Screen` object and calls that object's `SetMode()`. The `Screen` object wraps one `HWInterface`; the current Intel accelerant behind that interface still has one global current mode and framebuffer configuration.
+- The existing `display_mode` contains virtual dimensions and display-start coordinates, which are sufficient for one logical virtual desktop or a clone mode, not a collection of independent head configurations in one mode object.
+
+### Blocking app_server limitations found in source
+
+1. `ServerApp.cpp` accepts only `B_MAIN_SCREEN_ID` in `AS_VALID_SCREEN_ID`; `AS_GET_NEXT_SCREEN_ID` always returns `B_ENTRY_NOT_FOUND`. Mode-list and hardware-information requests also ignore the supplied screen ID in several paths. This means the public screen-ID protocol is not currently enumerating multiple independently addressable displays through this path.
+2. `Screen::SetFrame()` is a TODO and does nothing. `Screen::Frame()` returns the origin-based virtual dimensions from that screen's mode. `VirtualScreen::UpdateFrame()` computes a horizontal concatenation and maximum height, but explicitly says it does not use actual screen positions. It therefore cannot express arbitrary arrangements such as a display above, left of, or vertically offset from another.
+3. `VirtualScreen::AddScreen()` overwrites its `fDrawingEngine` and `fHWInterface` fields for each screen and comments that this only works for single-screen configurations. This is a direct compositor/drawing-engine integration blocker for independently rendered screens, even though a list of `Screen` objects exists.
+4. `ScreenManager::_ScanDrivers()` currently initializes one `AccelerantHWInterface` and stops; its source comments that scanning multiple drivers is future work. This is an additional enumeration limit for multiple adapters, distinct from the same-adapter/multiple-pipe problem.
+5. The accelerant hook surface in `accelerant_protos.h` is singleton-oriented: `get_mode_list`, `propose_display_mode`, `set_display_mode`, `get_display_mode`, `get_frame_buffer_config`, `move_display`, DPMS, and retrace-semaphore hooks have no head identifier. The current implementation consequently cannot return independent modes, pitches, surfaces, DPMS states, or retrace completion per head through those hooks.
+6. `src/preferences/screen/multimon.cpp` has a Radeon-specific private marker handshake, not a generic capability API. The doubled-width combine-mode menu is a legacy spanning UI, not a per-monitor placement or independent-resolution interface.
+
+### Conclusion
+
+**A true multihead/extended-desktop implementation cannot be completed solely inside the Intel accelerant while preserving the current app_server and accelerant interfaces.** The current API can support the existing one-logical-desktop spanning bridge, and app_server has some multi-`Screen` scaffolding, but a single Intel adapter with independent heads needs a new per-head contract plus app_server integration. The review does not establish that every display API must be replaced; it establishes that the current singleton accelerant hooks and current app_server screen enumeration/placement paths are insufficient.
+
+### Recommended implementation sequence
+
+1. **Define a versioned per-head contract.** Add head enumeration and stable IDs; per-head get/propose/set mode, framebuffer config, move/placement, DPMS, monitor/EDID, retrace/flip completion, and capability queries. Define clone groups separately from independently timed heads. Keep existing hooks as head-0 compatibility wrappers.
+2. **Extend the accelerant and shared ABI.** Add per-head records and generation-specific plane/pipe state, separate framebuffer allocation/stride/format/start per head, shared PLL/link resource validation, hotplug invalidation, and transactional all-head modesets. Add a clear ABI version/size check for cloned shared areas; never change shared structure layout without coordinating kernel driver and accelerant.
+3. **Make app_server enumerate real logical heads.** Update screen-ID validity/next-ID handlers and route mode lists, mode constraints, DPMS, retrace, framebuffer configuration, and monitor information to the selected head. Preserve stable IDs across connector hotplug where possible; invalidate stale IDs safely.
+4. **Fix virtual-screen geometry and compositor ownership.** Store an explicit `BRect` origin/bounds per head and compute the union of all rectangles. Route drawing/composition to the correct head surface; replace the single `VirtualScreen::fDrawingEngine/fHWInterface` assumption with a well-defined multi-head compositor or a shared logical framebuffer with per-head scanout views. Update input/cursor bounds and window-screen selection for non-origin-aligned displays.
+5. **Update Screen preferences.** Replace the Radeon-only `TestMultiMonSupport()` tunnel with a generic capability query and explicit per-display layout/mode UI. Keep the legacy combine option for spanning; don't use doubled virtual dimensions to represent independent monitors.
+6. **Add compatibility and tests.** Existing single-head accelerants should continue working via wrappers. Test two independent modes, arbitrary display arrangement, cursor and window movement across boundaries, different DPMS states, hotplug/reconnect, failure rollback, multi-workspace configurations, direct framebuffer clients, overlays, and simultaneous drawing. Include a non-Intel multi-head implementation in the regression matrix.
+7. **Build and stage the work across PRs.** Land the API/app_server scaffolding and tests separately from Intel hardware programming. Enable the Intel capability only after per-generation modeset and hardware validation. Until those layers land, advertise the Intel feature as spanning/clone only, not true independent multihead.
+
 ## Acceptance matrix
 
 For each supported generation and exact PCI ID, test:

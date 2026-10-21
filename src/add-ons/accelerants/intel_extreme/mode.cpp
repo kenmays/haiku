@@ -401,6 +401,12 @@ intel_set_display_mode(display_mode* mode)
 	// Do not report a successful mode change for a connector routed to C/D:
 	// those pipes require independently validated plane/surface programming
 	// and per-head state, which this accelerant path does not provide yet.
+	//
+	// Do not infer a spanning/combined mode from virtual_width alone. This
+	// accelerant currently sets B_SCROLL on every proposed mode, and that flag
+	// also describes ordinary display panning. A spanning mode needs an
+	// explicit request/reply marker and a validated two-pipe layout before
+	// programming a nonzero start offset for pipe B.
 	for (uint32 i = 0; i < gInfo->port_count; i++) {
 		Port* port = gInfo->ports[i];
 		if (port == NULL || !port->IsConnected())

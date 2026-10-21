@@ -396,6 +396,26 @@ intel_set_display_mode(display_mode* mode)
 	intel_shared_info &sharedInfo = *gInfo->shared_info;
 	Autolock locker(sharedInfo.accelerant_lock);
 
+	// This modeset path has one shared mode/framebuffer and
+	// set_frame_buffer_base() only programs the A/B plane register banks.
+	// Do not report a successful mode change for a connector routed to C/D:
+	// those pipes require independently validated plane/surface programming
+	// and per-head state, which this accelerant path does not provide yet.
+	for (uint32 i = 0; i < gInfo->port_count; i++) {
+		Port* port = gInfo->ports[i];
+		if (port == NULL || !port->IsConnected())
+			continue;
+
+		Pipe* pipe = port->GetPipe();
+		if (pipe == NULL)
+			return B_NOT_SUPPORTED;
+		if (pipe->Index() == INTEL_PIPE_C || pipe->Index() == INTEL_PIPE_D) {
+			ERROR("%s: Pipe C/D modesetting requires per-head scanout support; "
+				"refusing unsafe shared-framebuffer modeset.\\n", __func__);
+			return B_NOT_SUPPORTED;
+		}
+	}
+
 	// First register dump
 	//dump_registers();
 

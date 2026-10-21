@@ -2769,8 +2769,8 @@ DigitalDisplayInterface::SetDisplayMode(display_mode* target, uint32 colorMode)
 	// C and Type-C/MG PHY ports need their generation-specific PLL path;
 	// do not program DPLL0 and accidentally route its clock to DDI A.
 	if (gInfo->shared_info->device_type.Generation() >= 12
-		&& (PortIndex() != INTEL_PORT_A && PortIndex() != INTEL_PORT_B
-			|| fPipe->Index() != INTEL_PIPE_A && fPipe->Index() != INTEL_PIPE_B)) {
+		&& ((PortIndex() != INTEL_PORT_A && PortIndex() != INTEL_PORT_B)
+			|| (fPipe->Index() != INTEL_PIPE_A && fPipe->Index() != INTEL_PIPE_B))) {
 		ERROR("%s: Gen12 modesetting is limited to DDI A/B on pipe A/B; "
 			"other port/pipe routes are not implemented\n", __func__);
 		return B_NOT_SUPPORTED;

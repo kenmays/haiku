@@ -141,7 +141,12 @@ def main() -> int:
     require(
         "memset(data, 0, 64 * 16);" in cursor_shape
         and "memset(data + 16 * y, 0xff, 8);" in cursor_shape
-        and "gInfo->shared_info->cursor_visible ? CURSOR_ENABLED : 0" in cursor_shape,
+        and "hotX >= width || hotY >= height" in cursor_shape
+        and "gInfo->shared_info->cursor_visible ? CURSOR_ENABLED : 0" in cursor_shape
+        and "uint32 encodedX = (uint32)x;" in cursor_shape
+        and "uint32 encodedY = (uint32)y;" in cursor_shape
+        and "x = CURSOR_POSITION_MASK;" in cursor_shape
+        and "y = CURSOR_POSITION_MASK;" in cursor_shape,
         "cursor shape updates must clear stale mask data and preserve hidden state",
     )
 

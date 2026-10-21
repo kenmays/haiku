@@ -46,3 +46,22 @@ No build, boot, or physical hardware result is asserted by this document. Until 
 - Keep CPU-only 2D rendering; do not enable blit/fill hooks, engine submission, or synchronization hooks.
 - Do not infer Intel Extreme compatibility from Linux Xe PCI-ID coverage.
 - Keep Alchemist/DG2 and Battlemage/BMG out of the active allowlist until their display path is separately implemented and reviewed.
+
+## Follow-up audit: Gen12 DPLL and DDI mode-set blockers
+
+A targeted review of `DigitalDisplayInterface::SetDisplayMode()` and `TigerLakePLL.cpp` found issues that should be treated as mode-set reliability blockers, not papered over by widening the PCI allowlist:
+
+- **PLL status is not propagated.** The Gen12 DDI path calls `ProgramPLL(chosenPLL, p, q, k, dco)` but ignores its returned `status_t`. A bad PLL index or parameter rejection can therefore be followed by port clock routing and timing programming as though PLL setup succeeded.
+- **PLL polling is unbounded.** `ProgramPLL()` contains `while` loops waiting for unlock, power-state assertion, and lock. If hardware does not reach the requested state, the caller can hang indefinitely rather than return a recoverable mode-set error. Linux i915's corresponding DPLL code uses bounded register waits and reports lock/power failures (see `intel_dpll_mgr.c`, for example the ICL PLL enable/power helpers).
+- **Port clock routing needs a register-mask audit.** The Gen12 path edits `TGL_DPCLKA_CFGCR0` using read/modify/write operations, including `config &= TGL_DPCLKA_DDIA_CLOCK_SELECT` / `config &= TGL_DPCLKA_DDIB_CLOCK_SELECT`. Before changing this sequence, verify the masks' exact bit definitions and the required preservation of unrelated port clock selections against the Rocket Lake/Tiger Lake display register documentation. Do not assume these expressions preserve unrelated fields.
+- **DisplayPort DPLL choice is provisional.** The current code uses a fixed DisplayPort DPLL parameter set and a simplistic port-index choice (PLL 1 only for port index 7, otherwise PLL 0). The source itself notes the assignment is TODO. That is not sufficient evidence for concurrent outputs or all DDI ports.
+
+### Safe next implementation step
+
+Do not change PLL register sequencing based only on this source read. First make `ProgramPLL()` use bounded waits with explicit error returns, propagate its status from `DigitalDisplayInterface::SetDisplayMode()`, and audit the DPLL/port-clock masks against the matching register definitions. Keep this separate from claims of physical support. Linux i915 provides useful corroboration for bounded PLL waits, but it is not a substitute for the platform-specific register sequence.
+
+Evidence consulted:
+- Intel Tiger Lake Display Engine, Volume 12, PLL and display clock programming: https://cdrdv2-public.intel.com/705833/intel-gfx-prm-osrc-tgl-vol-12-display-engine.pdf
+- Linux i915 DPLL manager, which uses bounded register waits and reports timeout failures: https://gbmc.googlesource.com/linux/+/92a09c47464d040866cf2b4cd052bc60555185fb/drivers/gpu/drm/i915/display/intel_dpll_mgr.c
+
+These are source-level findings only. No build, runtime, or physical display test is asserted.

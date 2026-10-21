@@ -940,7 +940,10 @@ intel_extreme_init(intel_info &info)
 				if ((offset & (B_PAGE_SIZE - 1)) != 0
 					|| offset > info.shared_info->graphics_memory_size
 					|| B_PAGE_SIZE > info.shared_info->graphics_memory_size - offset
-					|| offset > 0xffffffffULL) {
+					|| offset > 0xffffffffULL
+					|| info.shared_info->physical_graphics_memory > 0xffffffffULL
+					|| offset > 0xffffffffULL
+						- info.shared_info->physical_graphics_memory) {
 					cursorStatus = B_BAD_VALUE;
 				} else {
 					info.shared_info->cursor_buffer_offset = (uint32)offset;

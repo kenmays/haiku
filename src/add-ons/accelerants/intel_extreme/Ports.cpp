@@ -159,7 +159,7 @@ validate_gen12_dp_bandwidth(Pipe* pipe, const display_timing& timing)
 	const uint64 capacity = (uint64)lanes * 270000 * 8;
 	if (required > capacity) {
 		ERROR("%s: Mode exceeds fixed Gen12 DP link capacity (%" B_PRIu64
-			" > %" B_PRIu64 ")\\n", __func__, required, capacity);
+			" > %" B_PRIu64 ")\n", __func__, required, capacity);
 		return B_NOT_SUPPORTED;
 	}
 

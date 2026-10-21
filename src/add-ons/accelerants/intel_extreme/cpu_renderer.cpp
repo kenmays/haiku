@@ -202,8 +202,10 @@ intel_cpu_release_engine(engine_token* engineToken, sync_token* syncToken)
 {
 	if (engineToken == NULL)
 		return B_BAD_VALUE;
-	if (syncToken != NULL)
+	if (syncToken != NULL) {
 		syncToken->engine_id = engineToken->engine_id;
+		syncToken->counter = 0;
+	}
 	release_lock(&gInfo->shared_info->engine_lock);
 	return B_OK;
 }
@@ -223,6 +225,7 @@ intel_cpu_get_sync_token(engine_token* engineToken, sync_token* syncToken)
 	if (engineToken == NULL || syncToken == NULL)
 		return B_BAD_VALUE;
 	syncToken->engine_id = engineToken->engine_id;
+	syncToken->counter = 0;
 	return B_OK;
 }
 
@@ -335,6 +338,7 @@ intel_cpu_fill_span(engine_token* token, uint32 color, uint16* _params,
 
 	span_params* params = (span_params*)_params;
 	for (uint32 i = 0; i < count; i++)
-		fill_rect(fb, params[i].left, params[i].top, params[i].right,
-			params[i].top, color, false);
+		// The span hook uses an exclusive right edge, unlike fill rectangles.
+		fill_rect(fb, params[i].left, params[i].top,
+			(int32)params[i].right - 1, params[i].top, color, false);
 }

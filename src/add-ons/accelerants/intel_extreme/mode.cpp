@@ -509,7 +509,9 @@ intel_set_display_mode(display_mode* mode)
 	write32(INTEL_VGA_DISPLAY_CONTROL, VGA_DISPLAY_DISABLED);
 	read32(INTEL_VGA_DISPLAY_CONTROL);
 
-	// Go over each port and set the display mode
+	// Go over each port and set the display mode. Preserve the first error:
+	// a failed port configuration must not be reported as a successful modeset.
+	status_t portStatus = B_OK;
 	for (uint32 i = 0; i < gInfo->port_count; i++) {
 		if (gInfo->ports[i] == NULL)
 			continue;
@@ -517,11 +519,16 @@ intel_set_display_mode(display_mode* mode)
 			continue;
 
 		status_t status = gInfo->ports[i]->SetDisplayMode(&target, colorMode);
-		if (status != B_OK)
-			ERROR("%s: Unable to set display mode!\n", __func__);
+		if (status != B_OK) {
+			ERROR("%s: Unable to set display mode on port %s!\n",
+				__func__, gInfo->ports[i]->PortName());
+			if (portStatus == B_OK)
+				portStatus = status;
+		}
 	}
 
-	TRACE("%s: Port configuration completed successfully!\n", __func__);
+	if (portStatus == B_OK)
+		TRACE("%s: Port configuration completed successfully!\n", __func__);
 
 	// We set the same color mode across all pipes
 	program_pipe_color_modes(colorMode);
@@ -557,10 +564,12 @@ intel_set_display_mode(display_mode* mode)
 		// triggers writing back double-buffered registers
 		// which is INTEL_DISPLAY_X_BYTES_PER_ROW only apparantly
 
+	// The new framebuffer and requested mode are now active in shared state,
+	// but return a port failure instead of masking an unsuccessful modeset.
 	// Second register dump
 	//dump_registers();
 
-	return B_OK;
+	return portStatus;
 }
 
 

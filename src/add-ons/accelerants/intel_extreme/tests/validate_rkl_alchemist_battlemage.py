@@ -189,6 +189,22 @@ if "validate_gen12_dp_bandwidth(fPipe, hardwareTarget)" not in ddi_mode:
     fail("Gen12 DP bandwidth must be checked before modeset register writes")
 if "mode != PIPE_DDI_MODE_DP_SST && mode != PIPE_DDI_MODE_DP_MST" not in port_source:
     fail("reserved DDI mode encodings must be rejected")
+
+# Keep Gen12-specific checks out of the legacy DisplayPort Gen4 routine, which
+# has no DDI mode selector variable.
+legacy_dp_start = port_source.find("DisplayPort::_SetPortLinkGen4(")
+legacy_dp_end = port_source.find("DisplayPort::_SetPortLinkGen6(", legacy_dp_start)
+if legacy_dp_start < 0 or legacy_dp_end <= legacy_dp_start:
+    fail("could not isolate legacy DP Gen4 link helper")
+if "mode == PIPE_DDI_MODE_DP_SST" in port_source[legacy_dp_start:legacy_dp_end]:
+    fail("Gen12 DDI mode logic was inserted into the legacy DP Gen4 helper")
+ddi_link_start = port_source.find("DigitalDisplayInterface::_SetPortLinkGen8(")
+ddi_mode_start = port_source.find("DigitalDisplayInterface::SetDisplayMode(", ddi_link_start)
+if ddi_link_start < 0 or ddi_mode_start <= ddi_link_start:
+    fail("could not isolate DDI Gen8+ link M/N helper")
+ddi_link = port_source[ddi_link_start:ddi_mode_start]
+if "Mode exceeds fixed Gen12 DP link capacity" not in ddi_link:
+    fail("DDI link helper must reject over-capacity Gen12 DP modes")
 if "status_t linkStatus = _SetPortLinkGen8(" not in ddi_mode or "return linkStatus;" not in ddi_mode:
     fail("DDI link M/N programming errors must propagate")
 

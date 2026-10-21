@@ -92,20 +92,13 @@ validate_gen12_dp_bandwidth(Pipe* pipe, const display_timing& timing)
 	if (pipe == NULL || gInfo->shared_info->device_type.Generation() < 12)
 		return B_OK;
 
-	addr_t pipeOffset = 0;
-	switch (pipe->Index()) {
-		case INTEL_PIPE_B:
-			pipeOffset = 0x1000;
-			break;
-		case INTEL_PIPE_C:
-			pipeOffset = 0x2000;
-			break;
-		case INTEL_PIPE_D:
-			pipeOffset = 0xf000;
-			break;
-		default:
-			break;
-	}
+	// Framebuffer-base and pitch programming currently cover only pipes A/B.
+	// Do not preflight a Gen12 DP mode on a pipe whose scanout plane is not
+	// represented by the current accelerant framebuffer path.
+	if (pipe->Index() != INTEL_PIPE_A && pipe->Index() != INTEL_PIPE_B)
+		return B_NOT_SUPPORTED;
+
+	addr_t pipeOffset = pipe->Index() == INTEL_PIPE_B ? 0x1000 : 0;
 
 	uint32 pipeFunc = read32(PIPE_DDI_FUNC_CTL_A + pipeOffset);
 	uint32 mode = (pipeFunc & PIPE_DDI_MODESEL_MASK) >> PIPE_DDI_MODESEL_SHIFT;
@@ -2776,9 +2769,10 @@ DigitalDisplayInterface::SetDisplayMode(display_mode* target, uint32 colorMode)
 	// C and Type-C/MG PHY ports need their generation-specific PLL path;
 	// do not program DPLL0 and accidentally route its clock to DDI A.
 	if (gInfo->shared_info->device_type.Generation() >= 12
-		&& PortIndex() != INTEL_PORT_A && PortIndex() != INTEL_PORT_B) {
-		ERROR("%s: Gen12 DPLL routing is not implemented for %s\n",
-			__func__, PortName());
+		&& (PortIndex() != INTEL_PORT_A && PortIndex() != INTEL_PORT_B
+			|| fPipe->Index() != INTEL_PIPE_A && fPipe->Index() != INTEL_PIPE_B)) {
+		ERROR("%s: Gen12 modesetting is limited to DDI A/B on pipe A/B; "
+			"other port/pipe routes are not implemented\n", __func__);
 		return B_NOT_SUPPORTED;
 	}
 

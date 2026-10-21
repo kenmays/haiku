@@ -52,5 +52,27 @@ for feature in (
     if match is None or not re.search(r"return\s+NULL\s*;", match.group(1)):
         fail(f"{feature} is not visibly fail-closed")
 
-print("PASS: Rocket Lake IDs retained; Alchemist/Battlemage remain unclaimed; CPU-only 2D hooks fail closed.")
+# Engine and synchronization hooks must also remain unavailable in CPU-only mode.
+engine_features = (
+    "B_ACCELERANT_ENGINE_COUNT",
+    "B_ACQUIRE_ENGINE",
+    "B_RELEASE_ENGINE",
+    "B_WAIT_ENGINE_IDLE",
+    "B_GET_SYNC_TOKEN",
+    "B_SYNC_TO_TOKEN",
+)
+engine_block = re.search(
+    r"case\\s+B_ACCELERANT_ENGINE_COUNT\\s*:(.*?)(?=\\n\\s*/\\* 2D acceleration \\*/)",
+    hooks,
+    re.DOTALL,
+)
+if engine_block is None:
+    fail("engine/synchronization hook block was not found")
+for feature in engine_features:
+    if not re.search(r"case\\s+" + feature + r"\\s*:", engine_block.group(0)):
+        fail(f"{feature} hook case is missing")
+if not re.search(r"return\\s+NULL\\s*;", engine_block.group(1)):
+    fail("engine/synchronization hooks are not visibly fail-closed")
+
+print("PASS: Rocket Lake IDs retained; Alchemist/Battlemage remain unclaimed; CPU-only 2D and engine/sync hooks fail closed.")
 print("NOTE: source checks only; build and physical display validation are still required.")

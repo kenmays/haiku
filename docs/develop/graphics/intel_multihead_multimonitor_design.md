@@ -80,6 +80,20 @@ Implement these as distinct modes:
 
 Initially support only the explicitly validated subset (for example, two outputs on documented A/B pipe/plane combinations). Return an error or hide unsupported head combinations rather than writing unverified C/D registers.
 
+## Concrete first implementation gate
+
+Do not implement spanning by checking `virtual_width == 2 * h_display` alone. In this branch `intel_propose_display_mode()` unconditionally sets `B_SCROLL`, so that flag cannot distinguish a spanning request from ordinary panning. The mode list also currently advertises visible-size virtual surfaces, and the existing Screen preferences multi-monitor handshake is Radeon-private. A silent inference would make normal wide virtual desktops change the output shown on pipe B.
+
+Before enabling a spanning mode, implement these pieces together:
+
+1. Add Intel-private request/reply mode markers in a documented, non-conflicting field and preserve them through propose/sanitize/set mode. Do not reuse Radeon-private marker values without a shared header and compatibility review.
+2. Extend the mode-list path only when two connected outputs have distinct, supported A/B pipes; publish explicit horizontal-span variants with checked `2 * h_display`, max virtual width, stride, and full allocation-size calculations.
+3. In the modeset transaction, require the explicit request, exactly two distinct connected A/B pipes, compatible timing/format, and successful setup of both ports. Set pipe A's start to the left origin and pipe B's start to the right-hand region using that generation's documented start-offset mechanism. On any failure, restore both pipes and the old surface.
+4. Update Screen preferences to negotiate the Intel markers and display positions; do not rely on a Radeon-only handshake.
+5. Add tests for one monitor, two monitors on the same pipe, A/B clone, horizontal span, disconnect during setup, ordinary panning, and oversized/overflowing dimensions.
+
+If any prerequisite is absent, return a failure or retain clone/single-monitor behavior; never silently reinterpret an ordinary mode as spanning.
+ 
 ## Acceptance matrix
 
 For each supported generation and exact PCI ID, test:

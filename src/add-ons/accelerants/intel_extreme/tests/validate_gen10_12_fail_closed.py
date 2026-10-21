@@ -16,6 +16,7 @@ DRIVER_PATH = ROOT / "src/add-ons/kernel/drivers/graphics/intel_extreme/driver.c
 BRINGUP_PATH = ROOT / "src/add-ons/kernel/drivers/graphics/intel_extreme/GEN10_12_BCS_BRINGUP.md"
 OVERLAY_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/overlay.cpp"
 PORTS_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/Ports.cpp"
+PLL_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/TigerLakePLL.cpp"
 HOOKS_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/hooks.cpp"
 MODE_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/mode.cpp"
 CURSOR_PATH = ROOT / "src/add-ons/accelerants/intel_extreme/cursor.cpp"
@@ -55,6 +56,7 @@ def main() -> int:
     bringup = BRINGUP_PATH.read_text(encoding="utf-8")
     overlay = OVERLAY_PATH.read_text(encoding="utf-8")
     ports = PORTS_PATH.read_text(encoding="utf-8")
+    pll = PLL_PATH.read_text(encoding="utf-8")
     hooks = HOOKS_PATH.read_text(encoding="utf-8")
     mode = MODE_PATH.read_text(encoding="utf-8")
     cursor = CURSOR_PATH.read_text(encoding="utf-8")
@@ -113,6 +115,36 @@ def main() -> int:
     require(
         "move_cursor(x, y);" in cursor_shape,
         "hotspot changes must preserve signed off-screen cursor coordinates",
+    )
+
+    # Gen12 must not advertise the legacy cursor register path before the
+    # per-pipe cursor plane and register mapping have been audited.
+    cursor_hook_start = hooks.find("/* cursor management */")
+    cursor_hook_end = hooks.find("/* engine/synchronization */", cursor_hook_start)
+    require(
+        cursor_hook_start >= 0 and cursor_hook_end > cursor_hook_start
+        and hooks[cursor_hook_start:cursor_hook_end].count("Generation() < 12") >= 3,
+        "legacy cursor hooks must remain disabled on Gen12+",
+    )
+    require(
+        "width == 0" in cursor_shape and "height == 0" in cursor_shape
+        and "andMask == NULL" in cursor_shape and "xorMask == NULL" in cursor_shape,
+        "cursor shape must reject empty dimensions and null masks",
+    )
+
+    # DPLL transitions must time out rather than hang, and the DDI modeset
+    # caller must stop when PLL programming fails.
+    require(
+        "while ((read32(DPLL_ENABLE)" not in pll
+        and "B_TIMED_OUT" in pll
+        and "wait_for_register(DPLL_ENABLE, TGL_DPLL_LOCK, false, 100000)" in pll
+        and "wait_for_register(DPLL_ENABLE, TGL_DPLL_POWER_STATE, true, 100000)" in pll
+        and "wait_for_register(DPLL_ENABLE, TGL_DPLL_LOCK, true, 100000)" in pll,
+        "Gen12 PLL unlock/power/lock polling must be bounded",
+    )
+    require(
+        "status_t pllStatus = ProgramPLL(" in ports and "return pllStatus;" in ports,
+        "DDI mode-setting must propagate PLL programming failures",
     )
 
     # EDID reads must attempt the alternate transport after either bus

@@ -52,7 +52,7 @@ if duplicate_ids:
 
 for device_id in ("0x4c8a", "0x4c8b", "0x4c90", "0x4c9a"):
     if not re.search(
-        r"\\{\\s*" + re.escape(device_id) + r"\\s*,\\s*INTEL_MODEL_RKL\\s*,",
+        r"\{\s*" + re.escape(device_id) + r"\s*,\s*INTEL_MODEL_RKL\s*,",
         active_table,
         re.IGNORECASE,
     ):

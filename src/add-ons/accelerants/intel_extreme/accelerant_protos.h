@@ -77,6 +77,25 @@ void intel_invert_rectangle(engine_token* engineToken, fill_rect_params* list,
 void intel_fill_span(engine_token* engineToken, uint32 color, uint16* list,
 	uint32 count);
 
+// CPU-only 2D renderer (does not submit GPU commands)
+uint32 intel_cpu_accelerant_engine_count(void);
+status_t intel_cpu_acquire_engine(uint32 capabilities, uint32 maxWait,
+	sync_token* syncToken, engine_token** _engineToken);
+status_t intel_cpu_release_engine(engine_token* engineToken,
+	sync_token* syncToken);
+void intel_cpu_wait_engine_idle(void);
+status_t intel_cpu_get_sync_token(engine_token* engineToken,
+	sync_token* syncToken);
+status_t intel_cpu_sync_to_token(sync_token* syncToken);
+void intel_cpu_screen_to_screen_blit(engine_token* token, blit_params* params,
+	uint32 count);
+void intel_cpu_fill_rectangle(engine_token* token, uint32 color,
+	fill_rect_params* params, uint32 count);
+void intel_cpu_invert_rectangle(engine_token* token, fill_rect_params* params,
+	uint32 count);
+void intel_cpu_fill_span(engine_token* token, uint32 color, uint16* params,
+	uint32 count);
+
 // overlay
 uint32 intel_overlay_count(const display_mode* mode);
 const uint32* intel_overlay_supported_spaces(const display_mode* mode);

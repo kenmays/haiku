@@ -2067,8 +2067,12 @@ DisplayPort::SetDisplayMode(display_mode* target, uint32 colorMode)
 		if (result == B_OK) {
 			// Setup PanelFitter and Train FDI if it exists
 			PanelFitter* fitter = fPipe->PFT();
-			if (fitter != NULL)
-				fitter->Enable(hardwareTarget);
+			if (fitter != NULL) {
+				if (needsScaling)
+					fitter->Enable(hardwareTarget);
+				else
+					fitter->Disable();
+			}
 
 			uint32 lanes = 0;
 			uint32 linkBandwidth = 0;
@@ -2077,7 +2081,13 @@ DisplayPort::SetDisplayMode(display_mode* target, uint32 colorMode)
 				FDILink* link = fPipe->FDI();
 				if (link != NULL) {
 					link->PreTrain(&hardwareTarget, &linkBandwidth, &lanes, &bitsPerPixel);
-					fPipe->SetFDILink(hardwareTarget, linkBandwidth, lanes, bitsPerPixel);
+					status_t linkStatus = fPipe->SetFDILink(hardwareTarget,
+						linkBandwidth, lanes, bitsPerPixel);
+					if (linkStatus != B_OK) {
+						ERROR("%s: Failed to configure FDI link on %s (status %d)\n",
+							__func__, PortName(), (int)linkStatus);
+						return linkStatus;
+					}
 					link->Train(&hardwareTarget, lanes);
 				}
 			} else {
@@ -2118,7 +2128,13 @@ DisplayPort::SetDisplayMode(display_mode* target, uint32 colorMode)
 				lanes =
 					((read32(INTEL_DISPLAY_PORT_A) & INTEL_DISP_PORT_WIDTH_MASK) >> INTEL_DISP_PORT_WIDTH_SHIFT) + 1;
 
-				fPipe->SetFDILink(hardwareTarget, linkBandwidth, lanes, bitsPerPixel);
+				status_t linkStatus = fPipe->SetFDILink(hardwareTarget,
+					linkBandwidth, lanes, bitsPerPixel);
+				if (linkStatus != B_OK) {
+					ERROR("%s: Failed to configure eDP link on %s (status %d)\n",
+						__func__, PortName(), (int)linkStatus);
+					return linkStatus;
+				}
 			}
 
 			// Program general pipe config

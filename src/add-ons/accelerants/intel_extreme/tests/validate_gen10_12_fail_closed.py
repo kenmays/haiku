@@ -154,6 +154,8 @@ def main() -> int:
         and "ref_khz != 19200 && ref_khz != 24000" in pll
         and "if (dco_frac >= (1 << 15))" in pll
         and "dco_int++;" in pll and "dco_frac = 0;" in pll
+        and "!(dco >= 7998.0f && dco <= 10000.0f)" in pll
+        and "float afeclk = (5.0f * freq) / 1000.0f;" in pll
         and "TGL_DPLL_DCO_INTEGER_SHIFT" not in pll,
         "PLL inputs and fractional carry must be validated before MMIO",
     )

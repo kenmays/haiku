@@ -51,8 +51,12 @@ if duplicate_ids:
 
 
 for device_id in ("0x4c8a", "0x4c8b", "0x4c90", "0x4c9a"):
-    if device_id not in driver.lower():
-        fail(f"Rocket Lake allowlist entry {device_id} disappeared")
+    if not re.search(
+        r"\\{\\s*" + re.escape(device_id) + r"\\s*,\\s*INTEL_MODEL_RKL\\s*,",
+        active_table,
+        re.IGNORECASE,
+    ):
+        fail(f"Rocket Lake allowlist entry {device_id} is missing or not mapped to INTEL_MODEL_RKL")
 
 # Keep exact known Alchemist/Battlemage IDs unclaimed until their display-engine
 # model and register paths are implemented and reviewed.

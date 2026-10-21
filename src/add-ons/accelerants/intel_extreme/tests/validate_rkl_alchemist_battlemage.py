@@ -191,6 +191,8 @@ if "validate_gen12_dp_bandwidth(fPipe, hardwareTarget)" not in ddi_mode:
     fail("Gen12 DP bandwidth must be checked before modeset register writes")
 if "_ValidateGen12DpLink()" not in ddi_mode or "return dpLinkStatus;" not in ddi_mode:
     fail("Gen12 DP modeset must propagate trained-link preflight errors")
+if ddi_mode.find("_ValidateGen12DpLink()") > ddi_mode.find("fPipe->Configure(target)"):
+    fail("Gen12 DP trained-link preflight must run before pipe modeset writes")
 for required in ("message.address = 0x100", "message.address = 0x202",
                  "linkConfig[0] != 0x0a", "laneStatus & 0x07) != 0x07",
                  "linkStatus[2] & 0x01"):

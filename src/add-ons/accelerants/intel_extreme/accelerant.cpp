@@ -440,46 +440,60 @@ assign_pipes()
 	// the same. For the moment we could get displays with the wrong pipes
 	// assigned when the count is > 1;
 
-	uint32 current = 0;
+	if (gInfo->pipe_count == 0 || gInfo->pipe_count > MAX_PIPES)
+		return B_NO_MEMORY;
 
-	bool assigned[gInfo->pipe_count];
-	memset(assigned, 0, gInfo->pipe_count);
+	uint32 current = 0;
+	bool assigned[MAX_PIPES];
+	memset(assigned, 0, sizeof(assigned));
 
 	// Some ports need to be assigned to a fixed pipe on old hardware (or due
 	// to limitations in the current driver on current hardware). Assign those
-	// first
+	// first.
 	for (uint32 i = 0; i < gInfo->port_count; i++) {
-		if (!gInfo->ports[i]->IsConnected())
+		Port* port = gInfo->ports[i];
+		if (port == NULL || !port->IsConnected())
 			continue;
 
-		pipe_index preference = gInfo->ports[i]->PipePreference();
+		pipe_index preference = port->PipePreference();
 		if (preference != INTEL_PIPE_ANY) {
 			int index = (int)preference - 1;
+			if (index < 0 || (uint32)index >= gInfo->pipe_count
+				|| gInfo->pipes[index] == NULL) {
+				ERROR("%s: Port %s requires unavailable pipe %d!\n", __func__,
+					port->PortName(), index);
+				return B_BAD_VALUE;
+			}
 			if (assigned[index]) {
 				TRACE("Pipe %d is already assigned, it will drive multiple "
 					"displays\n", index);
 			}
-			gInfo->ports[i]->SetPipe(gInfo->pipes[index]);
+			status_t status = port->SetPipe(gInfo->pipes[index]);
+			if (status != B_OK)
+				return status;
 			assigned[index] = true;
-			continue;
 		}
 	}
 
-	// In a second pass, assign the remaining ports to the remaining pipes
+	// In a second pass, assign the remaining ports to the remaining pipes.
 	for (uint32 i = 0; i < gInfo->port_count; i++) {
-		if (gInfo->ports[i]->IsConnected() && gInfo->ports[i]->GetPipe() == NULL) {
-			while (current < gInfo->pipe_count && assigned[current])
-				current++;
+		Port* port = gInfo->ports[i];
+		if (port == NULL || !port->IsConnected() || port->GetPipe() != NULL)
+			continue;
 
-			if (current >= gInfo->pipe_count) {
-				ERROR("%s: No pipes left to assign to port %s!\n", __func__,
-					gInfo->ports[i]->PortName());
-				continue;
-			}
+		while (current < gInfo->pipe_count && assigned[current])
+			current++;
 
-			gInfo->ports[i]->SetPipe(gInfo->pipes[current]);
-			assigned[current] = true;
+		if (current >= gInfo->pipe_count || gInfo->pipes[current] == NULL) {
+			ERROR("%s: No pipes left to assign to port %s!\n", __func__,
+				port->PortName());
+			continue;
 		}
+
+		status_t status = port->SetPipe(gInfo->pipes[current]);
+		if (status != B_OK)
+			return status;
+		assigned[current] = true;
 	}
 
 	return B_OK;

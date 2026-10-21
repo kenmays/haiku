@@ -527,8 +527,17 @@ intel_set_display_mode(display_mode* mode)
 		}
 	}
 
-	if (portStatus == B_OK)
-		TRACE("%s: Port configuration completed successfully!\n", __func__);
+	if (portStatus != B_OK) {
+		// The old framebuffer has already been released and at least one port
+		// may have partially changed its pipe/PLL state. Do not re-enable
+		// scanout against an unknown mode/base combination. Keep the display
+		// off and retain the new allocation for a subsequent recovery modeset.
+		ERROR("%s: Modeset failed (%s); leaving display powered off for recovery\n",
+			__func__, strerror(portStatus));
+		return portStatus;
+	}
+
+	TRACE("%s: Port configuration completed successfully!\n", __func__);
 
 	// We set the same color mode across all pipes
 	program_pipe_color_modes(colorMode);

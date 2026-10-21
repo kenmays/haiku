@@ -318,9 +318,7 @@ def main() -> int:
     power_off_status = mode_setter.find(
         "status_t powerStatus = set_display_power_mode(B_DPMS_OFF);"
     )
-    free_status = mode_setter.find(
-        "status_t freeStatus = intel_free_memory(sharedInfo.frame_buffer);"
-    )
+    free_status = mode_setter.find("status_t freeStatus = B_OK;")
     free_failure = mode_setter.find("if (freeStatus != B_OK)", free_status)
     free_restore_dpms = mode_setter.find(
         "set_display_power_mode(sharedInfo.dpms_mode);", free_failure
@@ -332,9 +330,11 @@ def main() -> int:
         power_off_status >= 0 and free_status > power_off_status
         and "return powerStatus;" in mode_setter[power_off_status:free_status]
         and free_status >= 0 and free_failure > free_status
+        and "if (sharedInfo.frame_buffer != 0)" in mode_setter[free_status:free_failure]
+        and "freeStatus = intel_free_memory(sharedInfo.frame_buffer);" in mode_setter[free_status:free_failure]
         and free_restore_dpms > free_failure
         and new_framebuffer_alloc > free_restore_dpms,
-        "mode switch must preserve old framebuffer and restore DPMS if its free fails",
+        "mode switch must preserve framebuffer ownership and skip freeing a null buffer",
     )
 
     # After a port modeset failure, keep the display off. On success, publish

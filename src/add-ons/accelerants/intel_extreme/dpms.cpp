@@ -57,7 +57,7 @@ wait_for_lvds_panel_power(bool enabled, addr_t statusRegister)
 		spin(1000);
 	}
 
-	ERROR("Timed out waiting for LVDS panel power %s (status 0x%08" B_PRIx32 ")\\n",
+	ERROR("Timed out waiting for LVDS panel power %s (status 0x%08" B_PRIx32 ")\n",
 		enabled ? "on" : "off", read32(statusRegister));
 	return false;
 }

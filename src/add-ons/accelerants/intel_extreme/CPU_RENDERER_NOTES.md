@@ -54,3 +54,12 @@ LVDS panel-status polling in `dpms.cpp` now has a bounded 500 ms timeout instead
 ## Additional operation
 
 - Transparent screen-to-screen blit now copies only pixels that differ from the encoded transparent key, with clipped extents and overlap-aware traversal. Pixel-key encoding still needs verification against app_server color-space semantics.
+
+
+## EDID/DDC/DVI and direct framebuffer access
+
+- The existing `Port::GetEDID()` path reads the EDID 1.x base structure using Haiku's `ddc2_read_edid1()` helper. The port layer configures GPIO/I2C DDC for legacy ports and DP AUX-I2C for DisplayPort/DDI, with a per-port fallback hook.
+- Legacy DVI detection remains a conservative fallback after DisplayPort/HDMI discovery and validates presence by successfully reading EDID. DVI is not inferred solely from a PCI ID or connector register.
+- `B_GET_EDID_INFO` now rejects null output/version pointers and undersized output buffers. The hook still exports Haiku's `edid1_info` structure; this is not a raw 128-byte-block/extension API.
+- **E-EDID extension limitation:** this path currently calls `ddc2_read_edid1()` and exposes only Haiku's parsed EDID 1.x structure. It does not preserve or expose arbitrary raw extension blocks (for example CTA-861 data blocks) to clients. Full extension-block transport/validation needs a suitable Haiku common DDC API or a separately designed raw-EDID interface; do not claim complete E-EDID extension support.
+- `B_PARALLEL_ACCESS` is now set on enumerated and proposed modes because the framebuffer is CPU mapped and the accelerant's 2D operations execute synchronously on the CPU. This advertises concurrent framebuffer access; it does not imply hardware validation of every PCI ID or guarantee that an untested chipset's display initialization is safe.

@@ -352,6 +352,7 @@ def main() -> int:
         and "set_display_power_mode(sharedInfo.dpms_mode);" not in failed_block
         and "releaseFailedBuffer" in failed_block
         and "fallbackStatus = fallbackSize != 0" in failed_block
+        and "((size_t)-1) / sharedInfo.current_mode.virtual_height" in failed_block
         and "sharedInfo.frame_buffer = 0;" in failed_block,
         "failed modesets must keep DPMS off and recover framebuffer ownership",
     )

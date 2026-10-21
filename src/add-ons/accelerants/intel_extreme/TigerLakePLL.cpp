@@ -123,7 +123,7 @@ ComputeHdmiDpll(int freq, int* Pdiv, int* Qdiv, int* Kdiv, float* bestdco)
 	const float dcomax = 10000;
 	const float dcomid = (dcomin + dcomax) / 2;
 
-	float afeclk = (5 * freq) / 1000;
+	float afeclk = (5.0f * freq) / 1000.0f;
 
 	for (size_t i = 0; i < B_COUNT_OF(dividerlist); i++) {
 		int div = dividerlist[i];

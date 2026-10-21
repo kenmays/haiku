@@ -690,6 +690,7 @@ intel_set_display_mode(display_mode* mode)
 		// switched before a later output failed. Best-effort restore the prior
 		// mode on every still-connected output while the old allocation is
 		// still alive.
+		bool restoreFailed = false;
 		if (oldFrameBuffer != 0 && oldMode.timing.h_display != 0
 			&& oldMode.timing.v_display != 0) {
 			uint32 oldColorMode, oldBytesPerRow, oldBitsPerPixel;
@@ -706,38 +707,38 @@ intel_set_display_mode(display_mode* mode)
 					status_t restoreStatus = port->SetDisplayMode(&oldPortMode,
 						oldColorMode);
 					if (restoreStatus != B_OK) {
+						restoreFailed = true;
 						ERROR("%s: Failed to restore previous mode on port %u "
 							"(status %d)\n", __func__, i, (int)restoreStatus);
 					}
 				}
 				program_pipe_color_modes(oldColorMode);
 				set_frame_buffer_base();
+			} else {
+				restoreFailed = true;
 			}
 		}
 
-		intel_free_memory(base);
-		set_display_power_mode(sharedInfo.dpms_mode);
+		if (restoreFailed) {
+			// A failed rollback leaves scanout ownership uncertain. Keep the new
+			// allocation alive and leave outputs powered down rather than risk a
+			// use-after-free by the display engine.
+			ERROR("%s: rollback incomplete; retaining replacement framebuffer\n",
+				__func__);
+			set_display_power_mode(B_DPMS_OFF);
+		} else {
+			intel_free_memory(base);
+			set_display_power_mode(sharedInfo.dpms_mode);
+		}
 		return portStatus;
 	}
 
 	TRACE("%s: Port configuration completed successfully!\n", __func__);
 
-	// The new mode was accepted by all connected ports; release the old
-	// framebuffer only after that point.
-	intel_free_memory(oldFrameBuffer);
-
-	// We set the same color mode across all pipes
+	// The new mode was accepted by all connected ports. Keep scanout
+	// powered down while pitch and the replacement surface are programmed.
 	program_pipe_color_modes(colorMode);
 
-	// TODO: This may not be neccesary (see DPMS OFF at top)
-	set_display_power_mode(sharedInfo.dpms_mode);
-
-	// Changing bytes per row seems to be ignored if the plane/pipe is turned
-	// off
-
-	// Always set both pipes, just in case
-	// TODO rework this when we get multiple head support with different
-	// resolutions
 	if (sharedInfo.device_type.InFamily(INTEL_FAMILY_LAKE)) {
 		write32(INTEL_DISPLAY_A_BYTES_PER_ROW, bytesPerRow >> 6);
 		write32(INTEL_DISPLAY_B_BYTES_PER_ROW, bytesPerRow >> 6);
@@ -746,14 +747,17 @@ intel_set_display_mode(display_mode* mode)
 		write32(INTEL_DISPLAY_B_BYTES_PER_ROW, bytesPerRow);
 	}
 
-	// update shared info
+	// Publish the new shared mode before programming its generation-specific
+	// scanout offsets. The old allocation remains alive until after the new
+	// surface has been programmed and a bounded vblank wait has elapsed.
 	sharedInfo.current_mode = target;
 	sharedInfo.bytes_per_row = bytesPerRow;
 	sharedInfo.bits_per_pixel = bitsPerPixel;
-
 	set_frame_buffer_base();
-		// triggers writing back double-buffered registers
-		// which is INTEL_DISPLAY_X_BYTES_PER_ROW only apparantly
+
+	set_display_power_mode(sharedInfo.dpms_mode);
+	wait_for_vblank();
+	intel_free_memory(oldFrameBuffer);
 
 	// Second register dump
 	//dump_registers();

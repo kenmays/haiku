@@ -1139,13 +1139,6 @@ AnalogPort::SetDisplayMode(display_mode* target, uint32 colorMode)
 		return B_ERROR;
 	}
 
-	// VBT panel timings can differ from the requested mode. Validate the actual
-	// hardware timing before touching the fitter, FDI, PLL, or pipe registers.
-	if (is_interlaced_timing(hardwareTarget)) {
-		ERROR("%s: Interlaced LVDS panel timing is not supported yet!\n", __func__);
-		return B_NOT_SUPPORTED;
-	}
-
 	// Setup PanelFitter and Train FDI if it exists
 	PanelFitter* fitter = fPipe->PFT();
 	if (fitter != NULL)
@@ -1389,6 +1382,13 @@ LVDSPort::SetDisplayMode(display_mode* target, uint32 colorMode)
 		// We don't have VBT data, try to set the requested mode directly
 		// and hope for the best
 		hardwareTarget = target->timing;
+	}
+
+	// VBT panel timings can differ from the requested mode. Validate the actual
+	// hardware timing before touching the fitter, FDI, PLL, or pipe registers.
+	if (is_interlaced_timing(hardwareTarget)) {
+		ERROR("%s: Interlaced LVDS panel timing is not supported yet!\n", __func__);
+		return B_NOT_SUPPORTED;
 	}
 
 	// Setup PanelFitter and Train FDI if it exists

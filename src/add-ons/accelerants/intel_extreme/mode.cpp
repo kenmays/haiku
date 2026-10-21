@@ -411,7 +411,7 @@ intel_set_display_mode(display_mode* mode)
 			return B_NOT_SUPPORTED;
 		if (pipe->Index() == INTEL_PIPE_C || pipe->Index() == INTEL_PIPE_D) {
 			ERROR("%s: Pipe C/D modesetting requires per-head scanout support; "
-				"refusing unsafe shared-framebuffer modeset.\\n", __func__);
+				"refusing unsafe shared-framebuffer modeset.\n", __func__);
 			return B_NOT_SUPPORTED;
 		}
 	}

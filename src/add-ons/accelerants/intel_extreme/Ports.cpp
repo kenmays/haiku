@@ -1803,6 +1803,56 @@ DisplayPort::SetupI2c(i2c_bus *bus)
 }
 
 
+// Discover HDMI 2.1 Protocol Converter (PCON) capabilities over native AUX.
+// This is capability discovery only: FRL/DSC modes must not be exposed until
+// source-side DSC, PCON configuration, FRL training, and status recovery exist.
+void
+DisplayPort::_ProbePconCapabilities()
+{
+	if (gInfo->shared_info->device_type.Generation() < 11)
+		return;
+
+	uint8 frlCapabilities = 0;
+	dp_aux_msg message;
+	memset(&message, 0, sizeof(message));
+	message.address = 0x0080; // DPCD downstream-facing port capabilities
+	message.request = DP_AUX_NATIVE_READ;
+	message.buffer = &frlCapabilities;
+	message.size = sizeof(frlCapabilities);
+
+	status_t status = (status_t)_DpAuxTransfer(&message);
+	if (status != B_OK) {
+		TRACE("%s: no readable PCON capability block on %s (status %d)\n",
+			__func__, PortName(), (int)status);
+		return;
+	}
+
+	uint8 maxFrl = (frlCapabilities >> 2) & 0x07;
+	if (maxFrl == 0) {
+		TRACE("%s: downstream converter does not advertise HDMI FRL on %s\n",
+			__func__, PortName());
+		return;
+	}
+
+	static const uint32 kFrlRates[] = {0, 9, 18, 24, 32, 40, 48};
+	TRACE("%s: HDMI PCON advertises FRL up to %" B_PRIu32
+		" Gbit/s on %s%s\n", __func__, kFrlRates[maxFrl], PortName(),
+		(frlCapabilities & (1 << 5)) != 0 ? " (source-controlled mode)" : "");
+
+	uint8 dscCapabilities = 0;
+	memset(&message, 0, sizeof(message));
+	message.address = 0x0092; // DP-HDMI 2.1 PCON DSC encoder capabilities
+	message.request = DP_AUX_NATIVE_READ;
+	message.buffer = &dscCapabilities;
+	message.size = sizeof(dscCapabilities);
+	status = (status_t)_DpAuxTransfer(&message);
+	if (status == B_OK && (dscCapabilities & 0x01) != 0) {
+		TRACE("%s: HDMI PCON advertises DSC encoding on %s; mode use remains disabled until "
+			"DSC/PPS and FRL training are implemented\n", __func__, PortName());
+	}
+}
+
+
 bool
 DisplayPort::IsConnected()
 {
@@ -1841,6 +1891,7 @@ DisplayPort::IsConnected()
 	}
 
 	TRACE("%s: %s link detected\n", __func__, PortName());
+	_ProbePconCapabilities();
 	bool edidDetected = HasEDID();
 
 	// On laptops we always have an internal panel.. (this is on the eDP port)

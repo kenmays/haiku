@@ -2034,6 +2034,67 @@ DisplayPort::_SetPortLinkGen4(const display_timing& timing)
 	uint32 bitsPerPixel = 24;	//fixme: always so?
 	uint32 lanes = 4;			//fixme: always so?
 
+	// For DP/eDP, reject a mode that cannot fit over the currently selected
+	// 8b/10b link. linkBandwidth is the encoded link clock (rate / 10), so
+	// each lane carries linkBandwidth * 8 payload bits per second in kHz units.
+	// This is a safety check, not link training; source PLL setup is separate.
+	uint32 ddiMode = (pipeFunc & PIPE_DDI_MODESEL_MASK) >> PIPE_DDI_MODESEL_SHIFT;
+	if (ddiMode == PIPE_DDI_MODE_DP_SST || ddiMode == PIPE_DDI_MODE_DP_MST) {
+		uint64 requiredBandwidth = (uint64)timing.pixel_clock * bitsPerPixel * 21 / 20;
+		uint64 availableBandwidth = (uint64)lanes * linkBandwidth * 8;
+		if (lanes == 0 || lanes > 4 || requiredBandwidth > availableBandwidth) {
+			ERROR("%s: DP mode exceeds selected link capacity: required=%" B_PRIu64
+				" kbit/s available=%" B_PRIu64 " kbit/s lanes=%" B_PRIu32
+				" link-clock=%" B_PRIu32 " kHz\\n", __func__, requiredBandwidth,
+				availableBandwidth, lanes, linkBandwidth);
+			return B_BAD_VALUE;
+		}
+
+		// Confirm that the receiver advertises at least the link rate and lane
+		// count selected by the source. Capabilities are not negotiated link
+		// state and do not replace the DP training sequence.
+		uint8 receiverCaps[3] = {};
+		dp_aux_msg message;
+		memset(&message, 0, sizeof(message));
+		message.address = 0x0000;
+		message.request = DP_AUX_NATIVE_READ;
+		message.buffer = receiverCaps;
+		message.size = sizeof(receiverCaps);
+		status_t auxStatus = (status_t)_DpAuxTransfer(&message);
+		if (auxStatus != B_OK || message.size < sizeof(receiverCaps)) {
+			ERROR("%s: unable to verify DP receiver link limits on %s\\n",
+				__func__, PortName());
+			return auxStatus != B_OK ? auxStatus : B_IO_ERROR;
+		}
+
+		uint32 receiverLinkClock;
+		switch (receiverCaps[1]) {
+			case 0x06:
+				receiverLinkClock = 162000;
+				break;
+			case 0x0a:
+				receiverLinkClock = 270000;
+				break;
+			case 0x14:
+				receiverLinkClock = 540000;
+				break;
+			case 0x1e:
+				receiverLinkClock = 810000;
+				break;
+			default:
+				ERROR("%s: unsupported DP receiver link-rate code 0x%02x on %s\\n",
+					__func__, receiverCaps[1], PortName());
+				return B_NOT_SUPPORTED;
+		}
+		uint32 receiverLanes = receiverCaps[2] & 0x1f;
+		if (linkBandwidth > receiverLinkClock || lanes > receiverLanes) {
+			ERROR("%s: selected DP link exceeds receiver limits (source %u kHz/%u lanes, "
+				"receiver %u kHz/%u lanes) on %s\\n", __func__, linkBandwidth,
+				lanes, receiverLinkClock, receiverLanes, PortName());
+			return B_BAD_VALUE;
+		}
+	}
+
 	//Setup Data M/N
 	uint64 linkspeed = lanes * linkBandwidth * 8;
 	uint64 ret_n = 1;

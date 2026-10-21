@@ -1475,17 +1475,25 @@ DigitalPort::SetDisplayMode(display_mode* target, uint32 colorMode)
 		return B_ERROR;
 	}
 
-	// Setup PanelFitter and Train FDI if it exists
+	// This path programs the requested timings directly; it does not
+	// configure scaling, so make sure a previously enabled fitter is bypassed.
 	PanelFitter* fitter = fPipe->PFT();
 	if (fitter != NULL)
-		fitter->Enable(target->timing);
+		fitter->Disable();
+
 	FDILink* link = fPipe->FDI();
 	if (link != NULL) {
 		uint32 lanes = 0;
 		uint32 linkBandwidth = 0;
 		uint32 bitsPerPixel = 0;
 		link->PreTrain(&target->timing, &linkBandwidth, &lanes, &bitsPerPixel);
-		fPipe->SetFDILink(target->timing, linkBandwidth, lanes, bitsPerPixel);
+		status_t linkStatus = fPipe->SetFDILink(target->timing, linkBandwidth,
+			lanes, bitsPerPixel);
+		if (linkStatus != B_OK) {
+			ERROR("%s: Failed to configure FDI link on %s (status %d)\n",
+				__func__, PortName(), (int)linkStatus);
+			return linkStatus;
+		}
 		link->Train(&target->timing, lanes);
 	}
 

@@ -624,6 +624,10 @@ intel_clone_accelerant(void* info)
 	status_t status = init_common(fd, true);
 	if (status != B_OK)
 		goto err1;
+	if (gInfo->pipe_count == 0) {
+		uninit_common();
+		return B_NO_MEMORY;
+	}
 
 	// get read-only clone of supported display modes
 	status = gInfo->mode_list_area = clone_area(

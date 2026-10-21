@@ -2765,7 +2765,12 @@ DigitalDisplayInterface::SetDisplayMode(display_mode* target, uint32 colorMode)
 
 	// Program target display mode
 	fPipe->ConfigureTimings(target, !needsScaling);
-	_SetPortLinkGen8(hardwareTarget, pllSel);
+	status_t linkStatus = _SetPortLinkGen8(hardwareTarget, pllSel);
+	if (linkStatus != B_OK) {
+		ERROR("%s: Failed to configure display link on %s (status %d)\n",
+			__func__, PortName(), (int)linkStatus);
+		return linkStatus;
+	}
 
 	// Set fCurrentMode to our set display mode
 	memcpy(&fCurrentMode, target, sizeof(display_mode));

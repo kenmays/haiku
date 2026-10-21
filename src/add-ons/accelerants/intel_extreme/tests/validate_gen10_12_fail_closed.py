@@ -109,6 +109,7 @@ def main() -> int:
     cursor_shape = function_body(cursor, "intel_set_cursor_shape(")
     cursor_move = function_body(cursor, "static void\nmove_cursor(")
     cursor_show = function_body(cursor, "intel_show_cursor(")
+    cursor_offsets = function_body(cursor, "get_cursor_pipe_offsets(")
     require(
         "x -= gInfo->shared_info->cursor_hot_x;" in cursor_move
         and "y -= gInfo->shared_info->cursor_hot_y;" in cursor_move,
@@ -148,6 +149,14 @@ def main() -> int:
     )
 
     require(
+        all(token in cursor_offsets for token in (
+            "case INTEL_PIPE_A:", "case INTEL_PIPE_B:", "case INTEL_PIPE_C:",
+            "case INTEL_PIPE_D:", "offsets[count++] = offset;",
+        ))
+        and "INTEL_CURSOR_POSITION + pipeOffsets[0]" in cursor_shape,
+        "legacy cursor register access must follow assigned display pipes",
+    )
+    require(
         "memset(data, 0, 64 * 16);" in cursor_shape
         and "memset(data + 16 * y, 0xff, 8);" in cursor_shape
         and "hotX >= width || hotY >= height" in cursor_shape
@@ -157,7 +166,7 @@ def main() -> int:
         and "x = CURSOR_POSITION_MASK;" in cursor_move
         and "y = CURSOR_POSITION_MASK;" in cursor_move
         and "if (!isVisible)" in cursor_show
-        and "write32(INTEL_CURSOR_CONTROL, 0);" in cursor_show,
+        and "write32(INTEL_CURSOR_CONTROL + pipeOffsets[i], 0);" in cursor_show,
         "cursor shape updates must clear stale mask data and preserve hidden state",
     )
 

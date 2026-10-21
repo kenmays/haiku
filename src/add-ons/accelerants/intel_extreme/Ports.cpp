@@ -2754,6 +2754,83 @@ DigitalDisplayInterface::_SetPortLinkGen8(const display_timing& timing, uint32 p
 }
 
 status_t
+DigitalDisplayInterface::_ValidateGen12DpLink()
+{
+	if (gInfo->shared_info->device_type.Generation() < 12 || fPipe == NULL)
+		return B_OK;
+
+	uint32 mode = fPipe->TranscoderMode();
+	if (mode != PIPE_DDI_MODE_DP_SST && mode != PIPE_DDI_MODE_DP_MST)
+		return B_OK;
+
+	// Only reuse a BIOS-trained 2.7 Gbit/s link. This driver does not yet
+	// implement link-rate selection or the DP clock-recovery/equalization
+	// training sequence, so fail before modeset writes if the existing link
+	// configuration/status does not match the supported fixed-rate path.
+	uint32 pipeOffset = fPipe->Index() == INTEL_PIPE_B ? 0x1000 : 0;
+	uint32 pipeFunc = read32(PIPE_DDI_FUNC_CTL_A + pipeOffset);
+	uint32 width = (pipeFunc & PIPE_DDI_DP_WIDTH_MASK) >> PIPE_DDI_DP_WIDTH_SHIFT;
+	uint32 lanes;
+	switch (width) {
+		case PIPE_DDI_DP_WIDTH_1:
+			lanes = 1;
+			break;
+		case PIPE_DDI_DP_WIDTH_2:
+			lanes = 2;
+			break;
+		case PIPE_DDI_DP_WIDTH_4:
+			lanes = 4;
+			break;
+		default:
+			return B_BAD_VALUE;
+	}
+
+	uint8 linkConfig[2] = {0, 0};
+	dp_aux_msg message;
+	memset(&message, 0, sizeof(message));
+	message.address = 0x100; // DPCD LINK_BW_SET
+	message.buffer = linkConfig;
+	message.request = DP_AUX_NATIVE_READ;
+	message.size = sizeof(linkConfig);
+	status_t status = _DpAuxTransfer(&message);
+	if (status != B_OK)
+		return status;
+
+	if (linkConfig[0] != 0x0a || (linkConfig[1] & 0x1f) != lanes) {
+		ERROR("%s: %s DP link is not configured for 2.7 Gbit/s and %" B_PRIu32
+			" lane(s); link training is not implemented\n", __func__, PortName(), lanes);
+		return B_NOT_SUPPORTED;
+	}
+
+	uint8 linkStatus[3] = {0, 0, 0};
+	memset(&message, 0, sizeof(message));
+	message.address = 0x202; // DPCD LANE0_1_STATUS through LANE_ALIGN_STATUS
+	message.buffer = linkStatus;
+	message.request = DP_AUX_NATIVE_READ;
+	message.size = sizeof(linkStatus);
+	status = _DpAuxTransfer(&message);
+	if (status != B_OK)
+		return status;
+
+	for (uint32 lane = 0; lane < lanes; lane++) {
+		uint8 laneStatus = (linkStatus[lane / 2] >> ((lane % 2) * 4)) & 0x0f;
+		if ((laneStatus & 0x07) != 0x07) {
+			ERROR("%s: %s DP lane %" B_PRIu32
+				" is not clock-recovered/equalized; link training is not implemented\n",
+				__func__, PortName(), lane);
+			return B_NOT_SUPPORTED;
+		}
+	}
+	if ((linkStatus[2] & 0x01) == 0) {
+		ERROR("%s: %s DP lane alignment is not complete\n", __func__, PortName());
+		return B_NOT_SUPPORTED;
+	}
+
+	return B_OK;
+}
+
+
+status_t
 DigitalDisplayInterface::SetDisplayMode(display_mode* target, uint32 colorMode)
 {
 	CALLED();
@@ -2853,6 +2930,10 @@ DigitalDisplayInterface::SetDisplayMode(display_mode* target, uint32 colorMode)
 			__func__, PortName());
 		return bandwidthStatus;
 	}
+
+	status_t dpLinkStatus = _ValidateGen12DpLink();
+	if (dpLinkStatus != B_OK)
+		return dpLinkStatus;
 
 	// Setup PanelFitter
 	PanelFitter* fitter = fPipe->PFT();

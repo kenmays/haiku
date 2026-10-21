@@ -67,11 +67,12 @@ get_color_space_format(const display_mode &mode, uint32 &colorMode,
 			bitsPerPixel = 16;
 			break;
 		case B_RGB15_LITTLE:
-			if (gInfo->shared_info->device_type.InFamily(INTEL_FAMILY_LAKE)) {
-				colorMode = DISPLAY_CONTROL_RGB15_SKY;
-			} else {
-				colorMode = DISPLAY_CONTROL_RGB15;
-			}
+			// The mode list intentionally omits RGB15 on Gen4+; reject
+			// callers that request it directly instead of programming an
+			// unsupported plane format.
+			if (gInfo->shared_info->device_type.Generation() >= 4)
+				return B_BAD_VALUE;
+			colorMode = DISPLAY_CONTROL_RGB15;
 			bytesPerPixel = 2;
 			bitsPerPixel = 15;
 			break;
@@ -314,6 +315,9 @@ intel_propose_display_mode(display_mode* target, const display_mode* low,
 {
 	CALLED();
 
+	if (target == NULL || low == NULL || high == NULL)
+		return B_BAD_VALUE;
+
 	display_mode mode = *target;
 
 	if (sanitize_display_mode(*target)) {
@@ -363,7 +367,7 @@ intel_set_display_mode(display_mode* mode)
 	// size_t on 32-bit builds.
 	uint64 framebufferSize64 = (uint64)bytesPerRow * target.virtual_height;
 	if (bytesPerRow == 0 || target.virtual_height == 0
-		|| framebufferSize64 > (uint64)(size_t)-1) {
+		|| framebufferSize64 > (uint64)((size_t)-1)) {
 		ERROR("%s: Invalid framebuffer dimensions/size!\n", __func__);
 		return B_BAD_VALUE;
 	}

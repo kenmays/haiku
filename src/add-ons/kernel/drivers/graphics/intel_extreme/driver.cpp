@@ -159,7 +159,6 @@ const struct supported_device {
 	{0x0d2b, INTEL_MODEL_HAS,  "Haswell CRW GT3 Reserved"},
 	{0x0d2e, INTEL_MODEL_HASM, "Haswell CRW GT3 Reserved Mobile"},
 
-#if 0
 	{0x0f30, INTEL_MODEL_VLVM, "ValleyView Mobile"},
 	{0x0f31, INTEL_MODEL_VLVM, "ValleyView Mobile"},
 	{0x0f32, INTEL_MODEL_VLVM, "ValleyView Mobile"},
@@ -169,7 +168,7 @@ const struct supported_device {
 	{0x22b1, INTEL_MODEL_CHVM, "Braswell GT1"},
 	{0x22b2, INTEL_MODEL_CHVM, "Cherryview"},
 	{0x22b3, INTEL_MODEL_CHVM, "Cherryview"},
-#endif
+
 
 	{0x1606, INTEL_MODEL_BDWM, "Broadwell GT1 ULT"},
 	{0x160b, INTEL_MODEL_BDWM, "Broadwell GT1 Iris"},
@@ -319,10 +318,221 @@ const struct supported_device {
 
 	{0x46a6, INTEL_MODEL_ALDM,  "Alder Lake-P GT2"},
 	{0x46d1, INTEL_MODEL_ALDM,  "Alder Lake-N"},
-#if 0
 	{0x46a8, INTEL_MODEL_ALDM,  "Alder Lake-UP3 GT2"},
-#endif
 
+
+
+	// Remaining upstream Linux i915/xe IDs. ID import is not hardware-validation.
+
+	// Ice Lake IDs imported from Linux i915/xe PCI table; closest existing Haiku model path.
+	{0x8a50, INTEL_MODEL_CFLM, "Ice Lake PCI 0x8a50"},
+	{0x8a54, INTEL_MODEL_CFLM, "Ice Lake PCI 0x8a54"},
+	{0x8a57, INTEL_MODEL_CFLM, "Ice Lake PCI 0x8a57"},
+	{0x8a58, INTEL_MODEL_CFLM, "Ice Lake PCI 0x8a58"},
+	{0x8a59, INTEL_MODEL_CFLM, "Ice Lake PCI 0x8a59"},
+	{0x8a5b, INTEL_MODEL_CFLM, "Ice Lake PCI 0x8a5b"},
+	{0x8a5d, INTEL_MODEL_CFLM, "Ice Lake PCI 0x8a5d"},
+	{0x8a70, INTEL_MODEL_CFLM, "Ice Lake PCI 0x8a70"},
+	{0x8a71, INTEL_MODEL_CFLM, "Ice Lake PCI 0x8a71"},
+
+	// Elkhart Lake IDs imported from Linux i915/xe PCI table; closest existing Haiku model path.
+	{0x4541, INTEL_MODEL_JSL, "Elkhart Lake PCI 0x4541"},
+	{0x4551, INTEL_MODEL_JSL, "Elkhart Lake PCI 0x4551"},
+	{0x4555, INTEL_MODEL_JSL, "Elkhart Lake PCI 0x4555"},
+	{0x4557, INTEL_MODEL_JSL, "Elkhart Lake PCI 0x4557"},
+	{0x4570, INTEL_MODEL_JSL, "Elkhart Lake PCI 0x4570"},
+	{0x4571, INTEL_MODEL_JSL, "Elkhart Lake PCI 0x4571"},
+
+	// Jasper Lake IDs imported from Linux i915/xe PCI table; closest existing Haiku model path.
+	{0x4e51, INTEL_MODEL_JSL, "Jasper Lake PCI 0x4e51"},
+	{0x4e57, INTEL_MODEL_JSL, "Jasper Lake PCI 0x4e57"},
+
+	// Tiger Lake IDs imported from Linux i915/xe PCI table; closest existing Haiku model path.
+	{0x9a59, INTEL_MODEL_TGLM, "Tiger Lake PCI 0x9a59"},
+	{0x9ac0, INTEL_MODEL_TGLM, "Tiger Lake PCI 0x9ac0"},
+	{0x9ac9, INTEL_MODEL_TGLM, "Tiger Lake PCI 0x9ac9"},
+	{0x9ad9, INTEL_MODEL_TGLM, "Tiger Lake PCI 0x9ad9"},
+	{0x9af8, INTEL_MODEL_TGLM, "Tiger Lake PCI 0x9af8"},
+
+	// Rocket Lake IDs imported from Linux i915/xe PCI table; closest existing Haiku model path.
+	{0x4c80, INTEL_MODEL_TGLM, "Rocket Lake PCI 0x4c80"},
+	{0x4c8a, INTEL_MODEL_TGLM, "Rocket Lake PCI 0x4c8a"},
+	{0x4c8b, INTEL_MODEL_TGLM, "Rocket Lake PCI 0x4c8b"},
+	{0x4c8c, INTEL_MODEL_TGLM, "Rocket Lake PCI 0x4c8c"},
+	{0x4c90, INTEL_MODEL_TGLM, "Rocket Lake PCI 0x4c90"},
+	{0x4c9a, INTEL_MODEL_TGLM, "Rocket Lake PCI 0x4c9a"},
+
+	// Alder Lake-S IDs imported from Linux i915/xe PCI table; closest existing Haiku model path.
+	{0x4680, INTEL_MODEL_ALDM, "Alder Lake-S PCI 0x4680"},
+	{0x4682, INTEL_MODEL_ALDM, "Alder Lake-S PCI 0x4682"},
+	{0x4688, INTEL_MODEL_ALDM, "Alder Lake-S PCI 0x4688"},
+	{0x468a, INTEL_MODEL_ALDM, "Alder Lake-S PCI 0x468a"},
+	{0x468b, INTEL_MODEL_ALDM, "Alder Lake-S PCI 0x468b"},
+	{0x4690, INTEL_MODEL_ALDM, "Alder Lake-S PCI 0x4690"},
+	{0x4692, INTEL_MODEL_ALDM, "Alder Lake-S PCI 0x4692"},
+	{0x4693, INTEL_MODEL_ALDM, "Alder Lake-S PCI 0x4693"},
+
+	// Alder Lake-P IDs imported from Linux i915/xe PCI table; closest existing Haiku model path.
+	{0x4626, INTEL_MODEL_ALDM, "Alder Lake-P PCI 0x4626"},
+	{0x4628, INTEL_MODEL_ALDM, "Alder Lake-P PCI 0x4628"},
+	{0x462a, INTEL_MODEL_ALDM, "Alder Lake-P PCI 0x462a"},
+	{0x46a0, INTEL_MODEL_ALDM, "Alder Lake-P PCI 0x46a0"},
+	{0x46a1, INTEL_MODEL_ALDM, "Alder Lake-P PCI 0x46a1"},
+	{0x46a2, INTEL_MODEL_ALDM, "Alder Lake-P PCI 0x46a2"},
+	{0x46a3, INTEL_MODEL_ALDM, "Alder Lake-P PCI 0x46a3"},
+	{0x46aa, INTEL_MODEL_ALDM, "Alder Lake-P PCI 0x46aa"},
+	{0x46b0, INTEL_MODEL_ALDM, "Alder Lake-P PCI 0x46b0"},
+	{0x46b1, INTEL_MODEL_ALDM, "Alder Lake-P PCI 0x46b1"},
+	{0x46b2, INTEL_MODEL_ALDM, "Alder Lake-P PCI 0x46b2"},
+	{0x46b3, INTEL_MODEL_ALDM, "Alder Lake-P PCI 0x46b3"},
+	{0x46c0, INTEL_MODEL_ALDM, "Alder Lake-P PCI 0x46c0"},
+	{0x46c1, INTEL_MODEL_ALDM, "Alder Lake-P PCI 0x46c1"},
+	{0x46c2, INTEL_MODEL_ALDM, "Alder Lake-P PCI 0x46c2"},
+	{0x46c3, INTEL_MODEL_ALDM, "Alder Lake-P PCI 0x46c3"},
+
+	// Alder Lake-N IDs imported from Linux i915/xe PCI table; closest existing Haiku model path.
+	{0x46d0, INTEL_MODEL_ALDM, "Alder Lake-N PCI 0x46d0"},
+	{0x46d2, INTEL_MODEL_ALDM, "Alder Lake-N PCI 0x46d2"},
+	{0x46d3, INTEL_MODEL_ALDM, "Alder Lake-N PCI 0x46d3"},
+	{0x46d4, INTEL_MODEL_ALDM, "Alder Lake-N PCI 0x46d4"},
+
+	// DG1 IDs imported from Linux xe PCI table; closest existing Haiku model path.
+	{0x4905, INTEL_MODEL_TGLM, "DG1 PCI 0x4905"},
+	{0x4906, INTEL_MODEL_TGLM, "DG1 PCI 0x4906"},
+	{0x4907, INTEL_MODEL_TGLM, "DG1 PCI 0x4907"},
+	{0x4908, INTEL_MODEL_TGLM, "DG1 PCI 0x4908"},
+	{0x4909, INTEL_MODEL_TGLM, "DG1 PCI 0x4909"},
+
+	// Raptor Lake-S IDs imported from Linux i915/xe PCI table; closest existing Haiku model path.
+	{0xa780, INTEL_MODEL_ALDM, "Raptor Lake-S PCI 0xa780"},
+	{0xa781, INTEL_MODEL_ALDM, "Raptor Lake-S PCI 0xa781"},
+	{0xa782, INTEL_MODEL_ALDM, "Raptor Lake-S PCI 0xa782"},
+	{0xa783, INTEL_MODEL_ALDM, "Raptor Lake-S PCI 0xa783"},
+	{0xa788, INTEL_MODEL_ALDM, "Raptor Lake-S PCI 0xa788"},
+	{0xa789, INTEL_MODEL_ALDM, "Raptor Lake-S PCI 0xa789"},
+	{0xa78a, INTEL_MODEL_ALDM, "Raptor Lake-S PCI 0xa78a"},
+	{0xa78b, INTEL_MODEL_ALDM, "Raptor Lake-S PCI 0xa78b"},
+
+	// Raptor Lake-U IDs imported from Linux i915/xe PCI table; closest existing Haiku model path.
+	{0xa721, INTEL_MODEL_ALDM, "Raptor Lake-U PCI 0xa721"},
+	{0xa7a1, INTEL_MODEL_ALDM, "Raptor Lake-U PCI 0xa7a1"},
+	{0xa7a9, INTEL_MODEL_ALDM, "Raptor Lake-U PCI 0xa7a9"},
+	{0xa7ac, INTEL_MODEL_ALDM, "Raptor Lake-U PCI 0xa7ac"},
+	{0xa7ad, INTEL_MODEL_ALDM, "Raptor Lake-U PCI 0xa7ad"},
+
+	// Raptor Lake-P IDs imported from Linux i915/xe PCI table; closest existing Haiku model path.
+	{0xa720, INTEL_MODEL_ALDM, "Raptor Lake-P PCI 0xa720"},
+	{0xa7a0, INTEL_MODEL_ALDM, "Raptor Lake-P PCI 0xa7a0"},
+	{0xa7a8, INTEL_MODEL_ALDM, "Raptor Lake-P PCI 0xa7a8"},
+	{0xa7aa, INTEL_MODEL_ALDM, "Raptor Lake-P PCI 0xa7aa"},
+	{0xa7ab, INTEL_MODEL_ALDM, "Raptor Lake-P PCI 0xa7ab"},
+
+	// DG2 IDs imported from Linux xe PCI table; closest existing Haiku model path.
+	{0x5690, INTEL_MODEL_TGLM, "DG2 PCI 0x5690"},
+	{0x5691, INTEL_MODEL_TGLM, "DG2 PCI 0x5691"},
+	{0x5692, INTEL_MODEL_TGLM, "DG2 PCI 0x5692"},
+	{0x5693, INTEL_MODEL_TGLM, "DG2 PCI 0x5693"},
+	{0x5694, INTEL_MODEL_TGLM, "DG2 PCI 0x5694"},
+	{0x5695, INTEL_MODEL_TGLM, "DG2 PCI 0x5695"},
+	{0x5696, INTEL_MODEL_TGLM, "DG2 PCI 0x5696"},
+	{0x5697, INTEL_MODEL_TGLM, "DG2 PCI 0x5697"},
+	{0x56a0, INTEL_MODEL_TGLM, "DG2 PCI 0x56a0"},
+	{0x56a1, INTEL_MODEL_TGLM, "DG2 PCI 0x56a1"},
+	{0x56a2, INTEL_MODEL_TGLM, "DG2 PCI 0x56a2"},
+	{0x56a3, INTEL_MODEL_TGLM, "DG2 PCI 0x56a3"},
+	{0x56a4, INTEL_MODEL_TGLM, "DG2 PCI 0x56a4"},
+	{0x56a5, INTEL_MODEL_TGLM, "DG2 PCI 0x56a5"},
+	{0x56a6, INTEL_MODEL_TGLM, "DG2 PCI 0x56a6"},
+	{0x56b0, INTEL_MODEL_TGLM, "DG2 PCI 0x56b0"},
+	{0x56b1, INTEL_MODEL_TGLM, "DG2 PCI 0x56b1"},
+	{0x56b2, INTEL_MODEL_TGLM, "DG2 PCI 0x56b2"},
+	{0x56b3, INTEL_MODEL_TGLM, "DG2 PCI 0x56b3"},
+	{0x56ba, INTEL_MODEL_TGLM, "DG2 PCI 0x56ba"},
+	{0x56bb, INTEL_MODEL_TGLM, "DG2 PCI 0x56bb"},
+	{0x56bc, INTEL_MODEL_TGLM, "DG2 PCI 0x56bc"},
+	{0x56bd, INTEL_MODEL_TGLM, "DG2 PCI 0x56bd"},
+	{0x56be, INTEL_MODEL_TGLM, "DG2 PCI 0x56be"},
+	{0x56bf, INTEL_MODEL_TGLM, "DG2 PCI 0x56bf"},
+
+	// Arctic Sound-M IDs imported from Linux xe PCI table; closest existing Haiku model path.
+	{0x56c0, INTEL_MODEL_TGLM, "Arctic Sound-M PCI 0x56c0"},
+	{0x56c1, INTEL_MODEL_TGLM, "Arctic Sound-M PCI 0x56c1"},
+	{0x56c2, INTEL_MODEL_TGLM, "Arctic Sound-M PCI 0x56c2"},
+
+	// Arrow Lake IDs imported from Linux xe PCI table; closest existing Haiku model path.
+	{0x7d41, INTEL_MODEL_TGLM, "Arrow Lake PCI 0x7d41"},
+	{0x7d51, INTEL_MODEL_TGLM, "Arrow Lake PCI 0x7d51"},
+	{0x7d67, INTEL_MODEL_TGLM, "Arrow Lake PCI 0x7d67"},
+	{0x7dd1, INTEL_MODEL_TGLM, "Arrow Lake PCI 0x7dd1"},
+	{0xb640, INTEL_MODEL_TGLM, "Arrow Lake PCI 0xb640"},
+
+	// Meteor Lake IDs imported from Linux xe PCI table; closest existing Haiku model path.
+	{0x7d40, INTEL_MODEL_TGLM, "Meteor Lake PCI 0x7d40"},
+	{0x7d45, INTEL_MODEL_TGLM, "Meteor Lake PCI 0x7d45"},
+	{0x7d55, INTEL_MODEL_TGLM, "Meteor Lake PCI 0x7d55"},
+	{0x7d60, INTEL_MODEL_TGLM, "Meteor Lake PCI 0x7d60"},
+	{0x7dd5, INTEL_MODEL_TGLM, "Meteor Lake PCI 0x7dd5"},
+
+	// Lunar Lake IDs imported from Linux xe PCI table; closest existing Haiku model path.
+	{0x6420, INTEL_MODEL_TGLM, "Lunar Lake PCI 0x6420"},
+	{0x64a0, INTEL_MODEL_TGLM, "Lunar Lake PCI 0x64a0"},
+	{0x64b0, INTEL_MODEL_TGLM, "Lunar Lake PCI 0x64b0"},
+
+	// Battlemage IDs imported from Linux xe PCI table; closest existing Haiku model path.
+	{0xe202, INTEL_MODEL_TGLM, "Battlemage PCI 0xe202"},
+	{0xe209, INTEL_MODEL_TGLM, "Battlemage PCI 0xe209"},
+	{0xe20b, INTEL_MODEL_TGLM, "Battlemage PCI 0xe20b"},
+	{0xe20c, INTEL_MODEL_TGLM, "Battlemage PCI 0xe20c"},
+	{0xe20d, INTEL_MODEL_TGLM, "Battlemage PCI 0xe20d"},
+	{0xe210, INTEL_MODEL_TGLM, "Battlemage PCI 0xe210"},
+	{0xe211, INTEL_MODEL_TGLM, "Battlemage PCI 0xe211"},
+	{0xe212, INTEL_MODEL_TGLM, "Battlemage PCI 0xe212"},
+	{0xe216, INTEL_MODEL_TGLM, "Battlemage PCI 0xe216"},
+	{0xe220, INTEL_MODEL_TGLM, "Battlemage PCI 0xe220"},
+	{0xe221, INTEL_MODEL_TGLM, "Battlemage PCI 0xe221"},
+	{0xe222, INTEL_MODEL_TGLM, "Battlemage PCI 0xe222"},
+	{0xe223, INTEL_MODEL_TGLM, "Battlemage PCI 0xe223"},
+
+	// Panther Lake IDs imported from Linux xe PCI table; closest existing Haiku model path.
+	{0xb080, INTEL_MODEL_TGLM, "Panther Lake PCI 0xb080"},
+	{0xb081, INTEL_MODEL_TGLM, "Panther Lake PCI 0xb081"},
+	{0xb082, INTEL_MODEL_TGLM, "Panther Lake PCI 0xb082"},
+	{0xb083, INTEL_MODEL_TGLM, "Panther Lake PCI 0xb083"},
+	{0xb084, INTEL_MODEL_TGLM, "Panther Lake PCI 0xb084"},
+	{0xb085, INTEL_MODEL_TGLM, "Panther Lake PCI 0xb085"},
+	{0xb086, INTEL_MODEL_TGLM, "Panther Lake PCI 0xb086"},
+	{0xb087, INTEL_MODEL_TGLM, "Panther Lake PCI 0xb087"},
+	{0xb08f, INTEL_MODEL_TGLM, "Panther Lake PCI 0xb08f"},
+	{0xb090, INTEL_MODEL_TGLM, "Panther Lake PCI 0xb090"},
+	{0xb0a0, INTEL_MODEL_TGLM, "Panther Lake PCI 0xb0a0"},
+	{0xb0b0, INTEL_MODEL_TGLM, "Panther Lake PCI 0xb0b0"},
+
+	// Wildcat Lake IDs imported from Linux xe PCI table; closest existing Haiku model path.
+	{0xfd80, INTEL_MODEL_TGLM, "Wildcat Lake PCI 0xfd80"},
+	{0xfd81, INTEL_MODEL_TGLM, "Wildcat Lake PCI 0xfd81"},
+
+	// Nova Lake-S IDs imported from Linux xe PCI table; closest existing Haiku model path.
+	{0xd740, INTEL_MODEL_TGLM, "Nova Lake-S PCI 0xd740"},
+	{0xd741, INTEL_MODEL_TGLM, "Nova Lake-S PCI 0xd741"},
+	{0xd742, INTEL_MODEL_TGLM, "Nova Lake-S PCI 0xd742"},
+	{0xd743, INTEL_MODEL_TGLM, "Nova Lake-S PCI 0xd743"},
+	{0xd745, INTEL_MODEL_TGLM, "Nova Lake-S PCI 0xd745"},
+	{0xd74a, INTEL_MODEL_TGLM, "Nova Lake-S PCI 0xd74a"},
+	{0xd74b, INTEL_MODEL_TGLM, "Nova Lake-S PCI 0xd74b"},
+
+	// Crescent Island IDs imported from Linux xe PCI table; closest existing Haiku model path.
+	{0x674c, INTEL_MODEL_TGLM, "Crescent Island PCI 0x674c"},
+	{0x674d, INTEL_MODEL_TGLM, "Crescent Island PCI 0x674d"},
+	{0x674e, INTEL_MODEL_TGLM, "Crescent Island PCI 0x674e"},
+	{0x674f, INTEL_MODEL_TGLM, "Crescent Island PCI 0x674f"},
+	{0x6750, INTEL_MODEL_TGLM, "Crescent Island PCI 0x6750"},
+
+	// Nova Lake-P IDs imported from Linux xe PCI table; closest existing Haiku model path.
+	{0xd750, INTEL_MODEL_TGLM, "Nova Lake-P PCI 0xd750"},
+	{0xd751, INTEL_MODEL_TGLM, "Nova Lake-P PCI 0xd751"},
+	{0xd752, INTEL_MODEL_TGLM, "Nova Lake-P PCI 0xd752"},
+	{0xd753, INTEL_MODEL_TGLM, "Nova Lake-P PCI 0xd753"},
+	{0xd75f, INTEL_MODEL_TGLM, "Nova Lake-P PCI 0xd75f"},
 };
 
 int32 api_version = B_CUR_DRIVER_API_VERSION;

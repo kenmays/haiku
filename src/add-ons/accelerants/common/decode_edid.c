@@ -268,14 +268,17 @@ decode_cta_block(edid1_info *edid, const cta_raw *raw)
 	edid->cta_block.underscan = raw->underscan;
 	edid->cta_block.num_data_blocks = 0;
 
-	if (raw->offset >= 4) {
-		for (i = 4; i < raw->offset;) {
+	{
+		// With offset zero there are no detailed timings; the data-block
+		// collection can still occupy bytes 4 through 126.
+		unsigned int dataEnd = raw->offset == 0 ? 127 : raw->offset;
+		for (i = 4; i < dataEnd;) {
 			cta_data_block* block;
 			size_t blockLength;
 
 			block = (cta_data_block*)&((const uint8*)raw)[i];
 			blockLength = (block->length & 0x1f) + 1;
-			if (i + blockLength > raw->offset)
+			if (i + blockLength > dataEnd)
 				return;
 
 			if (edid->cta_block.num_data_blocks

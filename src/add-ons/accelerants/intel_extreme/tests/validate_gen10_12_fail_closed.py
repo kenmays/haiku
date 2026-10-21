@@ -157,6 +157,18 @@ def main() -> int:
         and "INTEL_CURSOR_POSITION + pipeOffsets[0]" in cursor_shape,
         "legacy cursor register access must follow assigned display pipes",
     )
+
+    # Preserve the audited legacy offsets only for the legacy path. These are
+    # not a Gen12 mapping; Gen12 hooks above must stay gated until a dedicated
+    # per-pipe cursor register implementation is added.
+    require(
+        "offset = 0;" in cursor_offsets
+        and "offset = 0x1000;" in cursor_offsets
+        and "offset = 0x2000;" in cursor_offsets
+        and "offset = 0xf000;" in cursor_offsets
+        and hooks[cursor_hook_start:cursor_hook_end].count("Generation() < 12") >= 3,
+        "legacy cursor offsets must not be mistaken for a Gen12 pipe-offset map",
+    )
     cursor_show_loop = cursor_show[cursor_show.rfind("for (uint32 i = 0; i < pipeCount; i++)"):]
     require(
         cursor_show_loop.find("write32(INTEL_CURSOR_BASE + offset")

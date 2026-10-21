@@ -130,7 +130,7 @@ The current source audit therefore establishes a concrete blocker list rather th
 
 ### Follow-up: pipe cursor offsets cross-check
 
-The upstream i915 display-device table defines the Gen12/Tiger Lake cursor offset set as A=0x70080, B=0x71080, C=0x72080, and D=0x73080 (the set is named TGL_CURSOR_OFFSETS). The same Gen12 display-device family uses per-pipe cursor offsets rather than deriving every cursor register from one generic pipe stride. Rocket Lake is a Gen12 display platform in i915's platform tables, so this is a relevant reference for the target generation:
+The upstream i915 display-device table defines a generation-specific cursor offset set named TGL_CURSOR_OFFSETS: A=0x70080, B=0x700c0, C=0x72080, and D=0x73080. The same Gen12 display-device family uses per-pipe cursor offsets rather than deriving every cursor register from one generic pipe stride. Rocket Lake is a Gen12 display platform in i915's platform tables, so this is a relevant reference for the target generation:
 - https://github.com/torvalds/linux/blob/master/drivers/gpu/drm/i915/display/intel_display_device.c
 - https://github.com/torvalds/linux/blob/master/drivers/gpu/drm/i915/display/intel_display_device.h
 

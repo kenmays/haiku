@@ -132,6 +132,12 @@ def main() -> int:
         "cursor shape must reject empty dimensions and null masks",
     )
 
+    require(
+        "hardwareCursor && info.device_type.Generation() < 12" in kernel
+        and "Gen12+ hardware cursor remains disabled" in kernel,
+        "kernel must not allocate the legacy cursor buffer for unvalidated Gen12+",
+    )
+
     # DPLL transitions must time out rather than hang, and the DDI modeset
     # caller must stop when PLL programming fails.
     require(

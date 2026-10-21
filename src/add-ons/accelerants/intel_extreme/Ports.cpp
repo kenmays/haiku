@@ -2785,13 +2785,13 @@ DigitalDisplayInterface::SetDisplayMode(display_mode* target, uint32 colorMode)
 		TRACE("PLL configuration before changes: %" B_PRIx32 "\n", config);
 		if (chosenPLL == 0) {
 			config |= TGL_DPCLKA_DDIA_CLOCK_OFF;
-			config &= TGL_DPCLKA_DDIA_CLOCK_SELECT;
+			config &= ~TGL_DPCLKA_DDIA_CLOCK_SELECT;
 			write32(TGL_DPCLKA_CFGCR0, config);
 			config &= ~TGL_DPCLKA_DDIA_CLOCK_OFF;
 			write32(TGL_DPCLKA_CFGCR0, config);
 		} else {
 			config |= TGL_DPCLKA_DDIB_CLOCK_OFF;
-			config &= TGL_DPCLKA_DDIB_CLOCK_SELECT;
+			config &= ~TGL_DPCLKA_DDIB_CLOCK_SELECT;
 			config |= 1 << TGL_DPCLKA_DDIB_CLOCK_SELECT_SHIFT;
 			write32(TGL_DPCLKA_CFGCR0, config);
 			config &= ~TGL_DPCLKA_DDIB_CLOCK_OFF;

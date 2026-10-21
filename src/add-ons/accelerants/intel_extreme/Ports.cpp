@@ -104,7 +104,9 @@ validate_gen12_dp_bandwidth(Pipe* pipe, const display_timing& timing)
 	uint32 mode = (pipeFunc & PIPE_DDI_MODESEL_MASK) >> PIPE_DDI_MODESEL_SHIFT;
 	if (mode == PIPE_DDI_MODE_HDMI || mode == PIPE_DDI_MODE_DVI)
 		return B_OK;
-	if (mode != PIPE_DDI_MODE_DP_SST && mode != PIPE_DDI_MODE_DP_MST)
+	if (mode == PIPE_DDI_MODE_DP_MST)
+		return B_NOT_SUPPORTED;
+	if (mode != PIPE_DDI_MODE_DP_SST)
 		return B_BAD_VALUE;
 
 	uint32 bpc = (pipeFunc & PIPE_DDI_BPC_MASK) >> PIPE_DDI_COLOR_SHIFT;
@@ -2670,6 +2672,9 @@ DigitalDisplayInterface::_SetPortLinkGen8(const display_timing& timing, uint32 p
 	// four lanes, not three. Reject reserved encodings instead of calculating
 	// incorrect M/N ratios from them.
 	uint32 mode = (pipeFunc & PIPE_DDI_MODESEL_MASK) >> PIPE_DDI_MODESEL_SHIFT;
+	if (gInfo->shared_info->device_type.Generation() >= 12
+		&& mode == PIPE_DDI_MODE_DP_MST)
+		return B_NOT_SUPPORTED;
 	if (mode == PIPE_DDI_MODE_DP_SST || mode == PIPE_DDI_MODE_DP_MST) {
 		uint32 width = (pipeFunc & PIPE_DDI_DP_WIDTH_MASK) >> PIPE_DDI_DP_WIDTH_SHIFT;
 		switch (width) {
@@ -2760,7 +2765,9 @@ DigitalDisplayInterface::_ValidateGen12DpLink()
 		return B_OK;
 
 	uint32 mode = fPipe->TranscoderMode();
-	if (mode != PIPE_DDI_MODE_DP_SST && mode != PIPE_DDI_MODE_DP_MST)
+	if (mode == PIPE_DDI_MODE_DP_MST)
+		return B_NOT_SUPPORTED;
+	if (mode != PIPE_DDI_MODE_DP_SST)
 		return B_OK;
 
 	// Only reuse a BIOS-trained 2.7 Gbit/s link. This driver does not yet

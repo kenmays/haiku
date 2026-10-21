@@ -2773,7 +2773,12 @@ DigitalDisplayInterface::SetDisplayMode(display_mode* target, uint32 colorMode)
 			chosenPLL = 1;
 		TRACE("Using DPLL %d for port %d. PLL settings: DCO=%f, P,Q,K=%d,%d,%d\n", chosenPLL,
 			PortIndex(), dco, p, q, k);
-		ProgramPLL(chosenPLL, p, q, k, dco);
+		status_t pllStatus = ProgramPLL(chosenPLL, p, q, k, dco);
+		if (pllStatus != B_OK) {
+			ERROR("%s: failed to program DPLL %d for %s: %s\\n", __func__,
+				chosenPLL, PortName(), strerror(pllStatus));
+			return pllStatus;
+		}
 
 		// Configure DPLL mapping to port then turn on DPLL clock
 		uint32 config = read32(TGL_DPCLKA_CFGCR0);

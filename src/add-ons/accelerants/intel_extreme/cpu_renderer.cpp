@@ -179,8 +179,12 @@ intel_cpu_acquire_engine(uint32 capabilities, uint32 maxWait,
 {
 	if (_engineToken == NULL)
 		return B_BAD_VALUE;
-
 	*_engineToken = NULL;
+	if (gInfo == NULL || gInfo->shared_info == NULL)
+		return B_NO_INIT;
+
+	(void)capabilities;
+	(void)maxWait;
 	status_t status = acquire_lock(&gInfo->shared_info->engine_lock);
 	if (status != B_OK)
 		return status;

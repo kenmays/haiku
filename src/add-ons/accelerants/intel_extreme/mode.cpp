@@ -356,6 +356,13 @@ intel_set_display_mode(display_mode* mode)
 	if (intel_propose_display_mode(&target, &target, &target) != B_OK)
 		return B_BAD_VALUE;
 
+	// The scanout surface must contain the visible mode. Otherwise the plane
+	// can fetch beyond the allocation even when the allocation-size arithmetic
+	// itself is valid.
+	if (target.virtual_width < target.timing.h_display
+		|| target.virtual_height < target.timing.v_display)
+		return B_BAD_VALUE;
+
 	uint32 colorMode, bytesPerRow, bitsPerPixel;
 	status_t status = get_color_space_format(target, colorMode, bytesPerRow,
 		bitsPerPixel);

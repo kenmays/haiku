@@ -101,6 +101,14 @@ For each supported generation and exact PCI ID, test:
 - Intel Graphics Programmer Reference Manuals (PRMs): use the display-engine and command-stream volumes for the exact generation; register-bank topology, plane availability, pitch encoding, and latch sequences must be validated per generation. Do not use a DG1 PRM as a register specification for Gen2–Gen9.
 - Haiku accelerant/display API headers and app_server behavior for the exact target revision must be treated as the ABI contract.
 
+## Compatibility bridge versus true multihead
+
+Haiku's legacy Radeon accelerant contains a virtual-desktop spanning approach in `src/add-ons/accelerants/radeon/multimon.c`: one large framebuffer is presented as one logical desktop, while the driver positions the two CRTCs at different offsets. This can be a useful intermediate milestone for Intel, but it is not equivalent to per-screen app_server support: applications still see one large screen, and windows can span the bezel or center between physical displays.
+
+If implementing that bridge, keep it opt-in and explicitly distinguish it from independent heads. It must be enabled only when two compatible outputs are assigned to two supported pipes, the requested virtual dimensions exactly match the chosen layout, and both plane start offsets are representable and validated for that generation. Do not infer a spanning request from arbitrary oversized virtual dimensions, and do not silently change ordinary single-monitor panning semantics. The existing Intel mode list currently publishes visible-size virtual surfaces, so the bridge also needs a deliberate mode-list/configuration path before it can be selected.
+
+The proper long-term API must identify a screen/head in mode enumeration, mode proposal and set/get, framebuffer configuration, display movement, DPMS, and other per-display operations. The app_server must retain a distinct mode, bounds, and framebuffer mapping for each screen and route drawing/window placement accordingly. Until that API exists in the target Haiku revision, driver-only independent heads cannot be exposed honestly through the current single-mode hooks.
+
 ## Current honest support statement
 
 Until per-head shared state, per-head surface allocation, generation-specific scanout programming, transactional rollback, and Haiku display enumeration are implemented and tested, report this driver as single-head with limited shared-mode clone behavior where verified. Independent multi-monitor/extended-desktop support is not yet complete.

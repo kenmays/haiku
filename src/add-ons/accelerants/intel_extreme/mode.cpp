@@ -383,9 +383,12 @@ intel_set_display_mode(display_mode* mode)
 		return status;
 	}
 
-	// Clear the replacement before switching the shared framebuffer pointer.
+	// Keep the previous allocation until connected ports accept the mode.
+	// This allows failure handling to restore a live framebuffer allocation.
+	addr_t oldFrameBuffer = sharedInfo.frame_buffer;
+	addr_t oldFrameBufferOffset = sharedInfo.frame_buffer_offset;
+
 	memset((uint8*)base, 0, bytesPerRow * target.virtual_height);
-	intel_free_memory(sharedInfo.frame_buffer);
 	sharedInfo.frame_buffer = base;
 	sharedInfo.frame_buffer_offset = base - (addr_t)sharedInfo.graphics_memory;
 
@@ -487,13 +490,21 @@ intel_set_display_mode(display_mode* mode)
 		if (currentStatus != B_OK) {
 			ERROR("%s: Unable to set display mode on port %u (status %d)!\n",
 				__func__, i, (int)currentStatus);
-			if (portStatus == B_OK)
-				portStatus = currentStatus;
-		}
+			if (portStatus != B_OK) {
+		// Restore the previous framebuffer and scanout base on failure.
+		sharedInfo.frame_buffer = oldFrameBuffer;
+		sharedInfo.frame_buffer_offset = oldFrameBufferOffset;
+		set_frame_buffer_base();
+		intel_free_memory(base);
+		set_display_power_mode(sharedInfo.dpms_mode);
+		return portStatus;
 	}
 
-	if (portStatus == B_OK)
-		TRACE("%s: Port configuration completed successfully!\n", __func__);
+	TRACE("%s: Port configuration completed successfully!\\n", __func__);
+
+	// The new mode was accepted by all connected ports; release the old
+	// framebuffer only after that point.
+	intel_free_memory(oldFrameBuffer);
 
 	// We set the same color mode across all pipes
 	program_pipe_color_modes(colorMode);

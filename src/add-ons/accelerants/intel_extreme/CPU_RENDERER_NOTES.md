@@ -45,3 +45,8 @@ this environment.
    cannot expose stale framebuffer metadata to a drawing operation.
 5. Test boot, mode setting, DPMS, hotplug, and rendering on real devices in each
    claimed hardware generation before enabling additional PCI IDs.
+
+
+## Additional operation
+
+- Transparent screen-to-screen blit now copies only pixels that differ from the encoded transparent key, with clipped extents and overlap-aware traversal. Pixel-key encoding still needs verification against app_server color-space semantics.

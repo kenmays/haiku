@@ -488,9 +488,14 @@ intel_set_display_mode(display_mode* mode)
 		status_t currentStatus = gInfo->ports[i]->SetDisplayMode(&target,
 			colorMode);
 		if (currentStatus != B_OK) {
-			ERROR("%s: Unable to set display mode on port %u (status %d)!\n",
+			ERROR("%s: Unable to set display mode on port %u (status %d)!\\n",
 				__func__, i, (int)currentStatus);
-			if (portStatus != B_OK) {
+			if (portStatus == B_OK)
+				portStatus = currentStatus;
+		}
+	}
+
+	if (portStatus != B_OK) {
 		// Restore the previous framebuffer and scanout base on failure.
 		sharedInfo.frame_buffer = oldFrameBuffer;
 		sharedInfo.frame_buffer_offset = oldFrameBufferOffset;

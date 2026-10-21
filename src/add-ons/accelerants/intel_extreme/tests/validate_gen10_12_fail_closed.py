@@ -143,6 +143,8 @@ def main() -> int:
         "info.shared_info->cursor_buffer_offset = (uint32)offset;" in kernel
         and "offset > info.shared_info->graphics_memory_size" in kernel
         and "B_PAGE_SIZE > info.shared_info->graphics_memory_size - offset" in kernel
+        and "info.shared_info->physical_graphics_memory > 0xffffffffULL" in kernel
+        and "offset > 0xffffffffULL" in kernel
         and "info.shared_info->cursor_buffer_offset = 0;" in kernel,
         "legacy cursor aperture offset must be validated and cleared on allocation failure",
     )

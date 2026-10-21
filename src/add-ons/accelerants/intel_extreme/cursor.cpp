@@ -24,7 +24,7 @@ get_cursor_pipe_offsets(uint32* offsets, uint32 maxOffsets)
 	uint32 count = 0;
 	for (uint32 i = 0; i < gInfo->port_count; i++) {
 		Port* port = gInfo->ports[i];
-		if (port == NULL || !port->IsConnected() || port->GetPipe() == NULL)
+		if (port == NULL || port->GetPipe() == NULL)
 			continue;
 
 		uint32 offset;
@@ -129,7 +129,7 @@ intel_set_cursor_shape(uint16 width, uint16 height, uint16 hotX, uint16 hotY,
 
 	if (hotX != gInfo->shared_info->cursor_hot_x
 		|| hotY != gInfo->shared_info->cursor_hot_y) {
-		int32 x = read32(INTEL_CURSOR_POSITION);
+		int32 x = read32(INTEL_CURSOR_POSITION + pipeOffsets[0]);
 		int32 y = x >> 16;
 		x &= 0xffff;
 		

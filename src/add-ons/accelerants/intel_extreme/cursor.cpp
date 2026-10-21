@@ -211,11 +211,11 @@ intel_show_cursor(bool isVisible)
 
 	for (uint32 i = 0; i < pipeCount; i++) {
 		uint32 offset = pipeOffsets[i];
-		write32(INTEL_CURSOR_CONTROL + offset,
-			(isVisible ? CURSOR_ENABLED : 0) | gInfo->shared_info->cursor_format);
 		write32(INTEL_CURSOR_BASE + offset,
 			(uint32)gInfo->shared_info->physical_graphics_memory
 				+ gInfo->shared_info->cursor_buffer_offset);
+		write32(INTEL_CURSOR_CONTROL + offset,
+			(isVisible ? CURSOR_ENABLED : 0) | gInfo->shared_info->cursor_format);
 	}
 
 	gInfo->shared_info->cursor_visible = isVisible;

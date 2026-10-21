@@ -10,6 +10,7 @@ Addon intel_extreme.accelerant :
 	cursor.cpp
 	dpms.cpp
 	engine.cpp
+	cpu_renderer.cpp
 	hooks.cpp
 	memory.cpp
 	mode.cpp

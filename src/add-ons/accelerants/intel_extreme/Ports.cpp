@@ -2695,7 +2695,8 @@ DigitalDisplayInterface::_SetPortLinkGen8(const display_timing& timing, uint32 p
 				return B_BAD_VALUE;
 		}
 		TRACE("%s: DDI in DP mode with %" B_PRIu32 " lane(s) in use\n", __func__, lanes);
-	} else if (mode != PIPE_DDI_MODE_HDMI && mode != PIPE_DDI_MODE_DVI) {
+	} else if (gInfo->shared_info->device_type.Generation() >= 12
+		&& mode != PIPE_DDI_MODE_HDMI && mode != PIPE_DDI_MODE_DVI) {
 		ERROR("%s: Unsupported DDI mode encoding %" B_PRIu32 "\n", __func__, mode);
 		return B_BAD_VALUE;
 	} else {

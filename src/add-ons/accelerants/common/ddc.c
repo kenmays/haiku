@@ -174,6 +174,37 @@ ddc2_init_timing(i2c_bus *bus)
 
 
 //! Read EDID and VDIF from monitor via ddc2
+static status_t
+validate_edid_extension(const edid1_raw *raw)
+{
+	const uint8 *data = (const uint8 *)raw;
+
+	// CTA-861 extension: validate the detailed-timing offset and ensure
+	// every data-block header and payload fits inside the collection.
+	if (data[0] == 0x02) {
+		uint8 offset = data[2];
+		if (offset != 0 && (offset < 4 || offset > 127))
+			return B_BAD_DATA;
+
+		if (offset >= 4) {
+			for (size_t i = 4; i < offset;) {
+				size_t blockLength = (data[i] & 0x1f) + 1;
+				if (i + blockLength > offset)
+					return B_BAD_DATA;
+				i += blockLength;
+			}
+		}
+	} else if (data[0] == 0x70) {
+		// DisplayID's payload length follows its 3-byte tag/version/length
+		// header. Keep it within the extension before the checksum byte.
+		if (data[2] > 122)
+			return B_BAD_DATA;
+	}
+
+	return B_OK;
+}
+
+
 status_t
 ddc2_read_edid1(const i2c_bus *bus, edid1_info *edid,
 	void **vdif, size_t *vdifLength)
@@ -223,8 +254,10 @@ ddc2_read_edid1(const i2c_bus *bus, edid1_info *edid,
 		for (uint32 i = 1; i <= raw[0].num_sections; i++) {
 			status = ddc2_read(bus, (int)(i * sizeof(edid1_raw)),
 				(uint8 *)&raw[i], sizeof(edid1_raw));
+			if (status == B_OK)
+				status = validate_edid_extension(&raw[i]);
 			if (status != B_OK) {
-				TRACE("%s: failed to read EDID extension %u\n", __func__, i);
+				TRACE("%s: invalid EDID extension %u\n", __func__, i);
 				free(raw);
 				return status;
 			}

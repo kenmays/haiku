@@ -14,6 +14,7 @@
 #include <OS.h>
 
 #include <stdlib.h>
+#include <string.h>
 
 
 #define READ_RETRIES 4		// number of retries to read ddc data

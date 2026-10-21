@@ -1027,17 +1027,27 @@ AnalogPort::SetDisplayMode(display_mode* target, uint32 colorMode)
 		return B_ERROR;
 	}
 
-	// Setup PanelFitter and Train FDI if it exists
+	// VGA uses the requested timings directly. Do not leave a fitter enabled
+	// from a previous internal-panel mode on a pipe that is now driving VGA.
 	PanelFitter* fitter = fPipe->PFT();
 	if (fitter != NULL)
-		fitter->Enable(target->timing);
+		fitter->Disable();
+
+	// Configure the FDI link before training it. A failed link configuration
+	// must not be reported as a successful VGA modeset.
 	FDILink* link = fPipe->FDI();
 	if (link != NULL) {
 		uint32 lanes = 0;
 		uint32 linkBandwidth = 0;
 		uint32 bitsPerPixel = 0;
 		link->PreTrain(&target->timing, &linkBandwidth, &lanes, &bitsPerPixel);
-		fPipe->SetFDILink(target->timing, linkBandwidth, lanes, bitsPerPixel);
+		status_t linkStatus = fPipe->SetFDILink(target->timing, linkBandwidth,
+			lanes, bitsPerPixel);
+		if (linkStatus != B_OK) {
+			ERROR("%s: Failed to configure FDI link on %s (status %d)\\n",
+				__func__, PortName(), (int)linkStatus);
+			return linkStatus;
+		}
 		link->Train(&target->timing, lanes);
 	}
 	pll_divisors divisors;

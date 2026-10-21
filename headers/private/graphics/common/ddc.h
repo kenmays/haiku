@@ -16,8 +16,10 @@ extern "C" {
 
 void ddc2_init_timing(i2c_bus *bus);
 
-// read EDID and VDIF from monitor via ddc2
-// (currently, *vdif and *vdif_len is always set to null)
+// Read and checksum-validate the EDID base block and all declared extension
+// blocks via DDC2/E-DDC. The decoded structure exposes legacy EDID fields and
+// limited CTA/DisplayID summaries; it does not retain arbitrary raw extensions.
+// (currently, *vdif and *vdif_len are always set to null)
 status_t ddc2_read_edid1(const i2c_bus *bus, edid1_info *edid, 
 	void **vdif, size_t *vdifLength);
 

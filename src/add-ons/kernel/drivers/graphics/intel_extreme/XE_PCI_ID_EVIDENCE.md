@@ -1,6 +1,7 @@
 # Linux Xe PCI-ID evidence and Intel Extreme policy
 
 **Audit date:** 2026-10-20  
+**Linux source:** `torvalds/linux` `include/drm/intel/pciids.h`, blob `dff389b56eb3bf0ebcf9d8a81c2e76722a0ea54f`  
 **Project branch:** `work/intel-extreme-hd530-edid-2d`
 
 ## Interpretation rule
@@ -18,6 +19,15 @@ This distinction is intentional: the Intel Extreme target remains CPU-only 2D re
 - PCI-ID macro definitions: https://github.com/torvalds/linux/blob/master/include/drm/intel/pciids.h
 
 Because these macros are maintained upstream, re-check the current header at review time rather than treating a hand-copied list as exhaustive. Record the Linux commit/revision used for any future exhaustive ID snapshot.
+
+## Current upstream PCI-ID macro evidence
+
+The reviewed Linux header blob defines these IDs in the Xe-consumed macros:
+
+- **DG2 / Alchemist:** `0x56A0`, `0x56A1`, `0x56A2`, `0x56BE`, `0x56BF`, `0x5690`, `0x5691`, `0x5692`, `0x56A5`, `0x56A6`, `0x56B0`, `0x56B1`, `0x56BA`, `0x56BB`, `0x56BC`, `0x56BD`, `0x5693`, `0x5694`, `0x5695`, `0x56A3`, `0x56A4`, `0x56B2`, `0x56B3`, `0x5696`, `0x5697`.
+- **Battlemage / BMG:** `0xE202`, `0xE209`, `0xE20B`, `0xE20C`, `0xE20D`, `0xE210`, `0xE211`, `0xE212`, `0xE216`, `0xE220`, `0xE221`, `0xE222`, `0xE223`.
+
+The list above is a snapshot of the named macro groups in that exact upstream header blob, not a promise that it is exhaustive forever. The test guardrail intentionally prevents these known IDs from being added to the active Haiku allowlist before display support is implemented and reviewed.
 
 ## Family classification
 

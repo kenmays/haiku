@@ -373,7 +373,7 @@ intel_set_display_mode(display_mode* mode)
 	// panel cannot confirm the transition, keep the current framebuffer intact.
 	status_t powerStatus = set_display_power_mode(B_DPMS_OFF);
 	if (powerStatus != B_OK) {
-		ERROR("%s: Unable to turn display off before mode switch!\\n",
+		ERROR("%s: Unable to turn display off before mode switch!\n",
 			__func__);
 		return powerStatus;
 	}
@@ -588,7 +588,7 @@ intel_set_display_mode(display_mode* mode)
 	// is programmed. Report a timeout instead of claiming DPMS succeeded.
 	powerStatus = set_display_power_mode(sharedInfo.dpms_mode);
 	if (powerStatus != B_OK) {
-		ERROR("%s: Unable to restore display power state!\\n", __func__);
+		ERROR("%s: Unable to restore display power state!\n", __func__);
 		return powerStatus;
 	}
 

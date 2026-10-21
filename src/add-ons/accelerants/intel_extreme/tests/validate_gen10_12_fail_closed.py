@@ -155,6 +155,12 @@ def main() -> int:
         and "INTEL_CURSOR_POSITION + pipeOffsets[0]" in cursor_shape,
         "legacy cursor register access must follow assigned display pipes",
     )
+    cursor_show_loop = cursor_show[cursor_show.rfind("for (uint32 i = 0; i < pipeCount; i++)"):]
+    require(
+        cursor_show_loop.find("write32(INTEL_CURSOR_BASE + offset")
+            < cursor_show_loop.find("write32(INTEL_CURSOR_CONTROL + offset"),
+        "cursor base must be programmed before enabling a visible cursor plane",
+    )
     require(
         "memset(data, 0, 64 * 16);" in cursor_shape
         and "memset(data + 16 * y, 0xff, 8);" in cursor_shape

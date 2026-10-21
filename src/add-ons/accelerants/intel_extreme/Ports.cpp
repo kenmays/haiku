@@ -2849,25 +2849,44 @@ DigitalDisplayInterface::SetDisplayMode(display_mode* target, uint32 colorMode)
 			chosenPLL = 1;
 		TRACE("Using DPLL %d for port %d. PLL settings: DCO=%f, P,Q,K=%d,%d,%d\n", chosenPLL,
 			PortIndex(), dco, p, q, k);
-		ProgramPLL(chosenPLL, p, q, k, dco);
+		status_t pllStatus = ProgramPLL(chosenPLL, p, q, k, dco);
+		if (pllStatus != B_OK) {
+			ERROR("%s: Failed to program DPLL %d (status %d)\n",
+				__func__, chosenPLL, (int)pllStatus);
+			return pllStatus;
+		}
 
-		// Configure DPLL mapping to port then turn on DPLL clock
+		// Map the DPLL to the DDI while its output clock is gated. Preserve
+		// all unrelated PHY clock selections in DPCLKA_CFGCR0. Intel's PRM
+		// requires separate writes for clock selection and clock ungating.
 		uint32 config = read32(TGL_DPCLKA_CFGCR0);
 		TRACE("PLL configuration before changes: %" B_PRIx32 "\n", config);
 		if (chosenPLL == 0) {
 			config |= TGL_DPCLKA_DDIA_CLOCK_OFF;
-			config &= TGL_DPCLKA_DDIA_CLOCK_SELECT;
 			write32(TGL_DPCLKA_CFGCR0, config);
+			read32(TGL_DPCLKA_CFGCR0);
+
+			config &= ~TGL_DPCLKA_DDIA_CLOCK_SELECT;
+			// DPLL0 is selection value 0 for DDIA.
+			write32(TGL_DPCLKA_CFGCR0, config);
+			read32(TGL_DPCLKA_CFGCR0);
+
 			config &= ~TGL_DPCLKA_DDIA_CLOCK_OFF;
 			write32(TGL_DPCLKA_CFGCR0, config);
 		} else {
 			config |= TGL_DPCLKA_DDIB_CLOCK_OFF;
-			config &= TGL_DPCLKA_DDIB_CLOCK_SELECT;
-			config |= 1 << TGL_DPCLKA_DDIB_CLOCK_SELECT_SHIFT;
 			write32(TGL_DPCLKA_CFGCR0, config);
+			read32(TGL_DPCLKA_CFGCR0);
+
+			config &= ~TGL_DPCLKA_DDIB_CLOCK_SELECT;
+			config |= (uint32)chosenPLL << TGL_DPCLKA_DDIB_CLOCK_SELECT_SHIFT;
+			write32(TGL_DPCLKA_CFGCR0, config);
+			read32(TGL_DPCLKA_CFGCR0);
+
 			config &= ~TGL_DPCLKA_DDIB_CLOCK_OFF;
 			write32(TGL_DPCLKA_CFGCR0, config);
 		}
+		read32(TGL_DPCLKA_CFGCR0);
 		TRACE("PLL configuration after changes: %" B_PRIx32 "\n", config);
 	}
 

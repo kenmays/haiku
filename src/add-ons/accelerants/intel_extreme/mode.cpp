@@ -404,6 +404,25 @@ intel_set_display_mode(display_mode* mode)
 		return status;
 	}
 
+	// Validate the allocator's result before deriving an MMIO surface offset
+	// or touching the returned address. The kernel allocator is expected to
+	// return a range inside the mapped graphics-memory aperture.
+	addr_t graphicsBase = (addr_t)sharedInfo.graphics_memory;
+	if (base < graphicsBase) {
+		intel_free_memory(base);
+		set_display_power_mode(sharedInfo.dpms_mode);
+		return B_BAD_DATA;
+	}
+	addr_t framebufferOffset = base - graphicsBase;
+	if (framebufferOffset > sharedInfo.graphics_memory_size
+		|| framebufferSize > sharedInfo.graphics_memory_size - framebufferOffset) {
+		ERROR("%s: Framebuffer allocation is outside graphics memory!\n",
+			__func__);
+		intel_free_memory(base);
+		set_display_power_mode(sharedInfo.dpms_mode);
+		return B_BAD_DATA;
+	}
+
 	// Keep the previous allocation until connected ports accept the mode.
 	// This allows failure handling to restore a live framebuffer allocation.
 	addr_t oldFrameBuffer = sharedInfo.frame_buffer;
@@ -412,7 +431,7 @@ intel_set_display_mode(display_mode* mode)
 
 	memset((uint8*)base, 0, framebufferSize);
 	sharedInfo.frame_buffer = base;
-	sharedInfo.frame_buffer_offset = base - (addr_t)sharedInfo.graphics_memory;
+	sharedInfo.frame_buffer_offset = framebufferOffset;
 
 #if 0
 	if ((gInfo->head_mode & HEAD_MODE_TESTING) != 0) {

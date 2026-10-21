@@ -18,6 +18,7 @@ intel_set_cursor_shape(uint16 width, uint16 height, uint16 hotX, uint16 hotY,
 	uint8* andMask, uint8* xorMask)
 {
 	if (width == 0 || height == 0 || width > 64 || height > 64
+		|| hotX >= width || hotY >= height
 		|| andMask == NULL || xorMask == NULL
 		|| gInfo->shared_info->cursor_memory == NULL) {
 		return B_BAD_VALUE;
@@ -101,12 +102,28 @@ move_cursor(int32 x, int32 y)
 	x -= gInfo->shared_info->cursor_hot_x;
 	y -= gInfo->shared_info->cursor_hot_y;
 
-	if (x < 0)
+	// Position fields are 14-bit magnitudes plus a sign bit. Clamp rather
+	// than allowing out-of-range coordinates to overwrite reserved bits.
+	if (x < 0) {
+		if (x < -(int32)CURSOR_POSITION_MASK)
+			x = -(int32)CURSOR_POSITION_MASK;
 		x = -x | CURSOR_POSITION_NEGATIVE;
-	if (y < 0)
+	} else if (x > (int32)CURSOR_POSITION_MASK) {
+		x = CURSOR_POSITION_MASK;
+	}
+	if (y < 0) {
+		if (y < -(int32)CURSOR_POSITION_MASK)
+			y = -(int32)CURSOR_POSITION_MASK;
 		y = -y | CURSOR_POSITION_NEGATIVE;
+	} else if (y > (int32)CURSOR_POSITION_MASK) {
+		y = CURSOR_POSITION_MASK;
+	}
 
-	write32(INTEL_CURSOR_POSITION, (y << 16) | x);
+	// Use unsigned fields for the packed register value; shifting a signed
+	// coordinate with its sign bit set can overflow signed int32.
+	uint32 encodedX = (uint32)x;
+	uint32 encodedY = (uint32)y;
+	write32(INTEL_CURSOR_POSITION, (encodedY << 16) | encodedX);
 }
 
 

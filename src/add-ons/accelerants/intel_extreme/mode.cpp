@@ -539,11 +539,16 @@ intel_set_display_mode(display_mode* mode)
 
 	TRACE("%s: Port configuration completed successfully!\n", __func__);
 
-	// We set the same color mode across all pipes
-	program_pipe_color_modes(colorMode);
+	// Publish the new scanout metadata and program the new surface address
+	// while the display is still off. This prevents DPMS restore from briefly
+	// enabling a plane that still points at the freed old framebuffer.
+	sharedInfo.current_mode = target;
+	sharedInfo.bytes_per_row = bytesPerRow;
+	sharedInfo.bits_per_pixel = bitsPerPixel;
+	set_frame_buffer_base();
 
-	// Restore the requested power state after the new scanout has been
-	// configured. Report a timeout instead of claiming DPMS succeeded.
+	// Restore the requested power state only after the new framebuffer base
+	// is programmed. Report a timeout instead of claiming DPMS succeeded.
 	powerStatus = set_display_power_mode(sharedInfo.dpms_mode);
 	if (powerStatus != B_OK) {
 		ERROR("%s: Unable to restore display power state!\\n", __func__);
@@ -551,7 +556,7 @@ intel_set_display_mode(display_mode* mode)
 	}
 
 	// Changing bytes per row seems to be ignored if the plane/pipe is turned
-	// off
+	// off, so program it after the pipe has resumed.
 
 	// Always set both pipes, just in case
 	// TODO rework this when we get multiple head support with different
@@ -564,14 +569,8 @@ intel_set_display_mode(display_mode* mode)
 		write32(INTEL_DISPLAY_B_BYTES_PER_ROW, bytesPerRow);
 	}
 
-	// update shared info
-	sharedInfo.current_mode = target;
-	sharedInfo.bytes_per_row = bytesPerRow;
-	sharedInfo.bits_per_pixel = bitsPerPixel;
-
+	// Re-apply the base to latch the updated pitch/offset state.
 	set_frame_buffer_base();
-		// triggers writing back double-buffered registers
-		// which is INTEL_DISPLAY_X_BYTES_PER_ROW only apparantly
 
 	// The new framebuffer and requested mode are now active in shared state,
 	// but return a port failure instead of masking an unsuccessful modeset.

@@ -8,6 +8,7 @@
 #include "accelerant.h"
 
 #include <math.h>
+#include <KernelExport.h>
 
 
 #undef TRACE
@@ -20,6 +21,19 @@
 
 #define ERROR(x...) _sPrintf("intel_extreme: " x)
 #define CALLED(x...) TRACE("CALLED %s\n", __PRETTY_FUNCTION__)
+
+/* Bound hardware polling so a failed PLL transition cannot hang the accelerant. */
+static bool
+wait_for_register(addr_t address, uint32 mask, bool set, uint32 timeout)
+{
+	const uint32 interval = 50;
+	for (uint32 elapsed = 0; elapsed < timeout; elapsed += interval) {
+		if (((read32(address) & mask) != 0) == set)
+			return true;
+		spin(interval);
+	}
+	return (((read32(address) & mask) != 0) == set);
+}
 
 
 /**
@@ -304,14 +318,20 @@ ProgramPLL(int which, int Pdiv, int Qdiv, int Kdiv, float dco)
 
 	// Before we start, disable the PLL
 	write32(DPLL_ENABLE, read32(DPLL_ENABLE) & ~TGL_DPLL_ENABLE);
-	while ((read32(DPLL_ENABLE) & TGL_DPLL_LOCK) != 0);
+	if (!wait_for_register(DPLL_ENABLE, TGL_DPLL_LOCK, false, 100000)) {
+		ERROR("%s: timed out waiting for PLL to unlock\n", __func__);
+		return B_TIMED_OUT;
+	}
 	TRACE("PLL is unlocked\n");
 
 	// Enable PLL power
 	write32(DPLL_ENABLE, read32(DPLL_ENABLE) | TGL_DPLL_POWER_ENABLE);
 
 	// Wait for PLL to be powered up
-	while ((read32(DPLL_ENABLE) & TGL_DPLL_POWER_STATE) == 0);
+	if (!wait_for_register(DPLL_ENABLE, TGL_DPLL_POWER_STATE, true, 100000)) {
+		ERROR("%s: timed out waiting for PLL power state\n", __func__);
+		return B_TIMED_OUT;
+	}
 	TRACE("PLL is powered on\n");
 
 	// Deactivate spread spectrum
@@ -336,7 +356,10 @@ ProgramPLL(int which, int Pdiv, int Qdiv, int Kdiv, float dco)
 	TRACE("DPLL_ENABLE(%" B_PRIx32 ") = %" B_PRIx32 "\n", DPLL_ENABLE, read32(DPLL_ENABLE));
 
 	// Wait for PLL to be enabled
-	while ((read32(DPLL_ENABLE) & TGL_DPLL_LOCK) == 0);
+	if (!wait_for_register(DPLL_ENABLE, TGL_DPLL_LOCK, true, 100000)) {
+		ERROR("%s: timed out waiting for PLL lock\n", __func__);
+		return B_TIMED_OUT;
+	}
 	TRACE("PLL is locked\n");
 
 	// TODO Display voltage frequency switching?

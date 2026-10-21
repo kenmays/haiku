@@ -62,6 +62,6 @@ The implementation should program display-plane registers directly through a gen
 Until all relevant stages pass, report only source-level guardrails and implementation status. Do not claim hardware validation from Linux driver support or PCI-ID matches.
 
 ## Related source
-- `../ROCKET_LAKE_DISPLAY_AUDIT.md`
-- `../ROCKET_LAKE_ALCHEMIST_BATTLEMAGE_SOURCE_AUDIT.md`
-- `../ROCKET_LAKE_ALCHEMIST_BATTLEMAGE_SUPPORT.md`
+- `../../../kernel/drivers/graphics/intel_extreme/ROCKET_LAKE_DISPLAY_AUDIT.md`
+- `ROCKET_LAKE_ALCHEMIST_BATTLEMAGE_SOURCE_AUDIT.md`
+- `ROCKET_LAKE_ALCHEMIST_BATTLEMAGE_SUPPORT.md`

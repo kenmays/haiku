@@ -70,7 +70,7 @@ These are source-level findings only. No build, runtime, or physical display tes
 
 Source reviewed: `accelerants/intel_extreme/cursor.cpp`, `hooks.cpp`, `accelerant.cpp`, and the kernel's `intel_extreme.cpp`.
 
-- The kernel allocates one page for cursor storage when the `hardware_cursor` driver setting is enabled (default true), and the accelerant exposes `B_SET_CURSOR_SHAPE`, `B_MOVE_CURSOR`, and `B_SHOW_CURSOR` whenever that allocation pointer is non-NULL.
+- The kernel allocates one page for cursor storage when the `hardware_cursor` driver setting is enabled (default true). The original hook gate exposed cursor operations whenever that pointer was non-NULL; the follow-up implementation now additionally gates the legacy cursor hooks off for Generation 12 and newer.
 - The cursor implementation writes a legacy-style cursor control, position, size, palette, and base register set via `INTEL_CURSOR_*` definitions. It copies AND/XOR masks into a 64-pixel-wide, two-plane layout and advertises the two-color cursor format.
 - **Allocation is not proof of generation support.** The hook gate checks only for non-NULL cursor memory, not the device generation, active pipe, or whether the register definitions and cursor format match Rocket Lake's per-pipe display-plane model.
 - Cursor register accesses are not visibly associated with the active pipe in `cursor.cpp`. The cursor shape path enables the cursor immediately, while visibility is tracked separately. There is no local bounds check for zero dimensions or a clear validation that all rows/bytes fit the one-page allocation, although the 64x64 limit makes the expected legacy image payload small.

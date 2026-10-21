@@ -184,12 +184,12 @@ const struct supported_device {
 	{0x162a, INTEL_MODEL_BDWS, "Broadwell GT3 Server"},
 	{0x162d, INTEL_MODEL_BDW,  "Broadwell GT3 Workstation"},
 	// Reserved Broadwell IDs also listed by upstream Linux i915.
-	{0x1636, INTEL_MODEL_BDWM, "Broadwell GT1 Reserved ULT"},
-	{0x163b, INTEL_MODEL_BDWM, "Broadwell GT1 Reserved Iris"},
-	{0x163e, INTEL_MODEL_BDWM, "Broadwell GT1 Reserved ULX"},
-	{0x1632, INTEL_MODEL_BDWM, "Broadwell GT1 Reserved ULT"},
-	{0x163a, INTEL_MODEL_BDWS, "Broadwell GT1 Reserved Server"},
-	{0x163d, INTEL_MODEL_BDW,  "Broadwell GT1 Reserved Workstation"},
+	{0x1636, INTEL_MODEL_BDWM, "Broadwell Reserved 0x1636"},
+	{0x163b, INTEL_MODEL_BDWM, "Broadwell Reserved 0x163b"},
+	{0x163e, INTEL_MODEL_BDWM, "Broadwell Reserved 0x163e"},
+	{0x1632, INTEL_MODEL_BDWM, "Broadwell Reserved 0x1632"},
+	{0x163a, INTEL_MODEL_BDWS, "Broadwell Reserved 0x163a"},
+	{0x163d, INTEL_MODEL_BDW,  "Broadwell Reserved 0x163d"},
 
 	{0x1902, INTEL_MODEL_SKY,  "Skylake GT1"},
 	{0x1906, INTEL_MODEL_SKYM, "Skylake GT1"},
@@ -266,6 +266,7 @@ const struct supported_device {
 	{0x3ea7, INTEL_MODEL_CFL,  "CoffeeLake U GT3"},
 	{0x3ea8, INTEL_MODEL_CFL,  "CoffeeLake U GT3"},
 	{0x3ea9, INTEL_MODEL_CFLM, "CoffeeLake U GT2"},
+	{0x87ca, INTEL_MODEL_CFLM, "CoffeeLake Y GT2"},
 
 	// Whiskey Lake (Gen9.5; shares the Coffee Lake display family)
 	{0x3ea0, INTEL_MODEL_CFLM, "WhiskeyLake U GT2"},

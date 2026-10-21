@@ -169,6 +169,12 @@ def main() -> int:
         and "return linkStatus;" in ddi_mode,
         "DDI link M/N errors must propagate to the modeset caller",
     )
+
+    require(
+        "validate_gen12_dp_bandwidth(fPipe, hardwareTarget)" in ddi_mode
+        and "mode != PIPE_DDI_MODE_DP_SST && mode != PIPE_DDI_MODE_DP_MST" in ports,
+        "Gen12 DP bandwidth and reserved mode encodings must be checked before modeset writes",
+    )
     require(
         "case PIPE_DDI_DP_WIDTH_1:" in ports
         and "case PIPE_DDI_DP_WIDTH_2:" in ports

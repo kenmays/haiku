@@ -147,6 +147,14 @@ def main() -> int:
         "DDI mode-setting must propagate PLL programming failures",
     )
 
+    require(
+        "config &= ~TGL_DPCLKA_DDIA_CLOCK_SELECT;" in ports
+        and "config &= ~TGL_DPCLKA_DDIB_CLOCK_SELECT;" in ports
+        and "config &= TGL_DPCLKA_DDIA_CLOCK_SELECT;" not in ports
+        and "config &= TGL_DPCLKA_DDIB_CLOCK_SELECT;" not in ports,
+        "DDI clock routing must preserve unrelated CFGCR0 fields",
+    )
+
     # EDID reads must attempt the alternate transport after either bus
     # setup or the EDID transaction fails; DDI/AUX selection is VBT-sensitive.
     edid_reader = function_body(ports, "Port::GetEDID(")

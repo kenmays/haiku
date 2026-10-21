@@ -57,9 +57,10 @@ PanelFitter::PanelFitter(pipe_index pipeIndex)
 			TRACE("%s: this fitter is enabled by the BIOS\n", __func__);
 		}
 	} else {
-		TRACE("%s: this fitter is not setup by the BIOS: Enabling.\n", __func__);
-		fitCtl |= PANEL_FITTER_ENABLED;
-		write32(fRegisterBase + PCH_PANEL_FITTER_CONTROL, fitCtl);
+		// Do not enable the fitter before a mode has supplied its window
+		// geometry. Enable() performs the explicit mode-setting transition.
+		TRACE("%s: this fitter is not setup by the BIOS; leaving it disabled until mode setup.\n",
+			__func__);
 	}
 }
 

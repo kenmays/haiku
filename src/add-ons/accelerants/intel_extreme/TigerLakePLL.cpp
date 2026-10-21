@@ -289,7 +289,7 @@ ProgramPLL(int which, int Pdiv, int Qdiv, int Kdiv, float dco)
 		dco_int++;
 		dco_frac = 0;
 	}
-	if (dco_int > (TGL_DPLL_DCO_INTEGER >> TGL_DPLL_DCO_INTEGER_SHIFT)
+	if (dco_int > TGL_DPLL_DCO_INTEGER
 		|| dco_frac > 0x7fff)
 		return B_BAD_VALUE;
 

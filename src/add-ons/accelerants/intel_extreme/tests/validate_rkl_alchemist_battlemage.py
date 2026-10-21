@@ -183,6 +183,8 @@ if not re.search(
     re.DOTALL,
 ):
     fail("Gen12 DDI modeset must fail closed for unimplemented PHY ports")
+if "fPipe->Index() != INTEL_PIPE_A" not in ddi_mode or "fPipe->Index() != INTEL_PIPE_B" not in ddi_mode:
+    fail("Gen12 modeset must stay on the pipes supported by framebuffer-base programming")
 if "PortIndex() == INTEL_PORT_B ? 1 : 0" not in ddi_mode:
     fail("Gen12 DDI A/B must select their matching combo DPLL")
 if "validate_gen12_dp_bandwidth(fPipe, hardwareTarget)" not in ddi_mode:

@@ -358,6 +358,9 @@ ProgramPLL(int which, int Pdiv, int Qdiv, int Kdiv, float dco)
 	// Wait for PLL to be powered up
 	if (!wait_for_register(DPLL_ENABLE, TGL_DPLL_POWER_STATE, true, 100000)) {
 		ERROR("%s: timed out waiting for PLL power state\n", __func__);
+		// Undo the power request if hardware did not acknowledge it.
+		write32(DPLL_ENABLE, read32(DPLL_ENABLE) & ~TGL_DPLL_POWER_ENABLE);
+		wait_for_register(DPLL_ENABLE, TGL_DPLL_POWER_STATE, false, 100000);
 		return B_TIMED_OUT;
 	}
 	TRACE("PLL is powered on\n");
@@ -386,6 +389,12 @@ ProgramPLL(int which, int Pdiv, int Qdiv, int Kdiv, float dco)
 	// Wait for PLL to be enabled
 	if (!wait_for_register(DPLL_ENABLE, TGL_DPLL_LOCK, true, 100000)) {
 		ERROR("%s: timed out waiting for PLL lock\n", __func__);
+		// Do not leave an unlocked PLL enabled after a failed mode set.
+		write32(DPLL_ENABLE, read32(DPLL_ENABLE) & ~TGL_DPLL_ENABLE);
+		if (wait_for_register(DPLL_ENABLE, TGL_DPLL_LOCK, false, 100000)) {
+			write32(DPLL_ENABLE, read32(DPLL_ENABLE) & ~TGL_DPLL_POWER_ENABLE);
+			wait_for_register(DPLL_ENABLE, TGL_DPLL_POWER_STATE, false, 100000);
+		}
 		return B_TIMED_OUT;
 	}
 	TRACE("PLL is locked\n");

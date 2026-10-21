@@ -83,8 +83,6 @@ const struct supported_device {
 
 	{0x0042, INTEL_MODEL_ILKG, "IronLake Desktop"},
 	{0x0046, INTEL_MODEL_ILKGM, "IronLake Mobile"},
-	{0x0046, INTEL_MODEL_ILKGM, "IronLake Mobile"},
-	{0x0046, INTEL_MODEL_ILKGM, "IronLake Mobile"},
 
 	{0x0102, INTEL_MODEL_SNBG, "SandyBridge Desktop GT1"},
 	{0x0112, INTEL_MODEL_SNBG, "SandyBridge Desktop GT2"},

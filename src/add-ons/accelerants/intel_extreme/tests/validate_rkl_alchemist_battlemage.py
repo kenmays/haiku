@@ -15,6 +15,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[5]
 DRIVER = ROOT / "src/add-ons/kernel/drivers/graphics/intel_extreme/driver.cpp"
 HOOKS = ROOT / "src/add-ons/accelerants/intel_extreme/hooks.cpp"
+MODE_SOURCE = ROOT / "src/add-ons/accelerants/intel_extreme/mode.cpp"
 
 def fail(message: str) -> None:
     print(f"FAIL: {message}")
@@ -22,6 +23,7 @@ def fail(message: str) -> None:
 
 driver = DRIVER.read_text(encoding="utf-8")
 hooks = HOOKS.read_text(encoding="utf-8")
+mode_source = MODE_SOURCE.read_text(encoding="utf-8")
 
 # Catch duplicate active PCI IDs in the supported-device table. Entries inside
 # #if 0 blocks are intentionally excluded because they are not compiled.
@@ -109,5 +111,18 @@ for feature in engine_features:
 if not re.search(r"return\s+NULL\s*;", engine_block.group(1)):
     fail("engine/synchronization hooks are not visibly fail-closed")
 
-print("PASS: Rocket Lake IDs retained; Alchemist/Battlemage remain unclaimed; CPU-only 2D and engine/sync hooks fail closed.")
+# A failed per-port modeset must not be silently reported as success.
+set_mode_match = re.search(
+    r"status_t\\s+intel_set_display_mode\\s*\\(.*?(?=\\nstatus_t\\s+intel_get_display_mode\\s*\\()",
+    mode_source,
+    re.DOTALL,
+)
+if set_mode_match is None:
+    fail("intel_set_display_mode function was not found")
+set_mode_block = set_mode_match.group(0)
+for required in ("status_t portStatus = B_OK;", "portStatus = status;", "return portStatus;"):
+    if required not in set_mode_block:
+        fail("display mode failure propagation is missing: " + required)
+
+print("PASS: Rocket Lake IDs retained; Alchemist/Battlemage remain unclaimed; CPU-only 2D and engine/sync hooks fail closed; port modeset errors propagate.")
 print("NOTE: source checks only; build and physical display validation are still required.")

@@ -1547,7 +1547,13 @@ DigitalPort::SetDisplayMode(display_mode* target, uint32 colorMode)
 		uint32 lanes = 0;
 		uint32 linkBandwidth = 0;
 		uint32 bitsPerPixel = 0;
-		link->PreTrain(&target->timing, &linkBandwidth, &lanes, &bitsPerPixel);
+		status_t preTrainStatus = link->PreTrain(&target->timing,
+			&linkBandwidth, &lanes, &bitsPerPixel);
+		if (preTrainStatus != B_OK) {
+			ERROR("%s: FDI pre-training failed on %s (status %d)\n",
+				__func__, PortName(), (int)preTrainStatus);
+			return preTrainStatus;
+		}
 		status_t linkStatus = fPipe->SetFDILink(target->timing, linkBandwidth,
 			lanes, bitsPerPixel);
 		if (linkStatus != B_OK) {
@@ -1555,7 +1561,12 @@ DigitalPort::SetDisplayMode(display_mode* target, uint32 colorMode)
 				__func__, PortName(), (int)linkStatus);
 			return linkStatus;
 		}
-		link->Train(&target->timing, lanes);
+		status_t trainStatus = link->Train(&target->timing, lanes);
+		if (trainStatus != B_OK) {
+			ERROR("%s: FDI training failed on %s (status %d)\n",
+				__func__, PortName(), (int)trainStatus);
+			return trainStatus;
+		}
 	}
 
 	pll_divisors divisors;

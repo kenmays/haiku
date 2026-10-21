@@ -1831,7 +1831,7 @@ DisplayPort::SetupI2c(i2c_bus *bus)
 // DP revision, maximum link rate, and lane count; it does not establish that
 // the Intel source has negotiated or trained that link.
 void
-DisplayPort::_ProbePconCapabilities()
+DisplayPort::_ProbeDisplayCapabilities()
 {
 	uint8 receiverCaps[16] = {};
 	dp_aux_msg message;
@@ -1933,7 +1933,7 @@ DisplayPort::IsConnected()
 	}
 
 	TRACE("%s: %s link detected\n", __func__, PortName());
-	_ProbePconCapabilities();
+	_ProbeDisplayCapabilities();
 	bool edidDetected = HasEDID();
 
 	// On laptops we always have an internal panel.. (this is on the eDP port)
@@ -2372,6 +2372,10 @@ EmbeddedDisplayPort::IsConnected()
 	}
 
 	HasEDID();
+	// Read the standard DP receiver capability block for diagnostics. This
+	// reports sink limits; it does not replace link training or prove eDP
+	// optional-feature support.
+	_ProbeDisplayCapabilities();
 
 	// If eDP has EDID, awesome. We use it.
 	// No EDID? The modesetting code falls back to VBIOS panel_mode

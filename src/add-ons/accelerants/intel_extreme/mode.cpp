@@ -485,8 +485,8 @@ intel_set_display_mode(display_mode* mode)
 		status_t currentStatus = gInfo->ports[i]->SetDisplayMode(&target,
 			colorMode);
 		if (currentStatus != B_OK) {
-			ERROR("%s: Unable to set display mode on port %u (status %ld)!\n",
-				__func__, i, currentStatus);
+			ERROR("%s: Unable to set display mode on port %u (status %d)!\n",
+				__func__, i, (int)currentStatus);
 			if (portStatus == B_OK)
 				portStatus = currentStatus;
 		}

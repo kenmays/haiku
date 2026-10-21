@@ -145,6 +145,45 @@ store_pixel(const cpu_framebuffer& fb, uint8* pixel, uint32 color)
 }
 
 
+static uint32
+raw_pixel(const cpu_framebuffer& fb, const uint8* pixel)
+{
+	switch (fb.colorSpace) {
+		case B_CMAP8:
+			return *pixel;
+		case B_RGB15_LITTLE:
+		case B_RGB16_LITTLE: {
+			uint16 value;
+			memcpy(&value, pixel, sizeof(value));
+			return value;
+		}
+		case B_RGB32_LITTLE: {
+			uint32 value;
+			memcpy(&value, pixel, sizeof(value));
+			return value & 0x00ffffff;
+		}
+	}
+	return 0;
+}
+
+
+static uint32
+encode_color(const cpu_framebuffer& fb, uint32 color)
+{
+	switch (fb.colorSpace) {
+		case B_CMAP8:
+			return color & 0xff;
+		case B_RGB15_LITTLE:
+			return to_rgb16(color, true);
+		case B_RGB16_LITTLE:
+			return to_rgb16(color, false);
+		case B_RGB32_LITTLE:
+			return color & 0x00ffffff;
+	}
+	return 0;
+}
+
+
 static void
 fill_rect(cpu_framebuffer& fb, int32 left, int32 top, int32 right,
 	int32 bottom, uint32 color, bool invert)
@@ -295,6 +334,65 @@ intel_cpu_screen_to_screen_blit(engine_token* token, blit_params* params,
 			for (int32 row = 0; row < height; row++)
 				memmove(destination + (size_t)row * fb.stride,
 					source + (size_t)row * fb.stride, rowBytes);
+		}
+	}
+}
+
+
+void
+intel_cpu_screen_to_screen_transparent_blit(engine_token* token,
+	uint32 transparentColor, blit_params* params, uint32 count)
+{
+	cpu_framebuffer fb;
+	if (params == NULL || !get_framebuffer(fb))
+		return;
+
+	const uint32 key = encode_color(fb, transparentColor);
+	for (uint32 i = 0; i < count; i++) {
+		int32 sourceLeft = params[i].src_left;
+		int32 sourceTop = params[i].src_top;
+		int32 destLeft = params[i].dest_left;
+		int32 destTop = params[i].dest_top;
+		int32 width = (int32)params[i].width + 1;
+		int32 height = (int32)params[i].height + 1;
+
+		if (sourceLeft >= (int32)fb.width || destLeft >= (int32)fb.width
+			|| sourceTop >= (int32)fb.height || destTop >= (int32)fb.height)
+			continue;
+		if (width > (int32)fb.width - sourceLeft)
+			width = (int32)fb.width - sourceLeft;
+		if (width > (int32)fb.width - destLeft)
+			width = (int32)fb.width - destLeft;
+		if (height > (int32)fb.height - sourceTop)
+			height = (int32)fb.height - sourceTop;
+		if (height > (int32)fb.height - destTop)
+			height = (int32)fb.height - destTop;
+		if (width <= 0 || height <= 0)
+			continue;
+
+		int32 row = destTop > sourceTop ? height - 1 : 0;
+		int32 rowEnd = destTop > sourceTop ? -1 : height;
+		int32 rowStep = destTop > sourceTop ? -1 : 1;
+		for (; row != rowEnd; row += rowStep) {
+			const uint8* source = fb.base
+				+ (size_t)(sourceTop + row) * fb.stride
+				+ (size_t)sourceLeft * fb.bytesPerPixel;
+			uint8* destination = fb.base
+				+ (size_t)(destTop + row) * fb.stride
+				+ (size_t)destLeft * fb.bytesPerPixel;
+			bool reverse = sourceTop == destTop && destLeft > sourceLeft
+				&& destLeft < sourceLeft + width;
+			int32 column = reverse ? width - 1 : 0;
+			int32 columnEnd = reverse ? -1 : width;
+			int32 columnStep = reverse ? -1 : 1;
+			for (; column != columnEnd; column += columnStep) {
+				const uint8* src = source
+					+ (size_t)column * fb.bytesPerPixel;
+				uint8* dst = destination
+					+ (size_t)column * fb.bytesPerPixel;
+				if (raw_pixel(fb, src) != key)
+					memmove(dst, src, fb.bytesPerPixel);
+			}
 		}
 	}
 }

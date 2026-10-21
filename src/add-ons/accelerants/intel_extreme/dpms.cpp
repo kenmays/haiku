@@ -199,8 +199,17 @@ status_t
 intel_set_dpms_mode(uint32 mode)
 {
 	CALLED();
-	gInfo->shared_info->dpms_mode = mode;
+
+	// DPMS modes are mutually exclusive states, not a bitmask to combine.
+	// Reject unknown values instead of silently blanking the display while
+	// reporting success with an invalid stored mode.
+	if (mode != B_DPMS_ON && mode != B_DPMS_STAND_BY
+		&& mode != B_DPMS_SUSPEND && mode != B_DPMS_OFF) {
+		return B_BAD_VALUE;
+	}
+
 	set_display_power_mode(mode);
+	gInfo->shared_info->dpms_mode = mode;
 
 	return B_OK;
 }

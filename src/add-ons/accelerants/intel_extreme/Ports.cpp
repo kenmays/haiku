@@ -2652,6 +2652,16 @@ DigitalDisplayInterface::SetDisplayMode(display_mode* target, uint32 colorMode)
 		return B_ERROR;
 	}
 
+	// Gen12 combo-PHY DPLL routing is implemented only for DDI A/B here.
+	// C and Type-C/MG PHY ports need their generation-specific PLL path;
+	// do not program DPLL0 and accidentally route its clock to DDI A.
+	if (gInfo->shared_info->device_type.Generation() >= 12
+		&& PortIndex() != INTEL_PORT_A && PortIndex() != INTEL_PORT_B) {
+		ERROR("%s: Gen12 DPLL routing is not implemented for %s\n",
+			__func__, PortName());
+		return B_NOT_SUPPORTED;
+	}
+
 	display_timing hardwareTarget = target->timing;
 	bool needsScaling = false;
 	if ((PortIndex() == INTEL_PORT_A)
@@ -2767,10 +2777,10 @@ DigitalDisplayInterface::SetDisplayMode(display_mode* target, uint32 colorMode)
 			return B_ERROR;
 		}
 
-		// TODO write a proper way to assign PLLs to pipes and ports.
-		int chosenPLL = 0;
-		if (PortIndex() == 7)
-			chosenPLL = 1;
+		// DPLL0 drives DDI A and DPLL1 drives DDI B on this supported
+		// Gen12 combo-PHY path. Other PHY types are rejected above rather
+		// than assigned a combo DPLL by a port-index heuristic.
+		int chosenPLL = PortIndex() == INTEL_PORT_B ? 1 : 0;
 		TRACE("Using DPLL %d for port %d. PLL settings: DCO=%f, P,Q,K=%d,%d,%d\n", chosenPLL,
 			PortIndex(), dco, p, q, k);
 		status_t pllStatus = ProgramPLL(chosenPLL, p, q, k, dco);
@@ -2780,10 +2790,11 @@ DigitalDisplayInterface::SetDisplayMode(display_mode* target, uint32 colorMode)
 			return pllStatus;
 		}
 
-		// Configure DPLL mapping to port then turn on DPLL clock
+		// Route the selected DPLL only to its matching combo-PHY port.
+		// Keep unrelated selector and clock-off fields intact.
 		uint32 config = read32(TGL_DPCLKA_CFGCR0);
 		TRACE("PLL configuration before changes: %" B_PRIx32 "\n", config);
-		if (chosenPLL == 0) {
+		if (PortIndex() == INTEL_PORT_A) {
 			config |= TGL_DPCLKA_DDIA_CLOCK_OFF;
 			config &= ~TGL_DPCLKA_DDIA_CLOCK_SELECT;
 			write32(TGL_DPCLKA_CFGCR0, config);
@@ -2800,9 +2811,15 @@ DigitalDisplayInterface::SetDisplayMode(display_mode* target, uint32 colorMode)
 		TRACE("PLL configuration after changes: %" B_PRIx32 "\n", config);
 	}
 
-	// Program target display mode
+	// Program target display mode. The link M/N helper can reject an
+	// unsupported or malformed link configuration; never hide that error.
 	fPipe->ConfigureTimings(target, !needsScaling);
-	_SetPortLinkGen8(hardwareTarget, pllSel);
+	status_t linkStatus = _SetPortLinkGen8(hardwareTarget, pllSel);
+	if (linkStatus != B_OK) {
+		ERROR("%s: Unable to configure link M/N values for %s: %s\n",
+			__func__, PortName(), strerror(linkStatus));
+		return linkStatus;
+	}
 
 	// Set fCurrentMode to our set display mode
 	memcpy(&fCurrentMode, target, sizeof(display_mode));

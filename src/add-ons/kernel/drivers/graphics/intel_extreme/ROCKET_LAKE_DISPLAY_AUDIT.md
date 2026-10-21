@@ -125,3 +125,20 @@ A source review of `accelerants/intel_extreme/Pipes.cpp` found another Gen12 sca
 - Until this audit is complete, keep the active allowlist unchanged and avoid adding a new cursor/overlay implementation on top of assumptions inherited from older generations.
 
 The Gen12 cursor/overlay plan in `accelerants/intel_extreme/tests/GEN12_CURSOR_OVERLAY_PLANE_PLAN.md` defines the plane inventory and physical test requirements. No register writes were changed in this follow-up because guessing at display-engine offsets or masks could make a working BIOS-configured display fail.
+
+
+## Follow-up implementation checkpoint: link limits and scanout failure safety
+
+Additional source changes after the earlier checkpoint:
+
+- Gen12 DDI A/B now map explicitly to DPLL0/DPLL1. Gen12 DDI C and later ports return `B_NOT_SUPPORTED` before modeset register writes because their TC/MG PHY-specific PLL setup is not implemented. This intentionally narrows the claim instead of routing an arbitrary port through DDI A's clock field.
+- DCO inputs are validated before MMIO: P/Q/K values, DCO range, and the reference clock must be supported. Fractional rounding carries into the integer field rather than spilling into a reserved fractional bit.
+- The DDI link M/N helper now returns its error to the caller. DP lane-width encodings are decoded as explicit 1/2/4-lane values; reserved encodings are rejected.
+- The Gen12 DP path uses a fixed 2.7 Gbit/s link reference. A payload-capacity check with 5% headroom runs before pipe/PLL/link writes. This does **not** replace DP link-rate selection or link training; modes exceeding the fixed link are rejected.
+- If a port mode-set fails, the accelerant no longer restores DPMS over a partially configured pipe. It leaves the display off and attempts to replace the failed-mode framebuffer with a correctly sized buffer for the prior software mode. If that allocation cannot be restored, the stale framebuffer pointer is cleared so it cannot be dereferenced.
+- On successful modesets, the new framebuffer surface is programmed before DPMS can re-enable scanout; pitch is then programmed with the pipe on and the base is re-applied to latch the final state. A null framebuffer pointer is no longer passed to the free ioctl on a later recovery attempt.
+- Added a GitHub Actions source-guard workflow at `.github/workflows/intel-extreme-source-guards.yml`. It runs the Rocket Lake/PCI-ID, Gen1–8 CPU-only, and Gen10–12 fail-closed validators when matching source changes are pushed or proposed.
+
+### Qualification status
+
+These are source-level corrections and guardrails only. The Haiku source checkout could not be cloned into this execution environment because GitHub DNS resolution failed, and no GitHub Actions run was visible after adding the workflow. Therefore the Python validators and C++ build remain **not executed here**; do not interpret the workflow file or source inspection as a passing CI/build result. Physical Rocket Lake DP/HDMI testing is still required.

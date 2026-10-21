@@ -102,6 +102,9 @@ wait_for_register(addr_t address, uint32 mask, bool set, uint32 timeout)
 bool
 ComputeHdmiDpll(int freq, int* Pdiv, int* Qdiv, int* Kdiv, float* bestdco)
 {
+	if (freq <= 0 || Pdiv == NULL || Qdiv == NULL || Kdiv == NULL || bestdco == NULL)
+		return false;
+
 	int bestdiv = 0;
 	float dco = 0, dcocentrality = 0;
 	float bestdcocentrality = 999999;
@@ -205,6 +208,12 @@ ComputeHdmiDpll(int freq, int* Pdiv, int* Qdiv, int* Kdiv, float* bestdco)
 bool
 ComputeDisplayPortDpll(int freq, int* Pdiv, int* Qdiv, int* Kdiv, float* bestdco)
 {
+	if (freq <= 0 || Pdiv == NULL || Qdiv == NULL || Kdiv == NULL || bestdco == NULL)
+		return false;
+
+	// This implementation deliberately supports only the fixed 2.7 Gbit/s
+	// DisplayPort reference clock. The caller separately checks payload
+	// bandwidth; higher link rates require a real rate-selection implementation.
 	*Pdiv = 3;
 	*Qdiv = 1;
 	*Kdiv = 2;
@@ -252,20 +261,39 @@ ProgramPLL(int which, int Pdiv, int Qdiv, int Kdiv, float dco)
 			return B_BAD_VALUE;
 	}
 
-	// Find the reference frequency (24 or 19.2MHz)
+	// Validate parameters before calculating or writing any hardware state.
+	if (Pdiv != 2 && Pdiv != 3 && Pdiv != 5 && Pdiv != 7)
+		return B_BAD_VALUE;
+	if (Kdiv < 1 || Kdiv > 3 || Qdiv < 1 || Qdiv > 255
+		|| dco < 7998.0f || dco > 10000.0f)
+		return B_BAD_VALUE;
+
+	// Find the reference frequency (24 or 19.2MHz).
 	int ref_khz = gInfo->shared_info->pll_info.reference_frequency;
 
-	// There is an automatic divide-by-two in this case
+	// There is an automatic divide-by-two in this case.
 	if (ref_khz == 38400)
 		ref_khz = 19200;
+	if (ref_khz != 19200 && ref_khz != 24000)
+		return B_BAD_VALUE;
 
 	float ref = ref_khz / 1000.0f;
 
-	// Compute the DCO divider integer and fractional parts
-	uint32 dco_int = (uint32)floorf(dco / ref);
-	uint32 dco_frac = (uint32)ceilf((dco / ref - dco_int) * (1 << 15));
+	// Compute the DCO divider integer and fractional parts. Round the
+	// fraction up as required by the PLL algorithm, carrying into the
+	// integer field rather than spilling bit 15 into a reserved register bit.
+	float multiplier = dco / ref;
+	uint32 dco_int = (uint32)floorf(multiplier);
+	uint32 dco_frac = (uint32)ceilf((multiplier - dco_int) * (1 << 15));
+	if (dco_frac >= (1 << 15)) {
+		dco_int++;
+		dco_frac = 0;
+	}
+	if (dco_int > (TGL_DPLL_DCO_INTEGER >> TGL_DPLL_DCO_INTEGER_SHIFT)
+		|| dco_frac > 0x7fff)
+		return B_BAD_VALUE;
 
-	int32 dco_reg = dco_int | (dco_frac << TGL_DPLL_DCO_FRACTION_SHIFT);
+	uint32 dco_reg = dco_int | (dco_frac << TGL_DPLL_DCO_FRACTION_SHIFT);
 
 	int32 dividers = 0;
 	switch (Pdiv) {

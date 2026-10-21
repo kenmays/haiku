@@ -182,8 +182,9 @@ set_frame_buffer_registers(uint32 offset)
 void
 set_frame_buffer_base()
 {
-	// TODO we always set both displays to the same address. When we support
-	// multiple framebuffers, they should get different addresses here.
+	// Both planes currently scan the same framebuffer allocation. In the
+	// explicit horizontal-span mode, plane B uses a different start offset
+	// into that allocation; this is still one logical desktop, not two heads.
 	set_frame_buffer_registers(0);
 	set_frame_buffer_registers(INTEL_DISPLAY_OFFSET);
 }
@@ -505,11 +506,9 @@ intel_set_display_mode(display_mode* mode)
 	// those pipes require independently validated plane/surface programming
 	// and per-head state, which this accelerant path does not provide yet.
 	//
-	// Do not infer a spanning/combined mode from virtual_width alone. This
-	// accelerant currently sets B_SCROLL on every proposed mode, and that flag
-	// also describes ordinary display panning. A spanning mode needs an
-	// explicit request/reply marker and a validated two-pipe layout before
-	// programming a nonzero start offset for pipe B.
+	// Do not infer a spanning mode from virtual_width or B_SCROLL alone. The
+	// explicit private marker is carried only by the spanning mode-list
+	// variants, and the topology is revalidated here before offset programming.
 	bool horizontalSpan = (target.timing.flags
 		& INTEL_MODE_HORIZONTAL_SPAN) != 0;
 	if (horizontalSpan && !has_supported_horizontal_span_pair())

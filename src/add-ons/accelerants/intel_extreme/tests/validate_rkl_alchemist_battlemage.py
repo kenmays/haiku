@@ -146,6 +146,10 @@ for required in ("wait_for_register(DPLL_ENABLE, TGL_DPLL_LOCK, false, 100000)",
                  "wait_for_register(DPLL_ENABLE, TGL_DPLL_LOCK, true, 100000)"):
     if required not in pll_source:
         fail("bounded PLL transition wait is missing: " + required)
+if "Undo the power request if hardware did not acknowledge it" not in pll_source:
+    fail("PLL power-up timeout must roll back the power request")
+if "Do not leave an unlocked PLL enabled" not in pll_source:
+    fail("PLL lock timeout must attempt bounded shutdown")
 if not re.search(r"status_t\s+pllStatus\s*=\s*ProgramPLL\(", port_source) or "return pllStatus;" not in port_source:
     fail("Gen12 PLL programming errors are not propagated to the modeset caller")
 

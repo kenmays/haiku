@@ -16,6 +16,9 @@ ROOT = Path(__file__).resolve().parents[5]
 DRIVER = ROOT / "src/add-ons/kernel/drivers/graphics/intel_extreme/driver.cpp"
 HOOKS = ROOT / "src/add-ons/accelerants/intel_extreme/hooks.cpp"
 MODE_SOURCE = ROOT / "src/add-ons/accelerants/intel_extreme/mode.cpp"
+CURSOR_SOURCE = ROOT / "src/add-ons/accelerants/intel_extreme/cursor.cpp"
+PLL_SOURCE = ROOT / "src/add-ons/accelerants/intel_extreme/TigerLakePLL.cpp"
+PORT_SOURCE = ROOT / "src/add-ons/accelerants/intel_extreme/Ports.cpp"
 
 def fail(message: str) -> None:
     print(f"FAIL: {message}")
@@ -24,6 +27,9 @@ def fail(message: str) -> None:
 driver = DRIVER.read_text(encoding="utf-8")
 hooks = HOOKS.read_text(encoding="utf-8")
 mode_source = MODE_SOURCE.read_text(encoding="utf-8")
+cursor_source = CURSOR_SOURCE.read_text(encoding="utf-8")
+pll_source = PLL_SOURCE.read_text(encoding="utf-8")
+port_source = PORT_SOURCE.read_text(encoding="utf-8")
 
 # Catch duplicate active PCI IDs in the supported-device table. Entries inside
 # #if 0 blocks are intentionally excluded because they are not compiled.
@@ -111,6 +117,37 @@ for feature in engine_features:
 if not re.search(r"return\s+NULL\s*;", engine_block.group(1)):
     fail("engine/synchronization hooks are not visibly fail-closed")
 
+# Gen12's legacy cursor register path is not yet validated; keep the hooks gated.
+cursor_hooks = re.search(
+    r"/\\* cursor management \\*/(.*?)(?=/\\* engine/synchronization \\*/)",
+    hooks,
+    re.DOTALL | re.IGNORECASE,
+)
+if cursor_hooks is None or cursor_hooks.group(1).count("Generation() < 12") < 3:
+    fail("hardware cursor hooks are not gated away from unvalidated Gen12")
+for required in ("width == 0", "height == 0", "andMask == NULL", "xorMask == NULL"):
+    if required not in cursor_source:
+        fail("cursor input validation is missing: " + required)
+
+# Gen6+ overlay hooks must stay fail-closed until a modern plane path exists.
+overlay_gate = re.search(
+    r"if \\(gInfo->shared_info->device_type.Generation\\(\\) >= 6\\)\\s*\\{(.*?)\\n\\s*\\}",
+    hooks,
+    re.DOTALL,
+)
+if overlay_gate is None or "B_CONFIGURE_OVERLAY" not in overlay_gate.group(1) or "return NULL;" not in overlay_gate.group(1):
+    fail("legacy overlay hooks are not visibly disabled on Gen6+")
+
+# PLL waits must be bounded and caller-visible failures must stop the modeset.
+if "while ((read32(DPLL_ENABLE)" in pll_source:
+    fail("unbounded Gen12 PLL polling loop remains")
+for required in ("wait_for_register(DPLL_ENABLE, TGL_DPLL_LOCK, false, 100000)",
+                 "wait_for_register(DPLL_ENABLE, TGL_DPLL_POWER_STATE, true, 100000)",
+                 "wait_for_register(DPLL_ENABLE, TGL_DPLL_LOCK, true, 100000)"):
+    if required not in pll_source:
+        fail("bounded PLL transition wait is missing: " + required)
+if not re.search(r"status_t\\s+pllStatus\\s*=\\s*ProgramPLL\\(", port_source) or "return pllStatus;" not in port_source:
+    fail("Gen12 PLL programming errors are not propagated to the modeset caller")
 # A failed per-port modeset must not be silently reported as success.
 set_mode_match = re.search(
     r"status_t\s+intel_set_display_mode\s*\(.*?(?=\nstatus_t\s+intel_get_display_mode\s*\()",
@@ -124,5 +161,5 @@ for required in ("status_t portStatus = B_OK;", "portStatus = status;", "return 
     if required not in set_mode_block:
         fail("display mode failure propagation is missing: " + required)
 
-print("PASS: Rocket Lake IDs retained; Alchemist/Battlemage remain unclaimed; CPU-only 2D and engine/sync hooks fail closed; port modeset errors propagate.")
+print("PASS: Rocket Lake IDs retained; Alchemist/Battlemage remain unclaimed; CPU-only 2D and engine/sync hooks fail closed; cursor/overlay Gen12 gates retained; PLL waits bounded and errors propagated; port modeset errors propagate.")
 print("NOTE: source checks only; build and physical display validation are still required.")

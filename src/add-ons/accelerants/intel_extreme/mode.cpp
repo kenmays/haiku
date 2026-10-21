@@ -401,6 +401,7 @@ intel_set_display_mode(display_mode* mode)
 	// This allows failure handling to restore a live framebuffer allocation.
 	addr_t oldFrameBuffer = sharedInfo.frame_buffer;
 	addr_t oldFrameBufferOffset = sharedInfo.frame_buffer_offset;
+	display_mode oldMode = sharedInfo.current_mode;
 
 	memset((uint8*)base, 0, framebufferSize);
 	sharedInfo.frame_buffer = base;
@@ -514,6 +515,32 @@ intel_set_display_mode(display_mode* mode)
 		sharedInfo.frame_buffer = oldFrameBuffer;
 		sharedInfo.frame_buffer_offset = oldFrameBufferOffset;
 		set_frame_buffer_base();
+
+		// Port programming is not atomic: an earlier output may already have
+		// switched before a later output failed. Best-effort restore the prior
+		// mode on every still-connected output while the old allocation is
+		// still alive.
+		if (oldFrameBuffer != 0 && oldMode.timing.h_display != 0
+			&& oldMode.timing.v_display != 0) {
+			uint32 oldColorMode, oldBytesPerRow, oldBitsPerPixel;
+			if (get_color_space_format(oldMode, oldColorMode, oldBytesPerRow,
+					oldBitsPerPixel) == B_OK) {
+				for (uint32 i = 0; i < gInfo->port_count; i++) {
+					Port* port = gInfo->ports[i];
+					if (port == NULL || !port->IsConnected())
+						continue;
+					status_t restoreStatus = port->SetDisplayMode(&oldMode,
+						oldColorMode);
+					if (restoreStatus != B_OK) {
+						ERROR("%s: Failed to restore previous mode on port %u "
+							"(status %d)\n", __func__, i, (int)restoreStatus);
+					}
+				}
+				program_pipe_color_modes(oldColorMode);
+				set_frame_buffer_base();
+			}
+		}
+
 		intel_free_memory(base);
 		set_display_power_mode(sharedInfo.dpms_mode);
 		return portStatus;

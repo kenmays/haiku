@@ -68,3 +68,26 @@ Until all relevant stages pass, report only source-level guardrails and implemen
 - `../../../kernel/drivers/graphics/intel_extreme/ROCKET_LAKE_DISPLAY_AUDIT.md`
 - `ROCKET_LAKE_ALCHEMIST_BATTLEMAGE_SOURCE_AUDIT.md`
 - `ROCKET_LAKE_ALCHEMIST_BATTLEMAGE_SUPPORT.md`
+
+
+## Follow-up source comparison: upstream i915 plane architecture (2026-10-20)
+
+The upstream Linux i915 source confirms that Display version 12 uses a generation-specific universal-plane implementation: `skl_universal_plane.c` selects `tgl_plane_caps()` and `tgl_plane_funcs` for display version 12 and later, rather than treating a legacy overlay engine as the modern sprite-plane interface. The plane setup also associates each plane with a pipe and advertises per-plane format/capability sets. See:
+- https://github.com/torvalds/linux/blob/master/drivers/gpu/drm/i915/display/skl_universal_plane.c
+- https://github.com/torvalds/linux/blob/master/drivers/gpu/drm/i915/display/intel_display_device.h
+
+This is architectural corroboration, not a register-programming recipe to copy verbatim: Linux relies on atomic state validation, display power management, watermarks, plane update/latch sequencing, and hardware-specific workarounds that Haiku's current accelerant does not have as an equivalent transaction framework.
+
+### Decisions from this comparison
+
+1. Keep the existing legacy `overlay.cpp` API path disabled on Gen6+; do not route it to the Gen12 primary ring or reuse its legacy overlay register structure.
+2. Treat the desired Haiku video path as a dedicated Gen12 sprite/universal-plane implementation with a small explicit supported-format set, strict geometry/buffer validation, and a bounded update/disable sequence. The legacy Haiku overlay API can be adapted only if its lifetime and synchronization semantics can be satisfied.
+3. Keep the cursor implementation separate from the sprite/overlay plane path. Cursor programming must use the verified Gen12 cursor-plane register definitions and format rules; the existing legacy monochrome AND/XOR payload and `INTEL_CURSOR_*` offsets are not sufficient evidence.
+4. Before coding register writes, produce a register map for Rocket Lake from the actual definitions in Haiku's private Intel header and upstream i915's Gen12 cursor/plane helpers. For each register, record generation, pipe/plane indexing, writable fields, alignment, and latch requirements. If that map cannot be supported by source evidence, return `B_NOT_SUPPORTED` and retain the hook gate.
+5. No broad hook exposure, primary-ring initialization, or hardware drawing-hook changes are permitted as part of this display-plane work. CPU-only 2D rendering remains the recovery path.
+
+### Immediate implementation checkpoint
+
+- Strengthened `validate_rkl_alchemist_battlemage.py` to assert that all nine overlay hooks are inside the Gen6+ fail-closed gate and that cursor shape/move/show each retain an explicit Gen12 gate.
+- These are source guardrails only. The validator has not been run in this execution environment after the latest edit; the configured GitHub Actions workflow is the authoritative next check.
+- Do not claim a Gen12 cursor or overlay implementation from this documentation update. The actual register-map and runtime implementation tasks remain open.

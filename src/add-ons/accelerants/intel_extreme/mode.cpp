@@ -358,6 +358,17 @@ intel_set_display_mode(display_mode* mode)
 	if (status != B_OK)
 		return status;
 
+	// Compute the allocation size without 32-bit multiplication wrap.  The
+	// display_mode dimensions are 16-bit, but the product can still exceed
+	// size_t on 32-bit builds.
+	uint64 framebufferSize64 = (uint64)bytesPerRow * target.virtual_height;
+	if (bytesPerRow == 0 || target.virtual_height == 0
+		|| framebufferSize64 > (uint64)(size_t)-1) {
+		ERROR("%s: Invalid framebuffer dimensions/size!\n", __func__);
+		return B_BAD_VALUE;
+	}
+	size_t framebufferSize = (size_t)framebufferSize64;
+
 	// TODO: do not go further if the mode is identical to the current one.
 	// This would avoid the screen being off when switching workspaces when they
 	// have the same resolution.
@@ -375,8 +386,7 @@ intel_set_display_mode(display_mode* mode)
 	// If allocation fails, the old framebuffer and shared state remain valid.
 
 	addr_t base;
-	status = intel_allocate_memory(bytesPerRow * target.virtual_height, 0,
-		base);
+	status = intel_allocate_memory(framebufferSize, 0, base);
 	if (status < B_OK) {
 		ERROR("%s: Failed to allocate framebuffer!\n", __func__);
 		set_display_power_mode(sharedInfo.dpms_mode);
@@ -388,7 +398,7 @@ intel_set_display_mode(display_mode* mode)
 	addr_t oldFrameBuffer = sharedInfo.frame_buffer;
 	addr_t oldFrameBufferOffset = sharedInfo.frame_buffer_offset;
 
-	memset((uint8*)base, 0, bytesPerRow * target.virtual_height);
+	memset((uint8*)base, 0, framebufferSize);
 	sharedInfo.frame_buffer = base;
 	sharedInfo.frame_buffer_offset = base - (addr_t)sharedInfo.graphics_memory;
 

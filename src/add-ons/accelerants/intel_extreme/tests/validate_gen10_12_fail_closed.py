@@ -336,6 +336,40 @@ def main() -> int:
         and new_framebuffer_alloc > free_restore_dpms,
         "mode switch must preserve old framebuffer and restore DPMS if its free fails",
     )
+
+    # After a port modeset failure, keep the display off. On success, publish
+    # the new mode/base before DPMS re-enables any scanout plane, then re-apply
+    # the base after programming pitch while the pipe is on.
+    port_loop = mode_setter.find("status_t portStatus = B_OK;")
+    failed_modeset = mode_setter.find("if (portStatus != B_OK)", port_loop)
+    failed_return = mode_setter.find("return portStatus;", failed_modeset)
+    pre_restore_base = mode_setter.find("set_frame_buffer_base();", failed_modeset)
+    restore_new_dpms = mode_setter.find(
+        "powerStatus = set_display_power_mode(sharedInfo.dpms_mode);", pre_restore_base
+    )
+    row_pitch = mode_setter.find("write32(INTEL_DISPLAY_A_BYTES_PER_ROW", restore_new_dpms)
+    post_pitch_base = mode_setter.find("set_frame_buffer_base();", row_pitch)
+    require(
+        port_loop >= 0 and failed_modeset > port_loop
+        and failed_return > failed_modeset and pre_restore_base < 0
+        and restore_new_dpms < 0,
+        "failed modesets must not restore DPMS or expose a partially configured scanout",
+    )
+    # The success path occurs after the early failure return, so locate its
+    # first base update after the explicit success log.
+    success_log = mode_setter.find("Port configuration completed successfully!")
+    pre_restore_base = mode_setter.find("set_frame_buffer_base();", success_log)
+    restore_new_dpms = mode_setter.find(
+        "powerStatus = set_display_power_mode(sharedInfo.dpms_mode);", pre_restore_base
+    )
+    row_pitch = mode_setter.find("write32(INTEL_DISPLAY_A_BYTES_PER_ROW", restore_new_dpms)
+    post_pitch_base = mode_setter.find("set_frame_buffer_base();", row_pitch)
+    require(
+        success_log >= 0 and pre_restore_base > success_log
+        and restore_new_dpms > pre_restore_base
+        and row_pitch > restore_new_dpms and post_pitch_base > row_pitch,
+        "successful modeset must program the new base before DPMS restore and re-latch after pitch",
+    )
     require(
         failed_restore >= 0 and "sharedInfo.frame_buffer_offset = 0;" in allocation_failure,
         "failed fallback allocation must clear stale CPU framebuffer pointers",

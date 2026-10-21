@@ -541,10 +541,16 @@ intel_set_display_mode(display_mode* mode)
 		status_t releaseFailedBuffer = intel_free_memory(failedBase);
 		if (releaseFailedBuffer == B_OK) {
 			addr_t fallbackBase;
-			size_t fallbackSize = (size_t)sharedInfo.bytes_per_row
-				* sharedInfo.current_mode.virtual_height;
-			status_t fallbackStatus = intel_allocate_memory(fallbackSize, 0,
-				fallbackBase);
+			size_t fallbackSize = 0;
+			if (sharedInfo.current_mode.virtual_height != 0
+				&& (size_t)sharedInfo.bytes_per_row
+					<= ((size_t)-1) / sharedInfo.current_mode.virtual_height) {
+				fallbackSize = (size_t)sharedInfo.bytes_per_row
+					* sharedInfo.current_mode.virtual_height;
+			}
+			status_t fallbackStatus = fallbackSize != 0
+				? intel_allocate_memory(fallbackSize, 0, fallbackBase)
+				: B_BAD_VALUE;
 			if (fallbackStatus == B_OK) {
 				memset((uint8*)fallbackBase, 0, fallbackSize);
 				sharedInfo.frame_buffer = fallbackBase;

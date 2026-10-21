@@ -47,6 +47,10 @@ this environment.
    claimed hardware generation before enabling additional PCI IDs.
 
 
+## DPMS safety improvement
+
+LVDS panel-status polling in `dpms.cpp` now has a bounded 500 ms timeout instead of an unbounded loop. This prevents a missing/stuck status bit from trapping the accelerant forever. A timeout is logged, but the existing DPMS routine does not yet propagate the failure because its helper is `void`; digital-port DPMS and newer display-engine power sequencing remain unresolved and unvalidated.
+
 ## Additional operation
 
 - Transparent screen-to-screen blit now copies only pixels that differ from the encoded transparent key, with clipped extents and overlap-aware traversal. Pixel-key encoding still needs verification against app_server color-space semantics.

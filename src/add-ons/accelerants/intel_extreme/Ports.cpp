@@ -109,8 +109,10 @@ validate_gen12_dp_bandwidth(Pipe* pipe, const display_timing& timing)
 
 	uint32 pipeFunc = read32(PIPE_DDI_FUNC_CTL_A + pipeOffset);
 	uint32 mode = (pipeFunc & PIPE_DDI_MODESEL_MASK) >> PIPE_DDI_MODESEL_SHIFT;
-	if (mode < PIPE_DDI_MODE_DP_SST)
+	if (mode == PIPE_DDI_MODE_HDMI || mode == PIPE_DDI_MODE_DVI)
 		return B_OK;
+	if (mode != PIPE_DDI_MODE_DP_SST && mode != PIPE_DDI_MODE_DP_MST)
+		return B_BAD_VALUE;
 
 	uint32 bpc = (pipeFunc & PIPE_DDI_BPC_MASK) >> PIPE_DDI_COLOR_SHIFT;
 	uint32 bitsPerPixel;
@@ -1990,8 +1992,7 @@ DisplayPort::_SetPortLinkGen4(const display_timing& timing)
 	// that link's payload capacity instead of programming a knowingly invalid
 	// M/N ratio. Reserve 5% headroom as the older DP path does.
 	if (gInfo->shared_info->device_type.Generation() >= 12
-		&& (((pipeFunc & PIPE_DDI_MODESEL_MASK) >> PIPE_DDI_MODESEL_SHIFT)
-			>= PIPE_DDI_MODE_DP_SST)) {
+		&& (mode == PIPE_DDI_MODE_DP_SST || mode == PIPE_DDI_MODE_DP_MST)) {
 		uint64 required = (uint64)timing.pixel_clock * bitsPerPixel * 21 / 20;
 		uint64 capacity = (uint64)lanes * linkBandwidth * 8;
 		if (required > capacity) {
@@ -2687,7 +2688,8 @@ DigitalDisplayInterface::_SetPortLinkGen8(const display_timing& timing, uint32 p
 	// DP lane-width encodings are not a linear lane count: code 2 means
 	// four lanes, not three. Reject reserved encodings instead of calculating
 	// incorrect M/N ratios from them.
-	if (((pipeFunc & PIPE_DDI_MODESEL_MASK) >> PIPE_DDI_MODESEL_SHIFT) >= PIPE_DDI_MODE_DP_SST) {
+	uint32 mode = (pipeFunc & PIPE_DDI_MODESEL_MASK) >> PIPE_DDI_MODESEL_SHIFT;
+	if (mode == PIPE_DDI_MODE_DP_SST || mode == PIPE_DDI_MODE_DP_MST) {
 		uint32 width = (pipeFunc & PIPE_DDI_DP_WIDTH_MASK) >> PIPE_DDI_DP_WIDTH_SHIFT;
 		switch (width) {
 			case PIPE_DDI_DP_WIDTH_1:

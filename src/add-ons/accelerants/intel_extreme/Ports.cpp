@@ -86,6 +86,82 @@ wait_for_clear_status(addr_t address, uint32 mask, uint32 timeout)
 }
 
 
+static status_t
+validate_gen12_dp_bandwidth(Pipe* pipe, const display_timing& timing)
+{
+	if (pipe == NULL || gInfo->shared_info->device_type.Generation() < 12)
+		return B_OK;
+
+	addr_t pipeOffset = 0;
+	switch (pipe->Index()) {
+		case INTEL_PIPE_B:
+			pipeOffset = 0x1000;
+			break;
+		case INTEL_PIPE_C:
+			pipeOffset = 0x2000;
+			break;
+		case INTEL_PIPE_D:
+			pipeOffset = 0xf000;
+			break;
+		default:
+			break;
+	}
+
+	uint32 pipeFunc = read32(PIPE_DDI_FUNC_CTL_A + pipeOffset);
+	uint32 mode = (pipeFunc & PIPE_DDI_MODESEL_MASK) >> PIPE_DDI_MODESEL_SHIFT;
+	if (mode < PIPE_DDI_MODE_DP_SST)
+		return B_OK;
+
+	uint32 bpc = (pipeFunc & PIPE_DDI_BPC_MASK) >> PIPE_DDI_COLOR_SHIFT;
+	uint32 bitsPerPixel;
+	switch (bpc) {
+		case PIPE_DDI_8BPC:
+			bitsPerPixel = 24;
+			break;
+		case PIPE_DDI_10BPC:
+			bitsPerPixel = 30;
+			break;
+		case PIPE_DDI_6BPC:
+			bitsPerPixel = 18;
+			break;
+		case PIPE_DDI_12BPC:
+			bitsPerPixel = 36;
+			break;
+		default:
+			return B_BAD_VALUE;
+	}
+
+	uint32 width = (pipeFunc & PIPE_DDI_DP_WIDTH_MASK) >> PIPE_DDI_DP_WIDTH_SHIFT;
+	uint32 lanes;
+	switch (width) {
+		case PIPE_DDI_DP_WIDTH_1:
+			lanes = 1;
+			break;
+		case PIPE_DDI_DP_WIDTH_2:
+			lanes = 2;
+			break;
+		case PIPE_DDI_DP_WIDTH_4:
+			lanes = 4;
+			break;
+		default:
+			return B_BAD_VALUE;
+	}
+
+	if (timing.pixel_clock == 0)
+		return B_BAD_VALUE;
+
+	// Gen12 currently uses a fixed 2.7 Gbit/s link reference. Account for
+	// 8b/10b coding and reserve 5% payload headroom; rate selection and
+	// retraining are not implemented, so reject modes that cannot fit.
+	const uint64 required = (uint64)timing.pixel_clock * bitsPerPixel * 21 / 20;
+	const uint64 capacity = (uint64)lanes * 270000 * 8;
+	if (required > capacity)
+		return B_NOT_SUPPORTED;
+
+	return B_OK;
+}
+
+
 Port::Port(port_index index, const char* baseName)
 	:
 	fPipe(NULL),
@@ -2766,6 +2842,15 @@ DigitalDisplayInterface::SetDisplayMode(display_mode* target, uint32 colorMode)
 			// and hope for the best
 			hardwareTarget = target->timing;
 		}
+	}
+
+	// Validate the fixed-rate Gen12 DP path before changing the pipe,
+	// PLL, clock routing, or link registers.
+	status_t bandwidthStatus = validate_gen12_dp_bandwidth(fPipe, hardwareTarget);
+	if (bandwidthStatus != B_OK) {
+		ERROR("%s: Gen12 DP mode is unsupported by the configured link on %s\n",
+			__func__, PortName());
+		return bandwidthStatus;
 	}
 
 	// Setup PanelFitter

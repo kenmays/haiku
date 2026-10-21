@@ -105,6 +105,7 @@ const struct supported_device {
 	{0x0d26, INTEL_MODEL_HASM, "Haswell CRW GT3 Mobile"},
 	// Additional Haswell IDs present in upstream Linux i915.
 	{0x0a02, INTEL_MODEL_HAS,  "Haswell ULT GT1 Desktop"},
+	{0x0a0b, INTEL_MODEL_HAS,  "Haswell ULT GT1 Reserved"},
 	{0x0a0a, INTEL_MODEL_HAS,  "Haswell ULT GT1 Server"},
 	{0x0a0e, INTEL_MODEL_HASM, "Haswell ULX GT1 Mobile"},
 	{0x0402, INTEL_MODEL_HAS,  "Haswell GT1 Desktop"},
@@ -118,6 +119,7 @@ const struct supported_device {
 	{0x0c0b, INTEL_MODEL_HAS,  "Haswell SDV GT1 Reserved"},
 	{0x0c0e, INTEL_MODEL_HASM, "Haswell SDV GT1 Reserved Mobile"},
 	{0x0d02, INTEL_MODEL_HAS,  "Haswell CRW GT1 Desktop"},
+	{0x0d06, INTEL_MODEL_HASM, "Haswell CRW GT1 Mobile"},
 	{0x0d0a, INTEL_MODEL_HAS,  "Haswell CRW GT1 Server"},
 	{0x0d0b, INTEL_MODEL_HAS,  "Haswell CRW GT1 Reserved"},
 	{0x0d0e, INTEL_MODEL_HASM, "Haswell CRW GT1 Reserved Mobile"},
@@ -143,6 +145,7 @@ const struct supported_device {
 	{0x0a2a, INTEL_MODEL_HAS,  "Haswell ULT GT3 Server"},
 	{0x0a2b, INTEL_MODEL_HAS,  "Haswell ULT GT3 Reserved"},
 	{0x0422, INTEL_MODEL_HAS,  "Haswell GT3 Desktop"},
+	{0x0426, INTEL_MODEL_HASM, "Haswell GT3 Mobile"},
 	{0x042a, INTEL_MODEL_HAS,  "Haswell GT3 Server"},
 	{0x042b, INTEL_MODEL_HAS,  "Haswell GT3 Reserved"},
 	{0x042e, INTEL_MODEL_HASM, "Haswell GT3 Reserved Mobile"},

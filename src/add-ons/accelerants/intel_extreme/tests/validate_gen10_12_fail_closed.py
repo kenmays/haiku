@@ -394,7 +394,7 @@ def main() -> int:
 
     free_memory = function_body(memory, "intel_free_memory(")
     require(
-        "status_t" in memory[memory.find("status_t\\nintel_free_memory"):memory.find("status_t\\nintel_allocate_memory")]
+        "status_t" in memory[memory.find("status_t\nintel_free_memory"):memory.find("status_t\nintel_allocate_memory")]
         and "return errno;" in free_memory
         and "return B_OK;" in free_memory
         and "extern status_t intel_free_memory(addr_t base);" in accelerant_header,
@@ -416,7 +416,7 @@ def main() -> int:
         "B_CONFIGURE_OVERLAY",
     )
     require(overlay_gate >= 0, "overlay hooks must be gated on Gen6+")
-    overlay_gate_block = hooks[overlay_gate:hooks.find("\\n\\tswitch (feature) {", overlay_gate + 1)]
+    overlay_gate_block = hooks[overlay_gate:hooks.find("\n\tswitch (feature) {", overlay_gate + 1)]
     require(
         all(case in overlay_gate_block for case in overlay_cases)
         and "return NULL;" in overlay_gate_block,

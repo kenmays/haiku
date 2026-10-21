@@ -202,6 +202,8 @@ intel_cpu_release_engine(engine_token* engineToken, sync_token* syncToken)
 {
 	if (engineToken == NULL)
 		return B_BAD_VALUE;
+	if (gInfo == NULL || gInfo->shared_info == NULL)
+		return B_NO_INIT;
 	if (syncToken != NULL) {
 		syncToken->engine_id = engineToken->engine_id;
 		syncToken->counter = 0;
@@ -233,12 +235,11 @@ intel_cpu_get_sync_token(engine_token* engineToken, sync_token* syncToken)
 status_t
 intel_cpu_sync_to_token(sync_token* syncToken)
 {
-	// CPU drawing hooks complete their writes before returning. Acquiring and
-	// releasing the engine lock provides the synchronization boundary.
-	if (gInfo == NULL || gInfo->shared_info == NULL)
-		return B_NO_INIT;
 	// All operations in this backend are synchronous and write directly to
 	// mapped scanout memory; there is no deferred work to wait for.
+	if (gInfo == NULL || gInfo->shared_info == NULL)
+		return B_NO_INIT;
+	(void)syncToken;
 	return B_OK;
 }
 

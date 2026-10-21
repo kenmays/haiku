@@ -182,6 +182,10 @@ if not re.search(
     fail("Gen12 DDI modeset must fail closed for unimplemented PHY ports")
 if "PortIndex() == INTEL_PORT_B ? 1 : 0" not in ddi_mode:
     fail("Gen12 DDI A/B must select their matching combo DPLL")
+if "validate_gen12_dp_bandwidth(fPipe, hardwareTarget)" not in ddi_mode:
+    fail("Gen12 DP bandwidth must be checked before modeset register writes")
+if "mode != PIPE_DDI_MODE_DP_SST && mode != PIPE_DDI_MODE_DP_MST" not in port_source:
+    fail("reserved DDI mode encodings must be rejected")
 if "status_t linkStatus = _SetPortLinkGen8(" not in ddi_mode or "return linkStatus;" not in ddi_mode:
     fail("DDI link M/N programming errors must propagate")
 

@@ -89,14 +89,14 @@ ddc2_read(const i2c_bus *bus, int start, uint8 *buffer, size_t length)
 		if (start >= 0x100) {
 			status = call_send_receive(bus, 0x30, &segment, 1, NULL, 0);
 			if (status != B_OK) {
-				TRACE("%s: E-DDC segment selection failed\\n", __func__);
+				TRACE("%s: E-DDC segment selection failed\n", __func__);
 				continue;
 			}
 		}
 
 		status = call_send_receive(bus, 0x50, &offset, 1, buffer, length);
 		if (status != B_OK) {
-			TRACE("%s: DDC information read failure\\n", __func__);
+			TRACE("%s: DDC information read failure\n", __func__);
 			continue;
 		}
 
@@ -104,7 +104,7 @@ ddc2_read(const i2c_bus *bus, int start, uint8 *buffer, size_t length)
 		if (status == B_OK)
 			break;
 
-		dprintf("%s: DDC checksum incorrect!\\n", __func__);
+		dprintf("%s: DDC checksum incorrect!\n", __func__);
 	}
 
 	return status;
@@ -198,13 +198,13 @@ ddc2_read_edid1(const i2c_bus *bus, edid1_info *edid,
 	static const uint8 kEdidHeader[8] = {0x00, 0xff, 0xff, 0xff,
 		0xff, 0xff, 0xff, 0x00};
 	if (memcmp(raw->header.pad, kEdidHeader, sizeof(kEdidHeader)) != 0) {
-		TRACE("%s: invalid EDID header\\n", __func__);
+		TRACE("%s: invalid EDID header\n", __func__);
 		free(raw);
 		return B_BAD_DATA;
 	}
 
 	if (raw->version.version != 1 || raw->version.revision > 4) {
-		TRACE("%s: EDID version or revision out of range\\n", __func__);
+		TRACE("%s: EDID version or revision out of range\n", __func__);
 		free(raw);
 		return B_BAD_DATA;
 	}
@@ -224,7 +224,7 @@ ddc2_read_edid1(const i2c_bus *bus, edid1_info *edid,
 			status = ddc2_read(bus, (int)(i * sizeof(edid1_raw)),
 				(uint8 *)&raw[i], sizeof(edid1_raw));
 			if (status != B_OK) {
-				TRACE("%s: failed to read EDID extension %u\\n", __func__, i);
+				TRACE("%s: failed to read EDID extension %u\n", __func__, i);
 				free(raw);
 				return status;
 			}

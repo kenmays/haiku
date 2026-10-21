@@ -119,13 +119,16 @@ const struct supported_device {
 	{0x0d04, 0x0d26, INTEL_MODEL_HASM, "Haswell CRW GT3 Mobile"},
 
 	// ValleyView: bridge 0x0f00 is confirmed for these two display IDs.
-	// The 0x0f32/0x0f33 pairings remain unverified.
 	{0x0f00, 0x0f30, INTEL_MODEL_VLVM, "ValleyView Mobile"},
 	{0x0f00, 0x0f31, INTEL_MODEL_VLVM, "ValleyView Mobile"},
+	// Not enabled until the bridge/display pairing is confirmed:
+	// {0x0f00, 0x0f32, INTEL_MODEL_VLVM, "ValleyView Mobile"},
+	// {0x0f00, 0x0f33, INTEL_MODEL_VLVM, "ValleyView Mobile"},
 
 	// Cherryview/Braswell (0x22b1) stays disabled: besides platform-specific
 	// GTT/stolen-memory sizing, Gen8 needs 64-bit PTE handling, while this
 	// driver currently stores and writes 32-bit GTT entries.
+	// {0x2280, 0x22b1, INTEL_MODEL_CHVM, "Braswell GT1"},
 
 	// XXX: 0x1604 only confirmed on 0x1616
 	{0x1604, 0x1606, INTEL_MODEL_BDWM, "Broadwell GT1 ULT"},

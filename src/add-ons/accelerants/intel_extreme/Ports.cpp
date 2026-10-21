@@ -43,6 +43,13 @@
 
 
 static bool
+is_interlaced_timing(const display_timing& timing)
+{
+	return (timing.flags & B_TIMING_INTERLACED) != 0;
+}
+
+
+static bool
 wait_for_set(addr_t address, uint32 mask, uint32 timeout)
 {
 	int interval = 50;
@@ -1132,6 +1139,13 @@ AnalogPort::SetDisplayMode(display_mode* target, uint32 colorMode)
 		return B_ERROR;
 	}
 
+	// VBT panel timings can differ from the requested mode. Validate the actual
+	// hardware timing before touching the fitter, FDI, PLL, or pipe registers.
+	if (is_interlaced_timing(hardwareTarget)) {
+		ERROR("%s: Interlaced LVDS panel timing is not supported yet!\n", __func__);
+		return B_NOT_SUPPORTED;
+	}
+
 	// Setup PanelFitter and Train FDI if it exists
 	PanelFitter* fitter = fPipe->PFT();
 	if (fitter != NULL)
@@ -2189,6 +2203,12 @@ DisplayPort::SetDisplayMode(display_mode* target, uint32 colorMode)
 			}
 		}
 
+		// VBT may select native panel timings that differ from the requested mode.
+		if (is_interlaced_timing(hardwareTarget)) {
+			ERROR("%s: Interlaced DisplayPort panel timing is not supported yet!\n", __func__);
+			return B_NOT_SUPPORTED;
+		}
+
 		result = B_OK;
 		if (PortIndex() != INTEL_PORT_A)
 			result = _SetPortLinkGen6(hardwareTarget);
@@ -2927,6 +2947,13 @@ DigitalDisplayInterface::SetDisplayMode(display_mode* target, uint32 colorMode)
 			// and hope for the best
 			hardwareTarget = target->timing;
 		}
+	}
+
+	// EDID/VBT can provide a hardware timing independent of the requested mode.
+	// This pipe path still forces progressive scan, so reject such timings early.
+	if (is_interlaced_timing(hardwareTarget)) {
+		ERROR("%s: Interlaced DDI panel timing is not supported yet!\n", __func__);
+		return B_NOT_SUPPORTED;
 	}
 
 	// Validate the fixed-rate Gen12 DP path before changing the pipe,

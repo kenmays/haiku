@@ -65,6 +65,7 @@ get_framebuffer(cpu_framebuffer& fb)
 	// Reject corrupt modes and offsets before any pointer arithmetic. Keep all
 	// multiplications in size_t after checking the 32-bit stride constraints.
 	if (width > stride / bytesPerPixel
+		|| width > 0x7fffffffU || height > 0x7fffffffU
 		|| (size_t)height > (size_t)-1 / stride)
 		return false;
 
@@ -137,6 +138,7 @@ store_pixel(const cpu_framebuffer& fb, uint8* pixel, uint32 color)
 		case B_RGB32_LITTLE:
 			// B_RGB32_LITTLE stores the low 24-bit RGB value. Copy rather than
 			// cast to avoid alignment assumptions for framebuffer rows.
+			color &= 0x00ffffff;
 			memcpy(pixel, &color, sizeof(color));
 			break;
 	}
@@ -189,7 +191,7 @@ intel_cpu_acquire_engine(uint32 capabilities, uint32 maxWait,
 	if (status != B_OK)
 		return status;
 
-	static engine_token sCPUEngineToken = {1, 0 /* B_2D_ACCELERATION */, NULL};
+	static engine_token sCPUEngineToken = {1, B_2D_ACCELERATION, NULL};
 	*_engineToken = &sCPUEngineToken;
 	if (syncToken != NULL)
 		intel_cpu_sync_to_token(syncToken);

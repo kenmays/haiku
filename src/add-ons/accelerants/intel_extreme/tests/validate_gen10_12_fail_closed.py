@@ -107,7 +107,6 @@ def main() -> int:
     # Cursor coordinates must subtract each axis's own hotspot.
     cursor_move = function_body(cursor, "move_cursor(int32 x, int32 y)")
     cursor_shape = function_body(cursor, "intel_set_cursor_shape(")
-    cursor_move = function_body(cursor, "static void\nmove_cursor(")
     cursor_show = function_body(cursor, "intel_show_cursor(")
     cursor_offsets = function_body(cursor, "get_cursor_pipe_offsets(")
     require(

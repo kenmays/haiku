@@ -422,6 +422,12 @@ i2c_send_receive_callback(const i2c_bus *bus, uint32 slaveAddress, const uint8 *
 	if (status != B_OK)
 		goto err;
 
+	// A zero-length read requests a write-only transaction. In particular,
+	// E-DDC segment-pointer writes must end with STOP rather than issuing a
+	// repeated START followed by a read address with no data to receive.
+	if (readLength == 0)
+		return send_stop_condition(bus);
+
 	status = send_start_condition(bus);
 	if (status != B_OK)
 		return status;

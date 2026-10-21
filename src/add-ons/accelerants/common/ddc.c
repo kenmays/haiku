@@ -72,31 +72,42 @@ static status_t
 ddc2_read(const i2c_bus *bus, int start, uint8 *buffer, size_t length)
 {
 	status_t status = B_OK;
-	uint8 writeBuffer[2];
+	uint8 segment;
+	uint8 offset;
 	int i;
 
-	writeBuffer[0] = start & 0xff;
-	writeBuffer[1] = (start >> 8) & 0xff;
+	if (start < 0)
+		return B_BAD_VALUE;
+
+	// E-DDC addresses blocks beyond the first two using the segment
+	// pointer at 0x30 and an 8-bit offset at the EDID slave 0x50.
+	segment = (uint8)(start >> 8);
+	offset = (uint8)(start & 0xff);
 
 	for (i = 0; i < READ_RETRIES; ++i) {
-		status = call_send_receive(bus, 0x50, writeBuffer,
-			start < 0x100 ? 1 : 2, buffer, length);
-
-		if (status != B_OK)
-			TRACE("%s: DDC information read failure\n", __func__);
-
-		if (status == B_OK) {
-			status = verify_checksum(buffer, length);
-			if (status == B_OK)
-				break;
-
-			dprintf("%s: DDC checksum incorrect!\n", __func__);
+		if (start >= 0x100) {
+			status = call_send_receive(bus, 0x30, &segment, 1, NULL, 0);
+			if (status != B_OK) {
+				TRACE("%s: E-DDC segment selection failed\\n", __func__);
+				continue;
+			}
 		}
+
+		status = call_send_receive(bus, 0x50, &offset, 1, buffer, length);
+		if (status != B_OK) {
+			TRACE("%s: DDC information read failure\\n", __func__);
+			continue;
+		}
+
+		status = verify_checksum(buffer, length);
+		if (status == B_OK)
+			break;
+
+		dprintf("%s: DDC checksum incorrect!\\n", __func__);
 	}
 
 	return status;
 }
-
 
 /*!
 	Reading VDIF has not been tested.
@@ -166,30 +177,67 @@ status_t
 ddc2_read_edid1(const i2c_bus *bus, edid1_info *edid,
 	void **vdif, size_t *vdifLength)
 {
-	edid1_raw raw;
-	status_t status = ddc2_read(bus, 0, (uint8 *)&raw, sizeof(raw));
-	if (status != B_OK)
-		return status;
+	edid1_raw *raw;
+	size_t rawLength;
+	status_t status;
 
-	if (raw.version.version != 1 || raw.version.revision > 4) {
-		TRACE("%s: EDID version or revision out of range\n", __func__);
-		return B_ERROR;
+	if (bus == NULL || edid == NULL)
+		return B_BAD_VALUE;
+
+	raw = (edid1_raw *)malloc(sizeof(edid1_raw));
+	if (raw == NULL)
+		return B_NO_MEMORY;
+
+	status = ddc2_read(bus, 0, (uint8 *)raw, sizeof(edid1_raw));
+	if (status != B_OK) {
+		free(raw);
+		return status;
 	}
 
-	edid_decode(edid, &raw);
+	static const uint8 kEdidHeader[8] = {0x00, 0xff, 0xff, 0xff,
+		0xff, 0xff, 0xff, 0x00};
+	if (memcmp(raw->header.pad, kEdidHeader, sizeof(kEdidHeader)) != 0) {
+		TRACE("%s: invalid EDID header\\n", __func__);
+		free(raw);
+		return B_BAD_DATA;
+	}
+
+	if (raw->version.version != 1 || raw->version.revision > 4) {
+		TRACE("%s: EDID version or revision out of range\\n", __func__);
+		free(raw);
+		return B_BAD_DATA;
+	}
+
+	// edid_decode() walks extension blocks following the base block.
+	// Allocate and validate every declared block before calling it.
+	rawLength = sizeof(edid1_raw) * ((size_t)raw->num_sections + 1);
+	if (rawLength > sizeof(edid1_raw)) {
+		edid1_raw *extendedRaw = (edid1_raw *)realloc(raw, rawLength);
+		if (extendedRaw == NULL) {
+			free(raw);
+			return B_NO_MEMORY;
+		}
+		raw = extendedRaw;
+
+		for (uint32 i = 1; i <= raw[0].num_sections; i++) {
+			status = ddc2_read(bus, (int)(i * sizeof(edid1_raw)),
+				(uint8 *)&raw[i], sizeof(edid1_raw));
+			if (status != B_OK) {
+				TRACE("%s: failed to read EDID extension %u\\n", __func__, i);
+				free(raw);
+				return status;
+			}
+		}
+	}
+
+	edid_decode(edid, raw);
+	free(raw);
 
 	if (vdif != NULL)
 		*vdif = NULL;
 	if (vdifLength != NULL)
 		*vdifLength = 0;
 
-	// skip vdif as long as it's not tested	
-#if 0	
-	status = ddc2_read_vdif(bus, sizeof(raw) * (edid->num_sections + 1),
-		vdif, vdifLength);
-	if (status != B_OK)
-		return status;
-#endif
-
+	// Skip VDIF until its reader has been tested.
 	return B_OK;
 }

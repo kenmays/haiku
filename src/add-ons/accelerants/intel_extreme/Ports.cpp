@@ -157,8 +157,11 @@ validate_gen12_dp_bandwidth(Pipe* pipe, const display_timing& timing)
 	// retraining are not implemented, so reject modes that cannot fit.
 	const uint64 required = (uint64)timing.pixel_clock * bitsPerPixel * 21 / 20;
 	const uint64 capacity = (uint64)lanes * 270000 * 8;
-	if (required > capacity)
+	if (required > capacity) {
+		ERROR("%s: Mode exceeds fixed Gen12 DP link capacity (%" B_PRIu64
+			" > %" B_PRIu64 ")\\n", __func__, required, capacity);
 		return B_NOT_SUPPORTED;
+	}
 
 	return B_OK;
 }
@@ -1986,21 +1989,6 @@ DisplayPort::_SetPortLinkGen4(const display_timing& timing)
 
 	uint32 bitsPerPixel = 24;	//fixme: always so?
 	uint32 lanes = 4;			//fixme: always so?
-
-	// Gen12 currently uses a fixed 2.7 Gbit/s DP link reference and does
-	// not implement rate selection or retraining. Reject modes that exceed
-	// that link's payload capacity instead of programming a knowingly invalid
-	// M/N ratio. Reserve 5% headroom as the older DP path does.
-	if (gInfo->shared_info->device_type.Generation() >= 12
-		&& (mode == PIPE_DDI_MODE_DP_SST || mode == PIPE_DDI_MODE_DP_MST)) {
-		uint64 required = (uint64)timing.pixel_clock * bitsPerPixel * 21 / 20;
-		uint64 capacity = (uint64)lanes * linkBandwidth * 8;
-		if (required > capacity) {
-			ERROR("%s: Mode exceeds fixed Gen12 DP link capacity (%" B_PRIu64
-				" > %" B_PRIu64 ")\n", __func__, required, capacity);
-			return B_NOT_SUPPORTED;
-		}
-	}
 
 	//Setup Data M/N
 	uint64 linkspeed = lanes * linkBandwidth * 8;

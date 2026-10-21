@@ -40,6 +40,10 @@
 #define ERROR(x...) _sPrintf("intel_extreme: " x)
 #define CALLED(x...) TRACE("CALLED %s\n", __PRETTY_FUNCTION__)
 
+// Private marker carried by explicitly enumerated horizontal-span variants.
+// It is removed before timing/port programming; it is not a hardware flag.
+static const uint32 INTEL_MODE_HORIZONTAL_SPAN = 1UL << 28;
+
 
 static status_t
 get_color_space_format(const display_mode &mode, uint32 &colorMode,
@@ -137,6 +141,15 @@ set_frame_buffer_registers(uint32 offset)
 	intel_shared_info &sharedInfo = *gInfo->shared_info;
 	display_mode &mode = sharedInfo.current_mode;
 	uint32 bytes_per_pixel = (sharedInfo.bits_per_pixel + 7) / 8;
+	uint32 horizontalStart = mode.h_display_start;
+	uint32 verticalStart = mode.v_display_start;
+
+	// In an explicitly selected horizontal-span mode, plane B scans the
+	// right-hand half of the same surface. Wide virtual dimensions alone do
+	// not select this behavior; ordinary panning remains unchanged.
+	if (offset == INTEL_DISPLAY_OFFSET
+		&& (mode.timing.flags & INTEL_MODE_HORIZONTAL_SPAN) != 0)
+		horizontalStart += mode.timing.h_display;
 
 	if (sharedInfo.device_type.InGroup(INTEL_GROUP_96x)
 		|| sharedInfo.device_type.InGroup(INTEL_GROUP_G4x)
@@ -147,21 +160,20 @@ set_frame_buffer_registers(uint32 offset)
 		if (sharedInfo.device_type.InGroup(INTEL_GROUP_HAS)) {
 //			|| sharedInfo.device_type.InGroup(INTEL_GROUP_SKY)) {
 			write32(INTEL_DISPLAY_A_OFFSET_HAS + offset,
-				((uint32)mode.v_display_start << 16)
-					| (uint32)mode.h_display_start);
+				(verticalStart << 16) | horizontalStart);
 			read32(INTEL_DISPLAY_A_OFFSET_HAS + offset);
 		} else {
 			write32(INTEL_DISPLAY_A_BASE + offset,
-				mode.v_display_start * sharedInfo.bytes_per_row
-				+ mode.h_display_start * bytes_per_pixel);
+				verticalStart * sharedInfo.bytes_per_row
+				+ horizontalStart * bytes_per_pixel);
 			read32(INTEL_DISPLAY_A_BASE + offset);
 		}
 		write32(INTEL_DISPLAY_A_SURFACE + offset, sharedInfo.frame_buffer_offset);
 		read32(INTEL_DISPLAY_A_SURFACE + offset);
 	} else {
 		write32(INTEL_DISPLAY_A_BASE + offset, sharedInfo.frame_buffer_offset
-			+ mode.v_display_start * sharedInfo.bytes_per_row
-			+ mode.h_display_start * bytes_per_pixel);
+			+ verticalStart * sharedInfo.bytes_per_row
+			+ horizontalStart * bytes_per_pixel);
 		read32(INTEL_DISPLAY_A_BASE + offset);
 	}
 }
@@ -174,6 +186,42 @@ set_frame_buffer_base()
 	// multiple framebuffers, they should get different addresses here.
 	set_frame_buffer_registers(0);
 	set_frame_buffer_registers(INTEL_DISPLAY_OFFSET);
+}
+
+
+static bool
+has_supported_horizontal_span_pair()
+{
+	Port* pipeA = NULL;
+	Port* pipeB = NULL;
+	uint32 connectedCount = 0;
+
+	for (uint32 i = 0; i < gInfo->port_count; i++) {
+		Port* port = gInfo->ports[i];
+		if (port == NULL || !port->IsConnected())
+			continue;
+
+		connectedCount++;
+		Pipe* pipe = port->GetPipe();
+		if (pipe == NULL)
+			return false;
+		if (pipe->Index() == INTEL_PIPE_A) {
+			if (pipeA != NULL)
+				return false;
+			pipeA = port;
+		} else if (pipe->Index() == INTEL_PIPE_B) {
+			if (pipeB != NULL)
+				return false;
+			pipeB = port;
+		} else {
+			return false;
+		}
+	}
+
+	// Compatibility spanning is deliberately limited to exactly two
+	// connected outputs on distinct A/B pipes. It is not independent-head
+	// support and does not attempt C/D scanout.
+	return connectedCount == 2 && pipeA != NULL && pipeB != NULL;
 }
 
 
@@ -268,6 +316,49 @@ create_mode_list(void)
 	if (gInfo->mode_list_area < B_OK)
 		return gInfo->mode_list_area;
 
+	// Add explicitly marked horizontal-span variants only when the detected
+	// topology is exactly two connected outputs assigned to distinct A/B
+	// pipes. The wide virtual surface is an opt-in mode-list entry, not a
+	// heuristic applied to arbitrary panning modes.
+	if (has_supported_horizontal_span_pair()) {
+		uint32 spanCount = 0;
+		for (uint32 i = 0; i < count; i++) {
+			if ((uint32)list[i].timing.h_display * 2 <= UINT16_MAX)
+				spanCount++;
+		}
+		uint64 expandedSize64 = (uint64)(count + spanCount)
+			* sizeof(display_mode);
+		if (spanCount > 0 && expandedSize64 <= (uint64)((size_t)-1)) {
+			display_mode* expandedModes = NULL;
+			area_id expandedArea = create_area("intel extreme span modes",
+				(void**)&expandedModes, B_ANY_ADDRESS, (size_t)expandedSize64,
+				B_NO_LOCK, B_READ_AREA | B_WRITE_AREA);
+			if (expandedArea >= B_OK) {
+				memcpy(expandedModes, list, count * sizeof(display_mode));
+				uint32 output = count;
+				for (uint32 i = 0; i < count; i++) {
+					if ((uint32)list[i].timing.h_display * 2 > UINT16_MAX)
+						continue;
+					display_mode spanMode = list[i];
+					spanMode.virtual_width = spanMode.timing.h_display * 2;
+					spanMode.virtual_height = spanMode.timing.v_display;
+					spanMode.h_display_start = 0;
+					spanMode.v_display_start = 0;
+					spanMode.flags |= B_SCROLL | B_PARALLEL_ACCESS;
+					spanMode.timing.flags |= INTEL_MODE_HORIZONTAL_SPAN;
+					expandedModes[output++] = spanMode;
+				}
+				delete_area(gInfo->mode_list_area);
+				gInfo->mode_list_area = expandedArea;
+				list = expandedModes;
+				count = output;
+			} else {
+				TRACE("%s: Optional spanning mode list allocation failed (%d)\n",
+					__func__, (int)expandedArea);
+			}
+		}
+	}
+
 	// The framebuffer is mapped for CPU access and the accelerant provides
 	// synchronous CPU drawing hooks. Advertise parallel access consistently
 	// in the enumerated modes, not only in modes passed through propose.
@@ -324,6 +415,9 @@ intel_propose_display_mode(display_mode* target, const display_mode* low,
 	if (target == NULL || low == NULL || high == NULL)
 		return B_BAD_VALUE;
 
+	bool horizontalSpan = (target->timing.flags
+		& INTEL_MODE_HORIZONTAL_SPAN) != 0;
+	target->timing.flags &= ~INTEL_MODE_HORIZONTAL_SPAN;
 	display_mode mode = *target;
 
 	if (sanitize_display_mode(*target)) {
@@ -345,6 +439,15 @@ intel_propose_display_mode(display_mode* target, const display_mode* low,
 	// CPU drawing hooks, so clients may access it in parallel with display
 	// scanout. B_SCROLL remains the separate capability for display panning.
 	target->flags |= B_SCROLL | B_PARALLEL_ACCESS;
+	if (horizontalSpan) {
+		if (!has_supported_horizontal_span_pair()
+			|| (uint32)target->timing.h_display * 2 != target->virtual_width
+			|| target->virtual_height != target->timing.v_display
+			|| target->h_display_start != 0
+			|| target->v_display_start != 0)
+			return B_NOT_SUPPORTED;
+		target->timing.flags |= INTEL_MODE_HORIZONTAL_SPAN;
+	}
 
 	return is_display_mode_within_bounds(*target, *low, *high)
 		? B_OK : B_BAD_VALUE;
@@ -407,6 +510,11 @@ intel_set_display_mode(display_mode* mode)
 	// also describes ordinary display panning. A spanning mode needs an
 	// explicit request/reply marker and a validated two-pipe layout before
 	// programming a nonzero start offset for pipe B.
+	bool horizontalSpan = (target.timing.flags
+		& INTEL_MODE_HORIZONTAL_SPAN) != 0;
+	if (horizontalSpan && !has_supported_horizontal_span_pair())
+		return B_NOT_SUPPORTED;
+
 	for (uint32 i = 0; i < gInfo->port_count; i++) {
 		Port* port = gInfo->ports[i];
 		if (port == NULL || !port->IsConnected())
@@ -555,13 +663,15 @@ intel_set_display_mode(display_mode* mode)
 	// Configure every connected port, but retain the first error so callers
 	// are not told that a mode change succeeded when output setup failed.
 	status_t portStatus = B_OK;
+	display_mode portTarget = target;
+	portTarget.timing.flags &= ~INTEL_MODE_HORIZONTAL_SPAN;
 	for (uint32 i = 0; i < gInfo->port_count; i++) {
 		if (gInfo->ports[i] == NULL)
 			continue;
 		if (!gInfo->ports[i]->IsConnected())
 			continue;
 
-		status_t currentStatus = gInfo->ports[i]->SetDisplayMode(&target,
+		status_t currentStatus = gInfo->ports[i]->SetDisplayMode(&portTarget,
 			colorMode);
 		if (currentStatus != B_OK) {
 			ERROR("%s: Unable to set display mode on port %u (status %d)!\n",
@@ -588,11 +698,13 @@ intel_set_display_mode(display_mode* mode)
 					oldBitsPerPixel) == B_OK) {
 				(void)oldBytesPerRow;
 				(void)oldBitsPerPixel;
+				display_mode oldPortMode = oldMode;
+				oldPortMode.timing.flags &= ~INTEL_MODE_HORIZONTAL_SPAN;
 				for (uint32 i = 0; i < gInfo->port_count; i++) {
 					Port* port = gInfo->ports[i];
 					if (port == NULL || !port->IsConnected())
 						continue;
-					status_t restoreStatus = port->SetDisplayMode(&oldMode,
+					status_t restoreStatus = port->SetDisplayMode(&oldPortMode,
 						oldColorMode);
 					if (restoreStatus != B_OK) {
 						ERROR("%s: Failed to restore previous mode on port %u "
@@ -900,6 +1012,10 @@ intel_move_display(uint16 horizontalStart, uint16 verticalStart)
 	Autolock locker(sharedInfo.accelerant_lock);
 
 	display_mode &mode = sharedInfo.current_mode;
+
+	if ((mode.timing.flags & INTEL_MODE_HORIZONTAL_SPAN) != 0
+		&& horizontalStart != 0)
+		return B_BAD_VALUE;
 
 	if (horizontalStart + mode.timing.h_display > mode.virtual_width
 		|| verticalStart + mode.timing.v_display > mode.virtual_height)

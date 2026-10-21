@@ -37,8 +37,10 @@
 
 
 // Explicit PCI allowlist: i830 (Gen2) is the oldest supported GPU.
-// Do not add i810/i815 or other pre-i830 devices; their display engines
-// are outside this driver's supported hardware scope.
+// Pre-Gen2 i810 IDs (8086:7121, 8086:7123, 8086:7125) and i815 (8086:1132)
+// are intentionally excluded. Do not add these or other pre-i830 devices:
+// their display engines are outside this driver's supported hardware scope.
+// Keep the allowlist Gen2+ only; PCI-ID presence alone is not a support claim.
 const struct supported_device {
 	uint32		device_id;
 	int32		type;

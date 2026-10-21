@@ -85,6 +85,18 @@ wait_for_clear_status(addr_t address, uint32 mask, uint32 timeout)
 	return status;
 }
 
+// Return a safe integer refresh rate for diagnostics. Malformed VBT/EDID
+// timings must not turn a logging expression into a divide-by-zero fault.
+static uint32
+timing_refresh_rate(const display_timing& timing)
+{
+	if (timing.h_total == 0 || timing.v_total == 0)
+		return 0;
+
+	uint64 totalPixels = (uint64)timing.h_total * timing.v_total;
+	return (uint32)(((uint64)timing.pixel_clock * 1000) / totalPixels);
+}
+
 
 Port::Port(port_index index, const char* baseName)
 	:
@@ -1270,12 +1282,12 @@ LVDSPort::SetDisplayMode(display_mode* target, uint32 colorMode)
 			// Note: this means refresh and timing might vary according to requested mode.
 			hardwareTarget = target->timing;
 			TRACE("%s: Setting LVDS to native resolution at %" B_PRIu32 "Hz\n", __func__,
-				hardwareTarget.pixel_clock * 1000 / (hardwareTarget.h_total * hardwareTarget.v_total));
+				timing_refresh_rate(hardwareTarget));
 		} else {
 			// We need to enable the panel fitter
 			TRACE("%s: Hardware mode will actually be %dx%d at %" B_PRIu32 "Hz\n", __func__,
 				hardwareTarget.h_display, hardwareTarget.v_display,
-				hardwareTarget.pixel_clock * 1000 / (hardwareTarget.h_total * hardwareTarget.v_total));
+				timing_refresh_rate(hardwareTarget));
 
 			// FIXME we should also get the refresh frequency from the target
 			// mode, and then "sanitize" the resulting mode we made up.
@@ -2715,12 +2727,12 @@ DigitalDisplayInterface::SetDisplayMode(display_mode* target, uint32 colorMode)
 				// Note: this means refresh and timing might vary according to requested mode.
 				hardwareTarget = target->timing;
 				TRACE("%s: Setting internal panel to native resolution at %" B_PRIu32 "Hz\n", __func__,
-					hardwareTarget.pixel_clock * 1000 / (hardwareTarget.h_total * hardwareTarget.v_total));
+					timing_refresh_rate(hardwareTarget));
 			} else {
 				// We need to enable the panel fitter
 				TRACE("%s: Hardware mode will actually be %dx%d at %" B_PRIu32 "Hz\n", __func__,
 					hardwareTarget.h_display, hardwareTarget.v_display,
-					hardwareTarget.pixel_clock * 1000 / (hardwareTarget.h_total * hardwareTarget.v_total));
+					timing_refresh_rate(hardwareTarget));
 
 				// FIXME we should also get the refresh frequency from the target
 				// mode, and then "sanitize" the resulting mode we made up.

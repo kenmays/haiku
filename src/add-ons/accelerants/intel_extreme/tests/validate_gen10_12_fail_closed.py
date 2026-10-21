@@ -348,8 +348,10 @@ def main() -> int:
         port_loop >= 0 and failed_modeset > port_loop
         and failed_return > failed_modeset
         and "set_display_power_mode(sharedInfo.dpms_mode);" not in failed_block
-        and "set_frame_buffer_base();" not in failed_block,
-        "failed modesets must not restore DPMS or expose a partially configured scanout",
+        and "releaseFailedBuffer" in failed_block
+        and "fallbackStatus = fallbackSize != 0" in failed_block
+        and "sharedInfo.frame_buffer = 0;" in failed_block,
+        "failed modesets must keep DPMS off and recover framebuffer ownership",
     )
     # The success path occurs after the early failure return, so locate its
     # first base update after the explicit success log.

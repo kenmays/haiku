@@ -104,15 +104,21 @@ get_accelerant_hook(uint32 feature, void* data)
 		case B_SET_DPMS_MODE:
 			return (void*)intel_set_dpms_mode;
 
-		/* cursor managment */
+		/* cursor management */
+		// The current cursor implementation uses legacy cursor registers and
+		// has not been validated against Gen12 per-pipe cursor planes. Do not
+		// advertise it on Rocket Lake until that path is generation-correct.
 		case B_SET_CURSOR_SHAPE:
-			if (gInfo->shared_info->cursor_memory != NULL)
+			if (gInfo->shared_info->device_type.Generation() < 12
+				&& gInfo->shared_info->cursor_memory != NULL)
 				return (void*)intel_set_cursor_shape;
 		case B_MOVE_CURSOR:
-			if (gInfo->shared_info->cursor_memory != NULL)
+			if (gInfo->shared_info->device_type.Generation() < 12
+				&& gInfo->shared_info->cursor_memory != NULL)
 				return (void*)intel_move_cursor;
 		case B_SHOW_CURSOR:
-			if (gInfo->shared_info->cursor_memory != NULL)
+			if (gInfo->shared_info->device_type.Generation() < 12
+				&& gInfo->shared_info->cursor_memory != NULL)
 				return (void*)intel_show_cursor;
 
 			return NULL;

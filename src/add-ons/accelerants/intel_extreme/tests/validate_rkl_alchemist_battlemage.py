@@ -119,7 +119,7 @@ if not re.search(r"return\s+NULL\s*;", engine_block.group(1)):
 
 # Gen12's legacy cursor register path is not yet validated; keep the hooks gated.
 cursor_hooks = re.search(
-    r"/\\* cursor management \\*/(.*?)(?=/\\* engine/synchronization \\*/)",
+    r"/\* cursor management \*/(.*?)(?=/\* engine/synchronization \*/)",
     hooks,
     re.DOTALL | re.IGNORECASE,
 )
@@ -146,7 +146,7 @@ for required in ("wait_for_register(DPLL_ENABLE, TGL_DPLL_LOCK, false, 100000)",
                  "wait_for_register(DPLL_ENABLE, TGL_DPLL_LOCK, true, 100000)"):
     if required not in pll_source:
         fail("bounded PLL transition wait is missing: " + required)
-if not re.search(r"status_t\\s+pllStatus\\s*=\\s*ProgramPLL\\(", port_source) or "return pllStatus;" not in port_source:
+if not re.search(r"status_t\s+pllStatus\s*=\s*ProgramPLL\(", port_source) or "return pllStatus;" not in port_source:
     fail("Gen12 PLL programming errors are not propagated to the modeset caller")
 # A failed per-port modeset must not be silently reported as success.
 set_mode_match = re.search(

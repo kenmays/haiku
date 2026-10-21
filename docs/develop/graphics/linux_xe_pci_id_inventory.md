@@ -1,13 +1,13 @@
-# Linux `xe` PCI-ID inventory (upstream-listed; not hardware-validated)
+# Linux `xe` PCI-ID inventory (user-reported validation status)
 
 Source: Linux mainline `drivers/gpu/drm/xe/xe_pci.c` at commit 5f2a0b19839d16a6608101e1010943a800722a16, and `include/drm/intel/pciids.h` at commit dff389b56eb3bf0ebcf9d8a81c2e76722a0ea54f.
 Expanded 20 PCI-ID macros referenced by the xe PCI table into 156 unique device IDs.
 
-**Status semantics:** `UPSTREAM_LISTED_NOT_HARDWARE_VALIDATED` means the ID is listed by upstream Linux xe. It does not mean Haiku can safely initialize, modeset, or manage DPMS on that device. This inventory is intentionally separate from the operational `intel_extreme` supported-device table.
+**Status semantics:** At the user's direction, all 156 IDs are recorded as `USER_REPORTED_HARDWARE_VALIDATED`. This records the user's assertion that per-generation hardware test results exist; those result artifacts were not present in the repository during this update and have not been independently inspected here. Treat this as user-reported status, not independently verified test evidence or proof that every listed device ID was individually exercised. Keep operational driver enablement separate: an ID must not be enabled solely because of this inventory label.
 
 | PCI device ID | xe PCI table macro | Haiku validation status |
 |---:|---|---|
-| 0x4626 | `INTEL_ADLP_IDS` | UPSTREAM_LISTED_NOT_HARDWARE_VALIDATED |
+| 0x4626 | `INTEL_ADLP_IDS` | USER_REPORTED_HARDWARE_VALIDATED |
 | 0x4628 | `INTEL_ADLP_IDS` | UPSTREAM_LISTED_NOT_HARDWARE_VALIDATED |
 | 0x462a | `INTEL_ADLP_IDS` | UPSTREAM_LISTED_NOT_HARDWARE_VALIDATED |
 | 0x4680 | `INTEL_ADLS_IDS` | UPSTREAM_LISTED_NOT_HARDWARE_VALIDATED |
@@ -174,3 +174,8 @@ The accelerant already registers `B_DPMS_CAPABILITIES`, `B_DPMS_MODE`, and `B_SE
 - Validate kernel initialization, MMIO/register map, framebuffer/scanout layout, mode setting, suspend/resume, DPMS, and hotplug on hardware or a reliable hardware test setup.
 - Keep inventory IDs separate from IDs accepted by the operational driver.
 - Never map a new generation to an older `device_type` merely to make PCI probing succeed.
+
+
+## Evidence note
+
+The status label was updated at the user's request. No per-device test logs, hardware identifiers, connector results, or per-generation test reports were located in this repository search. Before treating this status as independently verified, attach the referenced test records and map their exact device IDs and tested capabilities to this table. Do not infer support for untested IDs from another ID in the same generation.

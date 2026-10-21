@@ -249,6 +249,7 @@ virtual addr_t						_PortRegister();
 private:
 		uint8						fMaxLanes;
 
+		status_t					_ValidateGen12DpLink();
 		status_t					_SetPortLinkGen8(const display_timing& timing,
 										uint32 pllSel);
 };

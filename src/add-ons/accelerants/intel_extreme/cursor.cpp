@@ -16,7 +16,7 @@
 
 // Cursor registers are pipe-local. The current framebuffer/modeset path uses
 // clone-style scanout, so the same cursor position and bitmap are programmed
-// on each pipe attached to a connected port. Gen12+ is gated in hooks.cpp
+// on each pipe assigned to a port. Gen12+ is gated in hooks.cpp
 // until its cursor plane format and register path are validated.
 static uint32
 get_cursor_pipe_offsets(uint32* offsets, uint32 maxOffsets)

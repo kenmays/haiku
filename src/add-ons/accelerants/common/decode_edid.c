@@ -291,13 +291,17 @@ decode_cta_block(edid1_info *edid, const cta_raw *raw)
 	}
 
 	// edid1_info has storage for at most six CTA detailed timings.
-	for (i = raw->offset, j = 0; i + sizeof(edid1_detailed_timing_raw) <= 127
-		&& j < sizeof(edid->cta_block.detailed_timing)
-			/ sizeof(edid->cta_block.detailed_timing[0]);
-		i += sizeof(edid1_detailed_timing_raw), j++) {
-		const edid1_detailed_timing_raw* timing =
-			(const edid1_detailed_timing_raw*)&((const uint8*)raw)[i];
-		decode_detailed_timing(&edid->cta_block.detailed_timing[j], timing);
+	// An offset of zero means the extension contains no detailed timings.
+	if (raw->offset >= 4) {
+		for (i = raw->offset, j = 0;
+			i + sizeof(edid1_detailed_timing_raw) <= 127
+				&& j < sizeof(edid->cta_block.detailed_timing)
+					/ sizeof(edid->cta_block.detailed_timing[0]);
+			i += sizeof(edid1_detailed_timing_raw), j++) {
+			const edid1_detailed_timing_raw* timing =
+				(const edid1_detailed_timing_raw*)&((const uint8*)raw)[i];
+			decode_detailed_timing(&edid->cta_block.detailed_timing[j], timing);
+		}
 	}
 }
 

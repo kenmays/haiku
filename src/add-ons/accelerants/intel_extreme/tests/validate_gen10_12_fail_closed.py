@@ -226,6 +226,14 @@ def main() -> int:
         and "mode != PIPE_DDI_MODE_DP_SST && mode != PIPE_DDI_MODE_DP_MST" in ports,
         "Gen12 DP bandwidth and reserved mode encodings must be checked before modeset writes",
     )
+
+    require(
+        "_ValidateGen12DpLink()" in ddi_mode and "return dpLinkStatus;" in ddi_mode
+        and "message.address = 0x100" in ports and "message.address = 0x202" in ports
+        and "linkConfig[0] != 0x0a" in ports
+        and "linkStatus[2] & 0x01" in ports,
+        "Gen12 DP modeset must require an already-trained fixed-rate link",
+    )
     require(
         "case PIPE_DDI_DP_WIDTH_1:" in ports
         and "case PIPE_DDI_DP_WIDTH_2:" in ports

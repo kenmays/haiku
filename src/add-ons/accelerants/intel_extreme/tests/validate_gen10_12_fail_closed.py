@@ -186,6 +186,8 @@ def main() -> int:
     require(
         "PortIndex() != INTEL_PORT_A" in ddi_mode
         and "PortIndex() != INTEL_PORT_B" in ddi_mode
+        and "fPipe->Index() != INTEL_PIPE_A" in ddi_mode
+        and "fPipe->Index() != INTEL_PIPE_B" in ddi_mode
         and "return B_NOT_SUPPORTED;" in ddi_mode
         and "PortIndex() == INTEL_PORT_B ? 1 : 0" in ddi_mode,
         "Gen12 must route DDI A/B to matching combo DPLLs and reject unimplemented PHY ports",

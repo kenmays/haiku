@@ -24,7 +24,7 @@ intel_set_cursor_shape(uint16 width, uint16 height, uint16 hotX, uint16 hotY,
 	}
 
 	write32(INTEL_CURSOR_CONTROL, 0);
-		// disable cursor
+		// disable cursor before changing shape memory or registers
 
 	// In two-color mode, the data is ordered as follows (always 64 bit per
 	// line):
@@ -40,6 +40,12 @@ intel_set_cursor_shape(uint16 width, uint16 height, uint16 hotX, uint16 hotY,
 	uint8* data = gInfo->shared_info->cursor_memory;
 	uint8 byteWidth = (width + 7) / 8;
 
+	// The hardware uses a fixed 64-pixel row stride. Initialize every row
+	// transparent so shrinking/changing a cursor cannot expose stale mask bits.
+	memset(data, 0, 64 * 16);
+	for (int32 y = 0; y < 64; y++)
+		memset(data + 16 * y, 0xff, 8);
+
 	for (int32 y = 0; y < height; y++) {
 		for (int32 x = 0; x < byteWidth; x++) {
 			data[16 * y + x] = andMask[byteWidth * y + x];
@@ -53,13 +59,15 @@ intel_set_cursor_shape(uint16 width, uint16 height, uint16 hotX, uint16 hotY,
 
 	gInfo->shared_info->cursor_format = CURSOR_FORMAT_2_COLORS;
 
-	write32(INTEL_CURSOR_CONTROL,
-		CURSOR_ENABLED | gInfo->shared_info->cursor_format);
 	write32(INTEL_CURSOR_SIZE, height << 12 | width);
-
 	write32(INTEL_CURSOR_BASE,
 		(uint32)gInfo->shared_info->physical_graphics_memory
 		+ gInfo->shared_info->cursor_buffer_offset);
+
+	// Shape changes must preserve visibility: a hidden cursor stays hidden.
+	write32(INTEL_CURSOR_CONTROL,
+		(gInfo->shared_info->cursor_visible ? CURSOR_ENABLED : 0)
+			| gInfo->shared_info->cursor_format);
 
 	// changing the hot point changes the cursor position, too
 

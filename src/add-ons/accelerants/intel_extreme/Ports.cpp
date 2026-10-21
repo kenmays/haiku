@@ -2773,7 +2773,8 @@ DigitalDisplayInterface::_SetPortLinkGen8(const display_timing& timing, uint32 p
 	// each lane carries linkBandwidth * 8 payload bits per second in kHz units.
 	// This is a safety check, not link training; source PLL setup is separate.
 	uint32 ddiMode = (pipeFunc & PIPE_DDI_MODESEL_MASK) >> PIPE_DDI_MODESEL_SHIFT;
-	if (ddiMode == PIPE_DDI_MODE_DP_SST || ddiMode == PIPE_DDI_MODE_DP_MST) {
+	if (gInfo->shared_info->device_type.Generation() <= 10
+		&& (ddiMode == PIPE_DDI_MODE_DP_SST || ddiMode == PIPE_DDI_MODE_DP_MST)) {
 		uint64 requiredBandwidth = (uint64)timing.pixel_clock * bitsPerPixel * 21 / 20;
 		uint64 availableBandwidth = (uint64)lanes * linkBandwidth * 8;
 		if (lanes == 0 || lanes > 4 || requiredBandwidth > availableBandwidth) {

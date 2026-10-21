@@ -219,6 +219,13 @@ ddc2_read_edid1(const i2c_bus *bus, edid1_info *edid,
 	if (bus == NULL || edid == NULL)
 		return B_BAD_VALUE;
 
+	// Make optional outputs deterministic on every failure path as well as
+	// on success. Callers must not observe stale VDIF data after a bad EDID.
+	if (vdif != NULL)
+		*vdif = NULL;
+	if (vdifLength != NULL)
+		*vdifLength = 0;
+
 	raw = (edid1_raw *)malloc(sizeof(edid1_raw));
 	if (raw == NULL)
 		return B_NO_MEMORY;

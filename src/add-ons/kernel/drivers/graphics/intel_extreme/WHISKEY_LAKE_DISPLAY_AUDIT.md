@@ -12,6 +12,18 @@ Status: **audit/design only; Whiskey Lake IDs are not enabled by this document.*
 - The current code's Skylake-style PLL path contains assumptions about PLL selection/routing and lock status that need explicit review before enabling an untested platform.
 - CPU-only rendering does not need BCS. Keep the current fail-closed BCS gates intact.
 
+## Code-level mapping trace
+
+The branch's shared header is `headers/private/graphics/intel_extreme/intel_extreme.h`:
+
+- `INTEL_MODEL_CFLM` is `INTEL_GROUP_CFL | INTEL_TYPE_MOBILE`; there is no dedicated Whiskey Lake model/group constant.
+- `DeviceType::Generation()` classifies any `INTEL_FAMILY_LAKE` device not matched by a more-specific case as Gen9. `DeviceType::HasDDI()` is true for Generation() >= 8.
+- Therefore, mapping a confirmed WHL-U ID to `INTEL_MODEL_CFLM` would select the Gen9 + DDI route: the accelerant probes DDI ports A-F, and `Ports.cpp` takes the Skylake-style WRPLL calculation/configuration branch for Gen9-11. It would not enter the legacy pre-DDI port probing branch or the Gen12 Tiger Lake PLL branch.
+- `driver.cpp::detect_intel_pch()` detects PCH from the ISA bridge and maps Cannon Point-LP IDs to `INTEL_PCH_CNP`. In `Ports.cpp`, DDC pin mapping uses the CNP-or-newer path when that PCH value is detected; otherwise the generation-based Gen9 mapping applies. This makes actual PCH detection and VBT DDC pin data part of the WHL validation, not an incidental detail.
+- This is a **control-flow trace, not a compatibility proof**. It confirms which code would run if an ID were mapped to `INTEL_MODEL_CFLM`; it does not prove the PLL, PHY, AUX power, eDP sequencing, or board routing assumptions match a given Whiskey Lake machine.
+
+The narrowest candidate for a future experiment is to map only an individually verified WHL-U PCI ID to the existing mobile CFL model, with no new model enum and no BCS changes. Do not commit that allowlist change until the ID is verified against the target machine and the display/PCH assumptions below are checked.
+
 ## PCI-ID evidence and caution
 
 The Linux i915 PCI-ID tables group Whiskey Lake-U and Coffee Lake-U IDs in overlapping SKU macros. Public references include:

@@ -89,6 +89,8 @@ status_t intel_cpu_get_sync_token(engine_token* engineToken,
 status_t intel_cpu_sync_to_token(sync_token* syncToken);
 void intel_cpu_screen_to_screen_blit(engine_token* token, blit_params* params,
 	uint32 count);
+void intel_cpu_screen_to_screen_transparent_blit(engine_token* token,
+	uint32 transparentColor, blit_params* params, uint32 count);
 void intel_cpu_fill_rectangle(engine_token* token, uint32 color,
 	fill_rect_params* params, uint32 count);
 void intel_cpu_invert_rectangle(engine_token* token, fill_rect_params* params,

@@ -90,3 +90,22 @@ Source reviewed: `accelerants/intel_extreme/overlay.cpp`, `hooks.cpp`, `commands
 ## Hardware-assist conclusion
 
 Hardware cursor and hardware video overlay are separate from the general-purpose 2D engine. A display-plane implementation can potentially provide these assists while ordinary fills/blits remain CPU-rendered. The current source does not establish that Rocket Lake's cursor path is generation-correct, and the overlay API is deliberately disabled for Gen6+. No cursor or overlay behavior has been validated on physical Rocket Lake hardware. These findings are source-level only; no build, boot, or runtime test is asserted.
+
+
+## Follow-up implementation checkpoint (2026-10-20)
+
+The following source-level guardrails have now been implemented on this branch:
+
+- `TigerLakePLL.cpp` replaces the three unbounded DPLL unlock, power-state, and lock polls with bounded waits (100 ms maximum per transition) and returns `B_TIMED_OUT` when a transition does not complete.
+- `DigitalDisplayInterface::SetDisplayMode()` checks and propagates `ProgramPLL()` failure before continuing with DDI port-clock routing and timing programming. The outer per-port modeset path already preserves the first returned port error.
+- The legacy cursor hooks are gated off for Generation 12 and newer because the current register set and pipe routing have not been demonstrated to be Gen12-correct.
+- Legacy cursor shape inputs reject zero dimensions, dimensions above 64x64, null AND/XOR masks, and a missing cursor allocation.
+- The static validator has been extended to guard these cursor restrictions, Gen6+ overlay-hook suppression, bounded PLL waits, and PLL error propagation.
+- A dedicated plan now records the Gen12 cursor register audit, modern plane/scaler inventory, safety constraints, and test matrix: `accelerants/intel_extreme/tests/GEN12_CURSOR_OVERLAY_PLANE_PLAN.md`.
+
+### Still open / not claimed fixed
+
+- The `TGL_DPCLKA_CFGCR0` read/modify/write masks and preservation of unrelated port clock selections remain unaudited against the exact register definition. Do not change them by guesswork.
+- DisplayPort DPLL parameters and PLL-to-port assignment are still provisional. The current fixed DP DPLL and port-index heuristic are not evidence of reliable multi-output behavior.
+- The mode-set sequence still needs a full Rocket Lake audit of transcoder selection, DDI link training, data/link M/N programming, pipe enable/disable order, and recovery after an intermediate failure.
+- No source validator, Haiku build, boot/runtime test, or physical Rocket Lake display test is claimed as passing by this checkpoint. Run the validator and supported build/test stages before treating these edits as verified.

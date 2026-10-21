@@ -2775,7 +2775,7 @@ DigitalDisplayInterface::SetDisplayMode(display_mode* target, uint32 colorMode)
 			PortIndex(), dco, p, q, k);
 		status_t pllStatus = ProgramPLL(chosenPLL, p, q, k, dco);
 		if (pllStatus != B_OK) {
-			ERROR("%s: failed to program DPLL %d for %s: %s\\n", __func__,
+			ERROR("%s: failed to program DPLL %d for %s: %s\n", __func__,
 				chosenPLL, PortName(), strerror(pllStatus));
 			return pllStatus;
 		}

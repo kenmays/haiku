@@ -318,6 +318,13 @@ intel_propose_display_mode(display_mode* target, const display_mode* low,
 {
 	CALLED();
 
+	// The pipe configuration path currently programs progressive scan only.
+	// Reject interlaced timings instead of silently programming them as progressive.
+	if ((target->timing.flags & B_TIMING_INTERLACED) != 0) {
+		ERROR("%s: Interlaced display timings are not supported yet!\n", __func__);
+		return B_NOT_SUPPORTED;
+	}
+
 	display_mode mode = *target;
 
 	if (sanitize_display_mode(*target)) {
@@ -353,8 +360,9 @@ intel_set_display_mode(display_mode* mode)
 
 	display_mode target = *mode;
 
-	if (intel_propose_display_mode(&target, &target, &target) != B_OK)
-		return B_BAD_VALUE;
+	status_t proposeStatus = intel_propose_display_mode(&target, &target, &target);
+	if (proposeStatus != B_OK)
+		return proposeStatus;
 
 	uint32 colorMode, bytesPerRow, bitsPerPixel;
 	get_color_space_format(target, colorMode, bytesPerRow, bitsPerPixel);

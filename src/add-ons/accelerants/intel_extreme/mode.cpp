@@ -381,7 +381,9 @@ intel_set_display_mode(display_mode* mode)
 	// Free the old framebuffer before allocating a replacement. If the
 	// kernel refuses the free, preserve the old pointer and restore scanout
 	// rather than proceeding with ambiguous allocation ownership.
-	status_t freeStatus = intel_free_memory(sharedInfo.frame_buffer);
+	status_t freeStatus = B_OK;
+	if (sharedInfo.frame_buffer != 0)
+		freeStatus = intel_free_memory(sharedInfo.frame_buffer);
 	if (freeStatus != B_OK) {
 		ERROR("%s: Failed to release old framebuffer!\n", __func__);
 		status_t restoreStatus = set_display_power_mode(sharedInfo.dpms_mode);
@@ -528,12 +530,41 @@ intel_set_display_mode(display_mode* mode)
 	}
 
 	if (portStatus != B_OK) {
-		// The old framebuffer has already been released and at least one port
-		// may have partially changed its pipe/PLL state. Do not re-enable
-		// scanout against an unknown mode/base combination. Keep the display
-		// off and retain the new allocation for a subsequent recovery modeset.
+		// The original framebuffer was released before allocation, and at least
+		// one port may have partially changed its pipe/PLL state. Keep the
+		// display off. Try to restore a correctly sized software framebuffer
+		// for the previous mode without re-enabling uncertain scanout.
 		ERROR("%s: Modeset failed (%s); leaving display powered off for recovery\n",
 			__func__, strerror(portStatus));
+
+		addr_t failedBase = sharedInfo.frame_buffer;
+		status_t releaseFailedBuffer = intel_free_memory(failedBase);
+		if (releaseFailedBuffer == B_OK) {
+			addr_t fallbackBase;
+			size_t fallbackSize = (size_t)sharedInfo.bytes_per_row
+				* sharedInfo.current_mode.virtual_height;
+			status_t fallbackStatus = intel_allocate_memory(fallbackSize, 0,
+				fallbackBase);
+			if (fallbackStatus == B_OK) {
+				memset((uint8*)fallbackBase, 0, fallbackSize);
+				sharedInfo.frame_buffer = fallbackBase;
+				sharedInfo.frame_buffer_offset = fallbackBase
+					- (addr_t)sharedInfo.graphics_memory;
+				set_frame_buffer_base();
+			} else {
+				// Never leave a pointer to the freed failed-mode allocation.
+				sharedInfo.frame_buffer = 0;
+				sharedInfo.frame_buffer_offset = 0;
+			}
+		} else {
+			// Ownership of the failed-mode allocation is ambiguous; retain it
+			// and publish its matching layout rather than freeing it twice or
+			// exposing an incompatible stride to software drawing.
+			sharedInfo.current_mode = target;
+			sharedInfo.bytes_per_row = bytesPerRow;
+			sharedInfo.bits_per_pixel = bitsPerPixel;
+			set_frame_buffer_base();
+		}
 		return portStatus;
 	}
 

@@ -96,7 +96,7 @@ Implemented in `src/add-ons/accelerants/intel_extreme/mode.cpp`:
 Important limitations and remaining work:
 
 - This bridge relies on the existing A/B register programming paths; it has not yet been built or validated on physical Intel generations. Treat hardware correctness as **unverified** until per-generation PRM review and hardware tests are complete.
-- The mode list contains duplicate visible timings with different virtual widths. Verify how Screen preferences exposes these variants; if it hides or collapses them, add a visible, supported configuration control rather than guessing from `B_SCROLL`.
+- The mode list contains duplicate visible timings with different virtual widths. The existing Screen preferences `ScreenMode.cpp` recognizes a horizontal combine mode when `B_SCROLL` is set and virtual width is twice the visible width, and its combine menu separates those modes. This makes the variants selectable through the existing UI path; verify end-to-end on the target build.
 - The bridge currently requires exactly two connected outputs and distinct A/B pipe assignments. It does not support C/D or independent modes, and it does not promise automatic fallback if a display disconnects after mode selection; the next mode proposal/set must reject a now-invalid span request.
 - Add tests for one output, two outputs assigned to one pipe, A/B clone, selected horizontal span, topology change between proposal and set, normal panning, vertical panning, allocation failure, oversized dimensions, and port setup failure.
 - Review whether mode timing flags outside the private marker are preserved by all mode-list and Screen preferences paths on the target Haiku revision.

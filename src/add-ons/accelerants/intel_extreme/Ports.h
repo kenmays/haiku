@@ -204,10 +204,12 @@ protected:
 virtual	addr_t						_DDCRegister();
 virtual	addr_t						_PortRegister();
 
+protected:
+		void						_ProbeDisplayCapabilities();
+
 private:
 		status_t					_SetPortLinkGen4(const display_timing& timing);
 		status_t					_SetPortLinkGen6(const display_timing& timing);
-		void						_ProbePconCapabilities();
 };
 
 

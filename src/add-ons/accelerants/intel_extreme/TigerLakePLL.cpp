@@ -265,7 +265,7 @@ ProgramPLL(int which, int Pdiv, int Qdiv, int Kdiv, float dco)
 	if (Pdiv != 2 && Pdiv != 3 && Pdiv != 5 && Pdiv != 7)
 		return B_BAD_VALUE;
 	if (Kdiv < 1 || Kdiv > 3 || Qdiv < 1 || Qdiv > 255
-		|| dco < 7998.0f || dco > 10000.0f)
+		|| !(dco >= 7998.0f && dco <= 10000.0f))
 		return B_BAD_VALUE;
 
 	// Find the reference frequency (24 or 19.2MHz).

@@ -86,3 +86,19 @@ as separate states.
   https://www.intel.com/content/www/us/en/support/articles/000101642/graphics.html
 - Intel Community Xe2 PRM discussion (availability status must be rechecked):
   https://community.intel.com/t5/Graphics/Xe2-Programmer-s-Reference-Manual/td-p/1708752
+
+
+## Follow-up source review (2026-10-20)
+
+A second pass inspected the current mode-setting, DPMS, port/EDID, cursor, and hook paths. It found one cleanup issue and several validation blockers:
+
+- `driver.cpp` contained the same IronLake PCI entry (`8086:0046`) three times. Two duplicate rows were removed; the single supported row remains. This is a table cleanup, not expanded hardware support.
+- `mode.cpp` uses a shared framebuffer base/surface programming helper for multiple generations. For Rocket Lake, the exact surface offset, pitch/stride, plane enable ordering, and framebuffer allocation limits still require comparison against the Rocket Lake Display Engine PRM and hardware tests. Do not infer correctness from the shared helper alone.
+- `dpms.cpp` manipulates legacy `INTEL_DISPLAY_A/B_PLL` registers and has legacy analog-port DPMS handling; the digital-port branch is disabled. Consequently, the exported DPMS API is not evidence of complete Rocket Lake DP/eDP/HDMI DPMS support. Validate per-port/transcoder sequencing and failure recovery before claiming full DPMS coverage.
+- `Ports.cpp` contains a base `SetupI2cFallback()` implementation that returns `B_ERROR`; successful alternate transport depends on a concrete port subclass override. Trace each Rocket Lake DDI port to its override and verify AUX/GMBUS selection, VBT routing, and EDID retry behavior on hardware. A fallback attempt at the base class is not itself functional fallback support.
+- `cursor.cpp` programs legacy cursor registers and a two-color cursor layout. The hook is exposed when cursor memory is present, but that alone does not establish that this register layout/base address is valid for every newer display engine. Keep cursor hardware enabled only on generations whose cursor allocation, format, address width, and position encoding have been validated; otherwise use Haiku's software cursor.
+- CPU-only 2D policy remains intact: hardware drawing, engine, and synchronization hooks must stay unavailable. Hardware scanout/modesetting remains a separate, generation-specific responsibility.
+
+### Validation status
+
+The source review is static. No Haiku build, boot test, physical Rocket Lake system test, DPMS transition test, EDID/DDC/AUX test, or cursor/hotplug test was run. The Rocket Lake PRM published by Intel includes a dedicated Display Engine volume; use that as the register-level reference for implementation review: https://www.intel.com/content/www/us/en/docs/graphics-for-linux/developer-reference/1-0/rocket-lake.html

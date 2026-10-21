@@ -148,6 +148,17 @@ for required in ("wait_for_register(DPLL_ENABLE, TGL_DPLL_LOCK, false, 100000)",
         fail("bounded PLL transition wait is missing: " + required)
 if not re.search(r"status_t\s+pllStatus\s*=\s*ProgramPLL\(", port_source) or "return pllStatus;" not in port_source:
     fail("Gen12 PLL programming errors are not propagated to the modeset caller")
+
+# DDI clock selection updates must clear only the selected port's field, not
+# mask away unrelated clock selections and clock-off bits.
+for unsafe in ("config &= TGL_DPCLKA_DDIA_CLOCK_SELECT;",
+               "config &= TGL_DPCLKA_DDIB_CLOCK_SELECT;"):
+    if unsafe in port_source:
+        fail("DDI clock routing update destroys unrelated CFGCR0 fields: " + unsafe)
+for required in ("config &= ~TGL_DPCLKA_DDIA_CLOCK_SELECT;",
+                 "config &= ~TGL_DPCLKA_DDIB_CLOCK_SELECT;"):
+    if required not in port_source:
+        fail("DDI clock routing must preserve unrelated CFGCR0 fields: " + required)
 # A failed per-port modeset must not be silently reported as success.
 set_mode_match = re.search(
     r"status_t\s+intel_set_display_mode\s*\(.*?(?=\nstatus_t\s+intel_get_display_mode\s*\()",
@@ -161,5 +172,5 @@ for required in ("status_t portStatus = B_OK;", "portStatus = status;", "return 
     if required not in set_mode_block:
         fail("display mode failure propagation is missing: " + required)
 
-print("PASS: Rocket Lake IDs retained; Alchemist/Battlemage remain unclaimed; CPU-only 2D and engine/sync hooks fail closed; cursor/overlay Gen12 gates retained; PLL waits bounded and errors propagated; port modeset errors propagate.")
+print("PASS: Rocket Lake IDs retained; Alchemist/Battlemage remain unclaimed; CPU-only 2D and engine/sync hooks fail closed; cursor/overlay Gen12 gates retained; PLL waits bounded, errors propagated and DDI clock masks preserve unrelated fields; port modeset errors propagate.")
 print("NOTE: source checks only; build and physical display validation are still required.")

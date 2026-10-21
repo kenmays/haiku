@@ -45,16 +45,33 @@ enable_all_pipes(bool enable)
 }
 
 
+static bool
+wait_for_lvds_panel_power(bool enabled, addr_t statusRegister)
+{
+	// A broken panel-status bit must not hang the app_server indefinitely.
+	// Poll for at most 500 ms, in 1 ms intervals.
+	for (uint32 i = 0; i < 500; i++) {
+		uint32 status = read32(statusRegister);
+		if (((status & PANEL_STATUS_POWER_ON) != 0) == enabled)
+			return true;
+		spin(1000);
+	}
+
+	ERROR("Timed out waiting for LVDS panel power %s (status 0x%08" B_PRIx32 ")\\n",
+		enabled ? "on" : "off", read32(statusRegister));
+	return false;
+}
+
+
 static void
 enable_lvds_panel(bool enable)
 {
 	bool hasPCH = (gInfo->shared_info->pch_info != INTEL_PCH_NONE);
 
-	int controlRegister = hasPCH ? PCH_PANEL_CONTROL : INTEL_PANEL_CONTROL;
-	int statusRegister = hasPCH ? PCH_PANEL_STATUS : INTEL_PANEL_STATUS;
+	addr_t controlRegister = hasPCH ? PCH_PANEL_CONTROL : INTEL_PANEL_CONTROL;
+	addr_t statusRegister = hasPCH ? PCH_PANEL_STATUS : INTEL_PANEL_STATUS;
 
 	uint32 control = read32(controlRegister);
-	uint32 panelStatus;
 
 	if (enable) {
 		if ((control & PANEL_CONTROL_POWER_TARGET_ON) == 0) {
@@ -62,11 +79,8 @@ enable_lvds_panel(bool enable)
 				/*| (hasPCH ? PANEL_REGISTER_UNLOCK : 0)*/);
 		}
 
-		if (!hasPCH) {
-			do {
-				panelStatus = read32(statusRegister);
-			} while ((panelStatus & PANEL_STATUS_POWER_ON) == 0);
-		}
+		if (!hasPCH)
+			wait_for_lvds_panel_power(true, statusRegister);
 	} else {
 		if ((control & PANEL_CONTROL_POWER_TARGET_ON) != 0) {
 			write32(controlRegister, (control & ~PANEL_CONTROL_POWER_TARGET_ON)
@@ -74,11 +88,7 @@ enable_lvds_panel(bool enable)
 		}
 
 		if (!hasPCH)
-		{
-			do {
-				panelStatus = read32(statusRegister);
-			} while ((panelStatus & PANEL_STATUS_POWER_ON) != 0);
-		}
+			wait_for_lvds_panel_power(false, statusRegister);
 	}
 }
 

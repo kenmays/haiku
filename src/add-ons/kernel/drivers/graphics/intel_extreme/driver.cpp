@@ -165,7 +165,10 @@ const struct supported_device {
 	{0x0f32, INTEL_MODEL_VLVM, "ValleyView Mobile"},
 	{0x0f33, INTEL_MODEL_VLVM, "ValleyView Mobile"},
 
+	{0x22b0, INTEL_MODEL_CHVM, "Cherryview"},
 	{0x22b1, INTEL_MODEL_CHVM, "Braswell GT1"},
+	{0x22b2, INTEL_MODEL_CHVM, "Cherryview"},
+	{0x22b3, INTEL_MODEL_CHVM, "Cherryview"},
 #endif
 
 	{0x1606, INTEL_MODEL_BDWM, "Broadwell GT1 ULT"},

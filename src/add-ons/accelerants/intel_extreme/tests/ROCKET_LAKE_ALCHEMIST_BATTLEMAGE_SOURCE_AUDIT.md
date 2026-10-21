@@ -99,6 +99,10 @@ A second pass inspected the current mode-setting, DPMS, port/EDID, cursor, and h
 - `cursor.cpp` programs legacy cursor registers and a two-color cursor layout. The hook is exposed when cursor memory is present, but that alone does not establish that this register layout/base address is valid for every newer display engine. Keep cursor hardware enabled only on generations whose cursor allocation, format, address width, and position encoding have been validated; otherwise use Haiku's software cursor.
 - CPU-only 2D policy remains intact: hardware drawing, engine, and synchronization hooks must stay unavailable. Hardware scanout/modesetting remains a separate, generation-specific responsibility.
 
+
+- A full pass over the active `kSupportedDevices` table found a second duplicate-ID defect: `0x0152` was mapped first to Ivy Bridge Desktop GT1 and again to Ivy Bridge Server. The second row was removed because it shadowed the desktop row in the first-match lookup; existing server-specific `0x015a` and `0x016a` rows remain. The validator now strips inactive `#if 0` blocks and fails if an active PCI ID occurs more than once.
+- Recheck result after the change: 211 active table rows parsed, no duplicate active PCI IDs found. Repeated marketing names are present for distinct PCI IDs and are not treated as duplicate IDs. This was a source-level scan, not execution of the validator or a build.
+
 ### Validation status
 
 The source review is static. No Haiku build, boot test, physical Rocket Lake system test, DPMS transition test, EDID/DDC/AUX test, or cursor/hotplug test was run. The Rocket Lake PRM published by Intel includes a dedicated Display Engine volume; use that as the register-level reference for implementation review: https://www.intel.com/content/www/us/en/docs/graphics-for-linux/developer-reference/1-0/rocket-lake.html

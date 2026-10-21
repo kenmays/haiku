@@ -108,6 +108,7 @@ def main() -> int:
     cursor_move = function_body(cursor, "move_cursor(int32 x, int32 y)")
     cursor_shape = function_body(cursor, "intel_set_cursor_shape(")
     cursor_move = function_body(cursor, "static void\nmove_cursor(")
+    cursor_show = function_body(cursor, "intel_show_cursor(")
     require(
         "x -= gInfo->shared_info->cursor_hot_x;" in cursor_move
         and "y -= gInfo->shared_info->cursor_hot_y;" in cursor_move,
@@ -147,7 +148,9 @@ def main() -> int:
         and "uint32 encodedX = (uint32)x;" in cursor_move
         and "uint32 encodedY = (uint32)y;" in cursor_move
         and "x = CURSOR_POSITION_MASK;" in cursor_move
-        and "y = CURSOR_POSITION_MASK;" in cursor_move,
+        and "y = CURSOR_POSITION_MASK;" in cursor_move
+        and "if (!isVisible)" in cursor_show
+        and "write32(INTEL_CURSOR_CONTROL, 0);" in cursor_show,
         "cursor shape updates must clear stale mask data and preserve hidden state",
     )
 

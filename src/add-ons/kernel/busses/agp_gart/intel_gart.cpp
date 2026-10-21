@@ -118,15 +118,13 @@ const struct supported_device {
 	{0x0a04, 0x0a2e, INTEL_MODEL_HASM, "Haswell ULT GT3 Mobile"},
 	{0x0d04, 0x0d26, INTEL_MODEL_HASM, "Haswell CRW GT3 Mobile"},
 
-#if 0
-	// XXX: 0x0f00 only confirmed on 0x0f30, 0x0f31
+	// ValleyView: bridge 0x0f00 is confirmed for these two display IDs.
+	// The 0x0f32/0x0f33 pairings remain unverified.
 	{0x0f00, 0x0f30, INTEL_MODEL_VLVM, "ValleyView Mobile"},
 	{0x0f00, 0x0f31, INTEL_MODEL_VLVM, "ValleyView Mobile"},
-	{0x0f00, 0x0f32, INTEL_MODEL_VLVM, "ValleyView Mobile"},
-	{0x0f00, 0x0f33, INTEL_MODEL_VLVM, "ValleyView Mobile"},
 
-	{0x2280, 0x22b1, INTEL_MODEL_CHVM, "Braswell GT1"},
-#endif
+	// Cherryview/Braswell (0x22b1) stays disabled until its GTT sizing and
+	// stolen-memory encoding are implemented and validated for this platform.
 
 	// XXX: 0x1604 only confirmed on 0x1616
 	{0x1604, 0x1606, INTEL_MODEL_BDWM, "Broadwell GT1 ULT"},
@@ -344,7 +342,9 @@ determine_gtt_stolen(intel_info &info)
 		}
 	} else if (info.type->InGroup(INTEL_GROUP_SNB)
 		|| info.type->InGroup(INTEL_GROUP_IVB)
-		|| info.type->InGroup(INTEL_GROUP_HAS)) {
+		|| info.type->InGroup(INTEL_GROUP_HAS)
+		|| info.type->InGroup(INTEL_GROUP_VLV)) {
+		// ValleyView uses the Gen6 GMCH stolen-memory size field.
 		switch (memoryConfig & SNB_STOLEN_MEMORY_MASK) {
 			case SNB_STOLEN_MEMORY_32MB:
 				memorySize *= 32;
@@ -605,7 +605,9 @@ determine_gtt_size(intel_info &info)
 		}
 	} else if (info.type->InGroup(INTEL_GROUP_SNB)
 			|| info.type->InGroup(INTEL_GROUP_IVB)
-			|| info.type->InGroup(INTEL_GROUP_HAS)) {
+			|| info.type->InGroup(INTEL_GROUP_HAS)
+			|| info.type->InGroup(INTEL_GROUP_VLV)) {
+		// ValleyView uses the Gen6 GMCH GTT-size field.
 		switch (memoryConfig & SNB_GTT_SIZE_MASK) {
 			case SNB_GTT_SIZE_NONE:
 				gttSize = 0;

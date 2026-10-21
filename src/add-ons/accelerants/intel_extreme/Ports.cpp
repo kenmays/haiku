@@ -2695,8 +2695,24 @@ DigitalDisplayInterface::_SetPortLinkGen8(const display_timing& timing, uint32 p
 				return B_BAD_VALUE;
 		}
 		TRACE("%s: DDI in DP mode with %" B_PRIu32 " lane(s) in use\n", __func__, lanes);
+	} else if (mode != PIPE_DDI_MODE_HDMI && mode != PIPE_DDI_MODE_DVI) {
+		ERROR("%s: Unsupported DDI mode encoding %" B_PRIu32 "\n", __func__, mode);
+		return B_BAD_VALUE;
 	} else {
 		TRACE("%s: DDI in non-DP mode with %" B_PRIu32 " lane(s) in use\n", __func__, lanes);
+	}
+
+	// Keep the M/N helper safe when called independently of SetDisplayMode's
+	// preflight check. Gen12 only supports the fixed 2.7 Gbit/s DP link here.
+	if (gInfo->shared_info->device_type.Generation() >= 12
+		&& (mode == PIPE_DDI_MODE_DP_SST || mode == PIPE_DDI_MODE_DP_MST)) {
+		uint64 required = (uint64)timing.pixel_clock * bitsPerPixel * 21 / 20;
+		uint64 capacity = (uint64)lanes * linkBandwidth * 8;
+		if (required > capacity) {
+			ERROR("%s: Mode exceeds fixed Gen12 DP link capacity (%" B_PRIu64
+				" > %" B_PRIu64 ")\n", __func__, required, capacity);
+			return B_NOT_SUPPORTED;
+		}
 	}
 
 	//Setup Data M/N

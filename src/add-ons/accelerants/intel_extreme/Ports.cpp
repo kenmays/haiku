@@ -1059,7 +1059,13 @@ AnalogPort::SetDisplayMode(display_mode* target, uint32 colorMode)
 		uint32 lanes = 0;
 		uint32 linkBandwidth = 0;
 		uint32 bitsPerPixel = 0;
-		link->PreTrain(&target->timing, &linkBandwidth, &lanes, &bitsPerPixel);
+		status_t preTrainStatus = link->PreTrain(&target->timing,
+			&linkBandwidth, &lanes, &bitsPerPixel);
+		if (preTrainStatus != B_OK) {
+			ERROR("%s: FDI pre-training failed on %s (status %d)\n",
+				__func__, PortName(), (int)preTrainStatus);
+			return preTrainStatus;
+		}
 		status_t linkStatus = fPipe->SetFDILink(target->timing, linkBandwidth,
 			lanes, bitsPerPixel);
 		if (linkStatus != B_OK) {
@@ -1067,7 +1073,12 @@ AnalogPort::SetDisplayMode(display_mode* target, uint32 colorMode)
 				__func__, PortName(), (int)linkStatus);
 			return linkStatus;
 		}
-		link->Train(&target->timing, lanes);
+		status_t trainStatus = link->Train(&target->timing, lanes);
+		if (trainStatus != B_OK) {
+			ERROR("%s: FDI training failed on %s (status %d)\n",
+				__func__, PortName(), (int)trainStatus);
+			return trainStatus;
+		}
 	}
 	pll_divisors divisors;
 	compute_pll_divisors(&target->timing, &divisors, false);
@@ -1314,7 +1325,13 @@ LVDSPort::SetDisplayMode(display_mode* target, uint32 colorMode)
 		uint32 lanes = 0;
 		uint32 linkBandwidth = 0;
 		uint32 bitsPerPixel = 0;
-		link->PreTrain(&hardwareTarget, &linkBandwidth, &lanes, &bitsPerPixel);
+		status_t preTrainStatus = link->PreTrain(&hardwareTarget,
+			&linkBandwidth, &lanes, &bitsPerPixel);
+		if (preTrainStatus != B_OK) {
+			ERROR("%s: FDI pre-training failed on %s (status %d)\n",
+				__func__, PortName(), (int)preTrainStatus);
+			return preTrainStatus;
+		}
 		status_t linkStatus = fPipe->SetFDILink(hardwareTarget, linkBandwidth,
 			lanes, bitsPerPixel);
 		if (linkStatus != B_OK) {
@@ -1322,7 +1339,12 @@ LVDSPort::SetDisplayMode(display_mode* target, uint32 colorMode)
 				__func__, PortName(), (int)linkStatus);
 			return linkStatus;
 		}
-		link->Train(&hardwareTarget, lanes);
+		status_t trainStatus = link->Train(&hardwareTarget, lanes);
+		if (trainStatus != B_OK) {
+			ERROR("%s: FDI training failed on %s (status %d)\n",
+				__func__, PortName(), (int)trainStatus);
+			return trainStatus;
+		}
 	}
 
 	pll_divisors divisors;
@@ -2127,7 +2149,13 @@ DisplayPort::SetDisplayMode(display_mode* target, uint32 colorMode)
 			if (PortIndex() != INTEL_PORT_A) {
 				FDILink* link = fPipe->FDI();
 				if (link != NULL) {
-					link->PreTrain(&hardwareTarget, &linkBandwidth, &lanes, &bitsPerPixel);
+					status_t preTrainStatus = link->PreTrain(&hardwareTarget,
+						&linkBandwidth, &lanes, &bitsPerPixel);
+					if (preTrainStatus != B_OK) {
+						ERROR("%s: FDI pre-training failed on %s (status %d)\n",
+							__func__, PortName(), (int)preTrainStatus);
+						return preTrainStatus;
+					}
 					status_t linkStatus = fPipe->SetFDILink(hardwareTarget,
 						linkBandwidth, lanes, bitsPerPixel);
 					if (linkStatus != B_OK) {
@@ -2135,7 +2163,12 @@ DisplayPort::SetDisplayMode(display_mode* target, uint32 colorMode)
 							__func__, PortName(), (int)linkStatus);
 						return linkStatus;
 					}
-					link->Train(&hardwareTarget, lanes);
+					status_t trainStatus = link->Train(&hardwareTarget, lanes);
+					if (trainStatus != B_OK) {
+						ERROR("%s: FDI training failed on %s (status %d)\n",
+							__func__, PortName(), (int)trainStatus);
+						return trainStatus;
+					}
 				}
 			} else {
 				// 'local' eDP port is in use

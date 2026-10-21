@@ -325,6 +325,25 @@ intel_propose_display_mode(display_mode* target, const display_mode* low,
 		return B_NOT_SUPPORTED;
 	}
 
+	// Do not let unsupported color spaces fall through to the CMAP8 default in
+	// get_color_space_format(); that would mismatch the CPU framebuffer layout
+	// and the display plane's pixel format.
+	switch (target->space) {
+		case B_RGB32_LITTLE:
+		case B_RGB16_LITTLE:
+		case B_CMAP8:
+			break;
+		case B_RGB15_LITTLE:
+			if (gInfo->shared_info->device_type.Generation() >= 4) {
+				ERROR("%s: RGB15 is not supported on this generation!\\n", __func__);
+				return B_NOT_SUPPORTED;
+			}
+			break;
+		default:
+			ERROR("%s: Unsupported framebuffer color space %d!\\n", __func__, target->space);
+			return B_BAD_VALUE;
+	}
+
 	display_mode mode = *target;
 
 	if (sanitize_display_mode(*target)) {

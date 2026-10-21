@@ -170,10 +170,10 @@ if "TGL_DPLL_DCO_INTEGER_SHIFT" in pll_source:
 # The current Gen12 combo-PHY implementation is intentionally limited to
 # DDI A/B; ports using TC/MG PHYs must not be assigned DPLL0 by heuristic.
 ddi_start = port_source.find("DigitalDisplayInterface::SetDisplayMode(")
-ddi_end = port_source.find("\nstatus_t\nDigitalDisplayInterface::_SetPortLinkGen8(", ddi_start)
-if ddi_start < 0 or ddi_end <= ddi_start:
+if ddi_start < 0:
     fail("DigitalDisplayInterface::SetDisplayMode body was not found")
-ddi_mode = port_source[ddi_start:ddi_end]
+# SetDisplayMode is the final DigitalDisplayInterface method in Ports.cpp.
+ddi_mode = port_source[ddi_start:]
 if not re.search(
     r"Generation\(\) >= 12.*?PortIndex\(\) != INTEL_PORT_A"
     r".*?PortIndex\(\) != INTEL_PORT_B.*?return B_NOT_SUPPORTED;",

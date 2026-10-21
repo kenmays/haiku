@@ -161,6 +161,8 @@ for required in (
     "if (dco_frac >= (1 << 15))",
     "dco_int++;",
     "dco_frac = 0;",
+    "!(dco >= 7998.0f && dco <= 10000.0f)",
+    "float afeclk = (5.0f * freq) / 1000.0f;",
 ):
     if required not in pll_source:
         fail("Gen12 PLL parameter validation is missing: " + required)

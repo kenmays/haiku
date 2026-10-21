@@ -131,7 +131,7 @@ for required in ("width == 0", "height == 0", "andMask == NULL", "xorMask == NUL
 
 # Gen6+ overlay hooks must stay fail-closed until a modern plane path exists.
 overlay_gate = re.search(
-    r"if \\(gInfo->shared_info->device_type.Generation\\(\\) >= 6\\)\\s*\\{(.*?)\\n\\s*\\}",
+    r"if \(gInfo->shared_info->device_type.Generation\(\) >= 6\)\s*\{(.*?)\n\s*\}",
     hooks,
     re.DOTALL,
 )

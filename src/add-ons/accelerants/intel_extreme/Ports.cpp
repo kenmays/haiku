@@ -804,6 +804,7 @@ Port::_DpAuxTransfer(dp_aux_msg* message)
 	uint8 retry;
 	for (retry = 0; retry < 7; retry++) {
 		ssize_t result = B_ERROR;
+		uint8 replyDataSize = 0;
 		switch(message->request & ~DP_AUX_I2C_MOT) {
 			case DP_AUX_NATIVE_WRITE:
 			case DP_AUX_I2C_WRITE:
@@ -829,8 +830,11 @@ Port::_DpAuxTransfer(dp_aux_msg* message)
 				if (result > 0) {
 					message->reply = receiveBuffer[0] >> 4;
 					result--;
-					if (message->buffer != NULL)
-						memcpy(message->buffer, receiveBuffer + 1, result);
+					// Preserve the actual count for short AUX reads so callers can
+					// continue without silently skipping unread data.
+					replyDataSize = min_c((uint8)result, message->size);
+					if (message->buffer != NULL && replyDataSize > 0)
+						memcpy(message->buffer, receiveBuffer + 1, replyDataSize);
 				}
 				break;
 			default:
@@ -845,6 +849,14 @@ Port::_DpAuxTransfer(dp_aux_msg* message)
 
 		switch (message->reply & DP_AUX_NATIVE_REPLY_MASK) {
 			case DP_AUX_NATIVE_REPLY_ACK:
+				if ((message->request & ~DP_AUX_I2C_MOT) == DP_AUX_NATIVE_READ
+					|| (message->request & ~DP_AUX_I2C_MOT) == DP_AUX_I2C_READ) {
+					if (replyDataSize == 0) {
+						TRACE("%s: AUX read ACK contained no data\\n", __func__);
+						return B_IO_ERROR;
+					}
+					message->size = replyDataSize;
+				}
 				return B_OK;
 			case DP_AUX_NATIVE_REPLY_NACK:
 				TRACE("%s: aux native reply nack\n", __func__);

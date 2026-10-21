@@ -138,6 +138,13 @@ def main() -> int:
         "kernel must not allocate the legacy cursor buffer for unvalidated Gen12+",
     )
 
+    require(
+        "memset(data, 0, 64 * 16);" in cursor_shape
+        and "memset(data + 16 * y, 0xff, 8);" in cursor_shape
+        and "gInfo->shared_info->cursor_visible ? CURSOR_ENABLED : 0" in cursor_shape,
+        "cursor shape updates must clear stale mask data and preserve hidden state",
+    )
+
     # DPLL transitions must time out rather than hang, and the DDI modeset
     # caller must stop when PLL programming fails.
     require(

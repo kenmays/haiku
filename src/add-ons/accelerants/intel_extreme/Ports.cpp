@@ -2683,10 +2683,16 @@ DigitalDisplayInterface::SetDisplayMode(display_mode* target, uint32 colorMode)
 		}
 	}
 
-	// Setup PanelFitter
+	// Configure the panel fitter only when the requested mode needs
+	// scaling. Enabling it unconditionally also affects native-resolution
+	// modes and can leave the output scaled after a mode switch.
 	PanelFitter* fitter = fPipe->PFT();
-	if (fitter != NULL)
-		fitter->Enable(hardwareTarget);
+	if (fitter != NULL) {
+		if (needsScaling)
+			fitter->Enable(hardwareTarget);
+		else
+			fitter->Disable();
+	}
 
 	// skip FDI as it never applies to DDI (on gen7 and 8 only for the real analog VGA port)
 

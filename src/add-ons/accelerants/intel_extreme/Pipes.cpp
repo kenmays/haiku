@@ -113,6 +113,8 @@ Pipe::Pipe(pipe_index pipeIndex)
 
 Pipe::~Pipe()
 {
+	delete fFDILink;
+	delete fPanelFitter;
 }
 
 

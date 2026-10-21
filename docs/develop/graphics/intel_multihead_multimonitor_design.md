@@ -80,20 +80,29 @@ Implement these as distinct modes:
 
 Initially support only the explicitly validated subset (for example, two outputs on documented A/B pipe/plane combinations). Return an error or hide unsupported head combinations rather than writing unverified C/D registers.
 
-## Concrete first implementation gate
+## Horizontal spanning compatibility bridge: implementation status
 
-Do not implement spanning by checking `virtual_width == 2 * h_display` alone. In this branch `intel_propose_display_mode()` unconditionally sets `B_SCROLL`, so that flag cannot distinguish a spanning request from ordinary panning. The mode list also currently advertises visible-size virtual surfaces, and the existing Screen preferences multi-monitor handshake is Radeon-private. A silent inference would make normal wide virtual desktops change the output shown on pipe B.
+The Intel accelerant now has an initial, explicitly opt-in horizontal-spanning bridge for the existing single logical desktop. It is not independent-screen support.
 
-Before enabling a spanning mode, implement these pieces together:
+Implemented in `src/add-ons/accelerants/intel_extreme/mode.cpp`:
 
-1. Add Intel-private request/reply mode markers in a documented, non-conflicting field and preserve them through propose/sanitize/set mode. Do not reuse Radeon-private marker values without a shared header and compatibility review.
-2. Extend the mode-list path only when two connected outputs have distinct, supported A/B pipes; publish explicit horizontal-span variants with checked `2 * h_display`, max virtual width, stride, and full allocation-size calculations.
-3. In the modeset transaction, require the explicit request, exactly two distinct connected A/B pipes, compatible timing/format, and successful setup of both ports. Set pipe A's start to the left origin and pipe B's start to the right-hand region using that generation's documented start-offset mechanism. On any failure, restore both pipes and the old surface.
-4. Update Screen preferences to negotiate the Intel markers and display positions; do not rely on a Radeon-only handshake.
-5. Add tests for one monitor, two monitors on the same pipe, A/B clone, horizontal span, disconnect during setup, ordinary panning, and oversized/overflowing dimensions.
+1. When initialization finds exactly two connected outputs assigned to distinct pipes A and B, it appends separate horizontal-span variants to the mode list. Each variant uses a virtual width of exactly twice the visible width and carries a private Intel mode marker; normal modes retain their original dimensions and flags.
+2. `intel_propose_display_mode()` preserves that marker across mode validation, then rejects span requests if the topology changed, the virtual dimensions do not exactly match the span layout, or display starts are nonzero.
+3. The modeset path strips the private marker before passing timings to port-specific hardware programming. The shared mode retains it so scanout-base programming can put pipe B at the right-hand region of the same framebuffer.
+4. The scanout-base helper adjusts the B plane's horizontal start by one visible mode width, using the existing generation-family start-offset path. Normal modes still program both planes at the same origin.
+5. `intel_move_display()` rejects horizontal panning in span mode, which would otherwise move the right-hand display beyond the exact two-panel surface. Vertical panning remains bounded by the virtual height.
+6. Existing allocation range/overflow checks and modeset failure rollback remain in effect. The mode list expansion is optional: if its extra area cannot be allocated, ordinary modes remain available.
 
-If any prerequisite is absent, return a failure or retain clone/single-monitor behavior; never silently reinterpret an ordinary mode as spanning.
- 
+Important limitations and remaining work:
+
+- This bridge relies on the existing A/B register programming paths; it has not yet been built or validated on physical Intel generations. Treat hardware correctness as **unverified** until per-generation PRM review and hardware tests are complete.
+- The mode list contains duplicate visible timings with different virtual widths. Verify how Screen preferences exposes these variants; if it hides or collapses them, add a visible, supported configuration control rather than guessing from `B_SCROLL`.
+- The bridge currently requires exactly two connected outputs and distinct A/B pipe assignments. It does not support C/D or independent modes, and it does not promise automatic fallback if a display disconnects after mode selection; the next mode proposal/set must reject a now-invalid span request.
+- Add tests for one output, two outputs assigned to one pipe, A/B clone, selected horizontal span, topology change between proposal and set, normal panning, vertical panning, allocation failure, oversized dimensions, and port setup failure.
+- Review whether mode timing flags outside the private marker are preserved by all mode-list and Screen preferences paths on the target Haiku revision.
+
+Do not confuse this bridge with the per-head architecture below. Independent extended desktop still requires per-head mode/framebuffer state and app_server integration.
+
 ## Acceptance matrix
 
 For each supported generation and exact PCI ID, test:

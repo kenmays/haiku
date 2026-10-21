@@ -525,6 +525,8 @@ intel_set_display_mode(display_mode* mode)
 			uint32 oldColorMode, oldBytesPerRow, oldBitsPerPixel;
 			if (get_color_space_format(oldMode, oldColorMode, oldBytesPerRow,
 					oldBitsPerPixel) == B_OK) {
+				(void)oldBytesPerRow;
+				(void)oldBitsPerPixel;
 				for (uint32 i = 0; i < gInfo->port_count; i++) {
 					Port* port = gInfo->ports[i];
 					if (port == NULL || !port->IsConnected())

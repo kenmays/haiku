@@ -26,19 +26,19 @@ hooks = HOOKS.read_text(encoding="utf-8")
 # Catch duplicate active PCI IDs in the supported-device table. Entries inside
 # #if 0 blocks are intentionally excluded because they are not compiled.
 table_match = re.search(
-    r"kSupportedDevices\\s*\\[\\]\\s*=\\s*\\{(.*?)^\\};",
+    r"kSupportedDevices\s*\[\]\s*=\s*\{(.*?)^\};",
     driver,
     re.DOTALL | re.MULTILINE,
 )
 if table_match is None:
     fail("supported-device table was not found")
 active_table = re.sub(
-    r"^\\s*#if\\s+0\\b.*?^\\s*#endif\\b[^\\n]*",
+    r"^\s*#if\s+0\b.*?^\s*#endif\b[^\n]*",
     "",
     table_match.group(1),
     flags=re.DOTALL | re.MULTILINE,
 )
-device_ids = re.findall(r"^\\s*\\{\\s*(0x[0-9a-fA-F]+)\\s*,", active_table, re.MULTILINE)
+device_ids = re.findall(r"^\s*\{\s*(0x[0-9a-fA-F]+)\s*,", active_table, re.MULTILINE)
 seen_ids = set()
 duplicate_ids = set()
 for device_id in device_ids:

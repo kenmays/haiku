@@ -109,3 +109,17 @@ The following source-level guardrails have now been implemented on this branch:
 - DisplayPort DPLL parameters and PLL-to-port assignment are still provisional. The current fixed DP DPLL and port-index heuristic are not evidence of reliable multi-output behavior.
 - The mode-set sequence still needs a full Rocket Lake audit of transcoder selection, DDI link training, data/link M/N programming, pipe enable/disable order, and recovery after an intermediate failure.
 - No source validator, Haiku build, boot/runtime test, or physical Rocket Lake display test is claimed as passing by this checkpoint. Run the validator and supported build/test stages before treating these edits as verified.
+
+
+## Follow-up audit: primary plane and scanout register mapping
+
+A source review of `accelerants/intel_extreme/Pipes.cpp` found another Gen12 scanout item that must be resolved before describing Rocket Lake modesetting as validated:
+
+- The generic `Pipe` constructor derives pipe offsets from fixed values (A=0, B=`0x1000`, C=`0x2000`, D=`0xf000`) and derives a primary-plane offset from `INTEL_PLANE_OFFSET` for B/C, while Pipe D has no corresponding plane offset in this code.
+- `Pipe::Enable()` programs `INTEL_DISPLAY_A_PIPE_CONTROL + fPipeOffset` and `INTEL_DISPLAY_A_CONTROL + fPlaneOffset`, using the legacy-named `DISPLAY_CONTROL_ENABLED` and tile-mode mask, and waits for vblank between enable/disable transitions.
+- `ConfigureTimings()` also writes the generic pipe-size and primary-plane-size register names. The source contains generation-specific branches, but those branches alone do not demonstrate that every offset, field, latch rule, or plane address is correct for Rocket Lake.
+- This is not enough evidence to conclude that scanout is wrong; it is a concrete register-mapping verification gap. Trace every register macro to its definition and documented Gen12 scope, then compare the exact order and per-pipe/per-plane addressing with Rocket Lake display-engine documentation and upstream Linux i915.
+- Specifically verify primary-plane base/surface programming, stride/pixel format, tile/modifier assumptions, plane size versus pipe source size, required posting reads, vblank wait bounds, and the pipe/transcoder enable order. Confirm how Pipe D and any additional Gen12 planes are represented.
+- Until this audit is complete, keep the active allowlist unchanged and avoid adding a new cursor/overlay implementation on top of assumptions inherited from older generations.
+
+The Gen12 cursor/overlay plan in `accelerants/intel_extreme/tests/GEN12_CURSOR_OVERLAY_PLANE_PLAN.md` defines the plane inventory and physical test requirements. No register writes were changed in this follow-up because guessing at display-engine offsets or masks could make a working BIOS-configured display fail.

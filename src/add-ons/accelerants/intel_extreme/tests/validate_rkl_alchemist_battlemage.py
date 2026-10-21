@@ -135,8 +135,37 @@ overlay_gate = re.search(
     hooks,
     re.DOTALL,
 )
-if overlay_gate is None or "B_CONFIGURE_OVERLAY" not in overlay_gate.group(1) or "return NULL;" not in overlay_gate.group(1):
+if overlay_gate is None or "return NULL;" not in overlay_gate.group(1):
     fail("legacy overlay hooks are not visibly disabled on Gen6+")
+
+# Every Haiku overlay entry point must be covered by the generation gate. A
+# partial gate can accidentally expose buffer allocation/release without a
+# usable configure path, or leave stale legacy paths callable on Gen12.
+overlay_features = (
+    "B_OVERLAY_COUNT",
+    "B_OVERLAY_SUPPORTED_SPACES",
+    "B_OVERLAY_SUPPORTED_FEATURES",
+    "B_ALLOCATE_OVERLAY_BUFFER",
+    "B_RELEASE_OVERLAY_BUFFER",
+    "B_GET_OVERLAY_CONSTRAINTS",
+    "B_ALLOCATE_OVERLAY",
+    "B_RELEASE_OVERLAY",
+    "B_CONFIGURE_OVERLAY",
+)
+for feature in overlay_features:
+    if not re.search(r"case\\s+" + feature + r"\\s*:", overlay_gate.group(1)):
+        fail(f"{feature} is not covered by the Gen6+ overlay fail-closed gate")
+
+# Cursor hooks are individually gated, not just shape-setting. This prevents
+# movement/show calls from reaching legacy registers on unvalidated Gen12.
+for feature in ("B_SET_CURSOR_SHAPE", "B_MOVE_CURSOR", "B_SHOW_CURSOR"):
+    match = re.search(
+        r"case\\s+" + feature + r"\\s*:(.*?)(?=\\n\\s*case\\s+[A-Z_]+|\\n\\s*/\\*)",
+        hooks,
+        re.DOTALL,
+    )
+    if match is None or "Generation() < 12" not in match.group(1) or "return NULL;" not in match.group(1):
+        fail(f"{feature} is not fail-closed for Gen12")
 
 # PLL waits must be bounded and caller-visible failures must stop the modeset.
 if "while ((read32(DPLL_ENABLE)" in pll_source:

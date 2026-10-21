@@ -92,27 +92,27 @@ get_accelerant_hook(uint32 feature, void* data)
 
 		/* engine/synchronization */
 		case B_ACCELERANT_ENGINE_COUNT:
-			return (void*)intel_accelerant_engine_count;
+			return (void*)intel_cpu_accelerant_engine_count;
 		case B_ACQUIRE_ENGINE:
-			return (void*)intel_acquire_engine;
+			return (void*)intel_cpu_acquire_engine;
 		case B_RELEASE_ENGINE:
-			return (void*)intel_release_engine;
+			return (void*)intel_cpu_release_engine;
 		case B_WAIT_ENGINE_IDLE:
-			return (void*)intel_wait_engine_idle;
+			return (void*)intel_cpu_wait_engine_idle;
 		case B_GET_SYNC_TOKEN:
-			return (void*)intel_get_sync_token;
+			return (void*)intel_cpu_get_sync_token;
 		case B_SYNC_TO_TOKEN:
-			return (void*)intel_sync_to_token;
+			return (void*)intel_cpu_sync_to_token;
 
 		/* 2D acceleration */
 		case B_SCREEN_TO_SCREEN_BLIT:
-			return (void*)intel_screen_to_screen_blit;
+			return (void*)intel_cpu_screen_to_screen_blit;
 		case B_FILL_RECTANGLE:
-			return (void*)intel_fill_rectangle;
+			return (void*)intel_cpu_fill_rectangle;
 		case B_INVERT_RECTANGLE:
-			return (void*)intel_invert_rectangle;
+			return (void*)intel_cpu_invert_rectangle;
 		case B_FILL_SPAN:
-			return NULL;//(void*)intel_fill_span;
+			return (void*)intel_cpu_fill_span;
 
 		// overlay
 		case B_OVERLAY_COUNT:

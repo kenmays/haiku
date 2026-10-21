@@ -81,8 +81,6 @@ const struct supported_device {
 
 	{0x0042, INTEL_MODEL_ILKG, "IronLake Desktop"},
 	{0x0046, INTEL_MODEL_ILKGM, "IronLake Mobile"},
-	{0x0046, INTEL_MODEL_ILKGM, "IronLake Mobile"},
-	{0x0046, INTEL_MODEL_ILKGM, "IronLake Mobile"},
 
 	{0x0102, INTEL_MODEL_SNBG, "SandyBridge Desktop GT1"},
 	{0x0112, INTEL_MODEL_SNBG, "SandyBridge Desktop GT2"},
@@ -96,7 +94,6 @@ const struct supported_device {
 	{0x0162, INTEL_MODEL_IVBG, "IvyBridge Desktop GT2"},
 	{0x0156, INTEL_MODEL_IVBGM, "IvyBridge Mobile GT1"},
 	{0x0166, INTEL_MODEL_IVBGM, "IvyBridge Mobile GT2"},
-	{0x0152, INTEL_MODEL_IVBGS, "IvyBridge Server"},
 	{0x015a, INTEL_MODEL_IVBGS, "IvyBridge Server GT1"},
 	{0x016a, INTEL_MODEL_IVBGS, "IvyBridge Server GT2"},
 
@@ -181,6 +178,13 @@ const struct supported_device {
 	{0x3eab, INTEL_MODEL_CFLM, "CoffeeLake Halo GT2"},
 	{0x3ea5, INTEL_MODEL_CFL,  "CoffeeLake GT3"},
 	{0x3ea6, INTEL_MODEL_CFL,  "CoffeeLake GT3"},
+
+	// Whiskey Lake (Gen9.5; shares the Coffee Lake display family)
+	{0x3ea0, INTEL_MODEL_CFLM, "WhiskeyLake U GT2"},
+	{0x3ea1, INTEL_MODEL_CFLM, "WhiskeyLake U GT1"},
+	{0x3ea2, INTEL_MODEL_CFLM, "WhiskeyLake U GT3"},
+	{0x3ea3, INTEL_MODEL_CFLM, "WhiskeyLake U GT2"},
+	{0x3ea4, INTEL_MODEL_CFLM, "WhiskeyLake U GT1"},
 
 	{0x8a56, INTEL_MODEL_CFLM, "IceLake GT1"},
 	{0x8a5c, INTEL_MODEL_CFLM, "IceLake GT1.5"},

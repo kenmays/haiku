@@ -2525,7 +2525,12 @@ DigitalDisplayInterface::_SetPortLinkGen8(const display_timing& timing, uint32 p
 	//fixme: always so on pre gen 9?
 	uint32 linkBandwidth = 270000; //khz
 
-	if (gInfo->shared_info->device_type.Generation() >= 11) {
+	if (gInfo->shared_info->device_type.Generation() >= 12) {
+		// Gen12 currently uses the fixed 2.7 Gbit/s DP link reference.
+		// Rate selection/retraining is not implemented, so the bandwidth
+		// guard below rejects modes that exceed this reference.
+		TRACE("%s: Gen12 uses fixed 270 MHz DP link reference\n", __func__);
+	} else if (gInfo->shared_info->device_type.Generation() >= 11) {
 		ERROR("%s: DDI PLL selection not implemented for Gen11, "
 			"assuming default DP-link reference\n", __func__);
 	} else if (gInfo->shared_info->device_type.Generation() >= 9) {

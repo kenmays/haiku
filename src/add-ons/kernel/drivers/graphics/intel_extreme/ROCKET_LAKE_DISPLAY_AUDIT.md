@@ -13,6 +13,10 @@
 - Hardware drawing hooks and engine/synchronization hooks remain unavailable. This is the required CPU-only 2D policy and must not be relaxed as part of display bring-up.
 - The current static validator checked Rocket Lake IDs by searching the whole source text, which could pass if an ID appeared only in a comment or with the wrong model mapping. The validator is being tightened to require each ID in the active supported-device table and mapped to `INTEL_MODEL_RKL`.
 
+## Follow-up fix from this audit
+
+The mode-setting loop previously logged a per-port `SetDisplayMode()` failure but continued to return `B_OK`, potentially reporting a successful modeset when a connected output failed. The loop now preserves the first port error and returns it after updating shared framebuffer/mode state and restoring the requested power state. The static validator checks that this error propagation remains present. This is a correctness fix, not proof that the underlying Rocket Lake register programming or physical output works.
+
 ## Review risks and evidence still required
 
 | Area | Source-level concern | Evidence required before claiming support |

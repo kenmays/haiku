@@ -139,8 +139,10 @@ def main() -> int:
         and "B_TIMED_OUT" in pll
         and "wait_for_register(DPLL_ENABLE, TGL_DPLL_LOCK, false, 100000)" in pll
         and "wait_for_register(DPLL_ENABLE, TGL_DPLL_POWER_STATE, true, 100000)" in pll
-        and "wait_for_register(DPLL_ENABLE, TGL_DPLL_LOCK, true, 100000)" in pll,
-        "Gen12 PLL unlock/power/lock polling must be bounded",
+        and "wait_for_register(DPLL_ENABLE, TGL_DPLL_LOCK, true, 100000)" in pll
+        and "Undo the power request if hardware did not acknowledge it" in pll
+        and "Do not leave an unlocked PLL enabled" in pll,
+        "Gen12 PLL transitions must be bounded and failed enable attempts rolled back",
     )
     require(
         "status_t pllStatus = ProgramPLL(" in ports and "return pllStatus;" in ports,

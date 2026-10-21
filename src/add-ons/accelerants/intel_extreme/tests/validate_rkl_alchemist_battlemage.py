@@ -153,14 +153,14 @@ overlay_features = (
     "B_CONFIGURE_OVERLAY",
 )
 for feature in overlay_features:
-    if not re.search(r"case\\s+" + feature + r"\\s*:", overlay_gate.group(1)):
+    if not re.search(r"case\s+" + feature + r"\s*:", overlay_gate.group(1)):
         fail(f"{feature} is not covered by the Gen6+ overlay fail-closed gate")
 
 # Cursor hooks are individually gated, not just shape-setting. This prevents
 # movement/show calls from reaching legacy registers on unvalidated Gen12.
 for feature in ("B_SET_CURSOR_SHAPE", "B_MOVE_CURSOR", "B_SHOW_CURSOR"):
     match = re.search(
-        r"case\\s+" + feature + r"\\s*:(.*?)(?=\\n\\s*case\\s+[A-Z_]+|\\n\\s*/\\*)",
+        r"case\s+" + feature + r"\s*:(.*?)(?=\n\s*case\s+[A-Z_]+|\n\s*/\\*)",
         hooks,
         re.DOTALL,
     )

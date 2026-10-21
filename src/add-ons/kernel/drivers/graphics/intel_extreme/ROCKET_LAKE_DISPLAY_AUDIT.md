@@ -65,3 +65,28 @@ Evidence consulted:
 - Linux i915 DPLL manager, which uses bounded register waits and reports timeout failures: https://gbmc.googlesource.com/linux/+/92a09c47464d040866cf2b4cd052bc60555185fb/drivers/gpu/drm/i915/display/intel_dpll_mgr.c
 
 These are source-level findings only. No build, runtime, or physical display test is asserted.
+
+## Hardware cursor review (Gen12 / Rocket Lake)
+
+Source reviewed: `accelerants/intel_extreme/cursor.cpp`, `hooks.cpp`, `accelerant.cpp`, and the kernel's `intel_extreme.cpp`.
+
+- The kernel allocates one page for cursor storage when the `hardware_cursor` driver setting is enabled (default true), and the accelerant exposes `B_SET_CURSOR_SHAPE`, `B_MOVE_CURSOR`, and `B_SHOW_CURSOR` whenever that allocation pointer is non-NULL.
+- The cursor implementation writes a legacy-style cursor control, position, size, palette, and base register set via `INTEL_CURSOR_*` definitions. It copies AND/XOR masks into a 64-pixel-wide, two-plane layout and advertises the two-color cursor format.
+- **Allocation is not proof of generation support.** The hook gate checks only for non-NULL cursor memory, not the device generation, active pipe, or whether the register definitions and cursor format match Rocket Lake's per-pipe display-plane model.
+- Cursor register accesses are not visibly associated with the active pipe in `cursor.cpp`. The cursor shape path enables the cursor immediately, while visibility is tracked separately. There is no local bounds check for zero dimensions or a clear validation that all rows/bytes fit the one-page allocation, although the 64x64 limit makes the expected legacy image payload small.
+- Cursor movement accepts unsigned 16-bit coordinates at the accelerant entry point. Negative/off-screen semantics should be verified against Haiku's accelerant contract and the hardware's signed position encoding before changing this code.
+- **Recommendation:** keep the existing cursor path classified as legacy/unverified on Rocket Lake until `INTEL_CURSOR_*` definitions are traced for Gen12 and the driver selects/programs the correct cursor plane for the active pipe. Add tests for 64x64 and smaller shapes, hot spot changes, hide/show, all four screen edges, negative/off-screen coordinates, DPMS transitions, mode changes, and multi-display pipe routing. If Gen12 register/pipe support is not proven, gate cursor hooks by a known-good generation/model rather than treating allocated memory as capability.
+
+## Hardware video overlay review (Haiku overlay accelerant API)
+
+Source reviewed: `accelerants/intel_extreme/overlay.cpp`, `hooks.cpp`, `commands.h`, and the kernel's overlay allocation setup.
+
+- The legacy overlay path implements one overlay channel, with `B_RGB15`, `B_RGB16`, `B_RGB32`, and `B_YCbCr422` source formats (with a narrower YCbCr422 list for the i965 group). It includes color-keying, scaling/filter coefficient generation, horizontal mirroring, clipping, and a buffer allocation path.
+- Overlay register state is mapped only when the kernel sets a nonzero `overlay_offset`; initialization zeros a page-sized register image and seeds contrast/saturation fields. The legacy overlay update path submits `QueueCommands` operations to the primary ring and waits for overlay flip completion.
+- **This overlay path is intentionally not exposed on Gen6 and newer.** `hooks.cpp` returns `NULL` for every overlay API hook from `B_OVERLAY_COUNT` through `B_CONFIGURE_OVERLAY` on Generation >= 6, because the legacy command path relies on a primary ring that is not initialized/validated for those generations. This is the right fail-closed policy for Rocket Lake; do not re-enable the legacy overlay hooks just because the display engine has plane/scaler hardware.
+- The implementation has legacy-specific assumptions that require care even on older hardware: the configure path does not comprehensively validate buffer/view/window arguments before dereferencing or programming them; clipping comments acknowledge incomplete behavior; and it updates `select_pipe = 0` rather than selecting based on the actual active display pipe. This is not a safe template for a Gen12 overlay implementation.
+- **Recommended Gen12 approach:** implement a modern display-plane path rather than resurrecting the legacy overlay engine. First inventory the Rocket Lake display planes/scalers and their per-pipe routing, then define a narrow supported-format set and validate stride, alignment, allocation size, source rectangle, destination rectangle, scaling range, clipping, color conversion, and buffer lifetime. Synchronize plane flips with vblank/commit completion and disable/release the plane cleanly on DPMS, mode changes, and client teardown. Keep the Haiku overlay API hooks unavailable until this is implemented and tested.
+
+## Hardware-assist conclusion
+
+Hardware cursor and hardware video overlay are separate from the general-purpose 2D engine. A display-plane implementation can potentially provide these assists while ordinary fills/blits remain CPU-rendered. The current source does not establish that Rocket Lake's cursor path is generation-correct, and the overlay API is deliberately disabled for Gen6+. No cursor or overlay behavior has been validated on physical Rocket Lake hardware. These findings are source-level only; no build, boot, or runtime test is asserted.

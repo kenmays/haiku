@@ -123,8 +123,9 @@ const struct supported_device {
 	{0x0f00, 0x0f30, INTEL_MODEL_VLVM, "ValleyView Mobile"},
 	{0x0f00, 0x0f31, INTEL_MODEL_VLVM, "ValleyView Mobile"},
 
-	// Cherryview/Braswell (0x22b1) stays disabled until its GTT sizing and
-	// stolen-memory encoding are implemented and validated for this platform.
+	// Cherryview/Braswell (0x22b1) stays disabled: besides platform-specific
+	// GTT/stolen-memory sizing, Gen8 needs 64-bit PTE handling, while this
+	// driver currently stores and writes 32-bit GTT entries.
 
 	// XXX: 0x1604 only confirmed on 0x1616
 	{0x1604, 0x1606, INTEL_MODEL_BDWM, "Broadwell GT1 ULT"},
@@ -256,6 +257,9 @@ const struct supported_device {
 	{0x4621, 0x46a6, INTEL_MODEL_ALDM, "Alder Lake-P GT2"},
 	{0x4621, 0x46d1, INTEL_MODEL_ALDM, "Alder Lake-N GT2"},
 	{0x4641, 0x46a6, INTEL_MODEL_ALDM, "Alder Lake-P GT2"},
+// Alder Lake (0x46a8) remains disabled in the AGP/GART table until the
+// modern GGTT/PTE and memory-layout path is implemented. The display PCI-ID
+// table alone must not be treated as proof of working device support.
 #if 0
 	{0x4601, 0x46a8, INTEL_MODEL_ALDM, "Alder Lake-UP3 GT2"},
 #endif

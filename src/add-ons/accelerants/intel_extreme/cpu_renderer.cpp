@@ -356,8 +356,39 @@ intel_cpu_screen_to_screen_transparent_blit(engine_token* token,
 		int32 width = (int32)params[i].width + 1;
 		int32 height = (int32)params[i].height + 1;
 
-		if (sourceLeft >= (int32)fb.width || destLeft >= (int32)fb.width
-			|| sourceTop >= (int32)fb.height || destTop >= (int32)fb.height)
+		// Clip source and destination together, preserving their offset. The
+		// transparent path must obey the same bounds rules as ordinary blits:
+		// otherwise a negative coordinate can address memory before fb.base.
+		if (sourceLeft < 0) {
+			int32 delta = -sourceLeft;
+			sourceLeft = 0;
+			destLeft += delta;
+			width -= delta;
+		}
+		if (sourceTop < 0) {
+			int32 delta = -sourceTop;
+			sourceTop = 0;
+			destTop += delta;
+			height -= delta;
+		}
+		if (destLeft < 0) {
+			int32 delta = -destLeft;
+			destLeft = 0;
+			sourceLeft += delta;
+			width -= delta;
+		}
+		if (destTop < 0) {
+			int32 delta = -destTop;
+			destTop = 0;
+			sourceTop += delta;
+			height -= delta;
+		}
+
+		if (width <= 0 || height <= 0
+			|| sourceLeft >= (int32)fb.width
+			|| destLeft >= (int32)fb.width
+			|| sourceTop >= (int32)fb.height
+			|| destTop >= (int32)fb.height)
 			continue;
 		if (width > (int32)fb.width - sourceLeft)
 			width = (int32)fb.width - sourceLeft;

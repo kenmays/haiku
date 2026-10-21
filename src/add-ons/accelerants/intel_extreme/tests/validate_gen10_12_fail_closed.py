@@ -234,6 +234,11 @@ def main() -> int:
         and "linkStatus[2] & 0x01" in ports,
         "Gen12 DP modeset must require an already-trained fixed-rate link",
     )
+
+    require(
+        ddi_mode.find("_ValidateGen12DpLink()") < ddi_mode.find("fPipe->Configure(target)"),
+        "Gen12 DP link status must be checked before changing pipe state",
+    )
     require(
         "case PIPE_DDI_DP_WIDTH_1:" in ports
         and "case PIPE_DDI_DP_WIDTH_2:" in ports

@@ -127,3 +127,13 @@ Relevant upstream references:
 Do not add speculative Gen12 MMIO writes or un-gate the cursor hooks yet. The safe next implementation unit is a **register-definition/mapping patch backed by exact Rocket Lake/i915 device data**, followed by a separate Gen12 cursor implementation with explicit allocation/address validation and a tested update sequence. For video, keep the legacy overlay entry points gated and do not reuse INTEL_PLANE_OFFSET as a Gen12 sprite-plane map without a per-plane/per-pipe trace.
 
 The current source audit therefore establishes a concrete blocker list rather than a completed Gen12 cursor/overlay implementation. This is intentional fail-closed behavior, not a claim that the features are finished.
+
+### Follow-up: pipe cursor offsets cross-check
+
+The upstream i915 display-device table defines the Gen12/Tiger Lake cursor offset set as A=0x70080, B=0x71080, C=0x72080, and D=0x73080 (the set is named TGL_CURSOR_OFFSETS). The same Gen12 display-device family uses per-pipe cursor offsets rather than deriving every cursor register from one generic pipe stride. Rocket Lake is a Gen12 display platform in i915's platform tables, so this is a relevant reference for the target generation:
+- https://github.com/torvalds/linux/blob/master/drivers/gpu/drm/i915/display/intel_display_device.c
+- https://github.com/torvalds/linux/blob/master/drivers/gpu/drm/i915/display/intel_display_device.h
+
+Haiku's current cursor helper instead uses relative offsets A=0, B=0x1000, C=0x2000, D=0xf000 added to its INTEL_CURSOR_* register definitions. The A/B/C stride happens to resemble the upstream table when applied to a 0x70000 display-register base, but **D does not match**: the upstream Gen12 table puts D at 0x73080 (relative 0x3000), not 0x7f080 (relative 0xf000). This is a concrete incompatibility in the legacy pipe-offset assumption, not a complete register map. The currently gated Gen12 path and currently supported DDI A/B modeset scope mean this finding must be fixed in a generation-specific mapping rather than by changing legacy offsets globally.
+
+This cross-check still does not resolve the cursor format/mode bits, address-width/alignment, memory visibility, or the required control/base/position update ordering. Therefore it does not authorize enabling Gen12 cursor hooks.

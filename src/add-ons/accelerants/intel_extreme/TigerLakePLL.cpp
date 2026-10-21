@@ -7,6 +7,7 @@
 
 #include "accelerant.h"
 
+#include <KernelExport.h>
 #include <math.h>
 
 
@@ -20,6 +21,22 @@
 
 #define ERROR(x...) _sPrintf("intel_extreme: " x)
 #define CALLED(x...) TRACE("CALLED %s\n", __PRETTY_FUNCTION__)
+
+
+// PLL status transitions are hardware-dependent. Bound every wait so a bad
+// clock configuration or broken PLL cannot hang the accelerant indefinitely.
+static bool
+wait_for_pll_status(uint32 reg, uint32 mask, bool set)
+{
+	const uint32 timeout = 100000; // microseconds
+	const uint32 interval = 50;
+	for (uint32 elapsed = 0; elapsed <= timeout; elapsed += interval) {
+		if (((read32(reg) & mask) != 0) == set)
+			return true;
+		spin(interval);
+	}
+	return false;
+}
 
 
 /**
@@ -238,12 +255,23 @@ ProgramPLL(int which, int Pdiv, int Qdiv, int Kdiv, float dco)
 			return B_BAD_VALUE;
 	}
 
-	// Find the reference frequency (24 or 19.2MHz)
+	// Find the reference frequency (19.2, 24, or 38.4MHz). A 38.4MHz
+	// reference is automatically divided by two by the DPLL.
 	int ref_khz = gInfo->shared_info->pll_info.reference_frequency;
-
-	// There is an automatic divide-by-two in this case
+	if (ref_khz != 19200 && ref_khz != 24000 && ref_khz != 38400) {
+		ERROR("%s: unsupported DPLL reference frequency %d kHz\n", __func__, ref_khz);
+		return B_BAD_VALUE;
+	}
 	if (ref_khz == 38400)
 		ref_khz = 19200;
+
+	if (Pdiv != 2 && Pdiv != 3 && Pdiv != 5 && Pdiv != 7)
+		return B_BAD_VALUE;
+	if (Kdiv < 1 || Kdiv > 3 || Qdiv < 1 || Qdiv > 255
+		|| (Kdiv != 2 && Qdiv != 1))
+		return B_BAD_VALUE;
+	if (!(dco >= 7998.0f && dco <= 10000.0f))
+		return B_BAD_VALUE;
 
 	float ref = ref_khz / 1000.0f;
 
@@ -302,16 +330,20 @@ ProgramPLL(int which, int Pdiv, int Qdiv, int Kdiv, float dco)
 		}
 	}
 
-	// Before we start, disable the PLL
+	// Disable the PLL and wait for lock to drop.
 	write32(DPLL_ENABLE, read32(DPLL_ENABLE) & ~TGL_DPLL_ENABLE);
-	while ((read32(DPLL_ENABLE) & TGL_DPLL_LOCK) != 0);
+	if (!wait_for_pll_status(DPLL_ENABLE, TGL_DPLL_LOCK, false)) {
+		ERROR("%s: timed out waiting for DPLL %d to unlock\n", __func__, which);
+		return B_ERROR;
+	}
 	TRACE("PLL is unlocked\n");
 
-	// Enable PLL power
+	// Enable PLL power and wait for the power state to become active.
 	write32(DPLL_ENABLE, read32(DPLL_ENABLE) | TGL_DPLL_POWER_ENABLE);
-
-	// Wait for PLL to be powered up
-	while ((read32(DPLL_ENABLE) & TGL_DPLL_POWER_STATE) == 0);
+	if (!wait_for_pll_status(DPLL_ENABLE, TGL_DPLL_POWER_STATE, true)) {
+		ERROR("%s: timed out waiting for DPLL %d power\n", __func__, which);
+		return B_ERROR;
+	}
 	TRACE("PLL is powered on\n");
 
 	// Deactivate spread spectrum
@@ -335,8 +367,13 @@ ProgramPLL(int which, int Pdiv, int Qdiv, int Kdiv, float dco)
 	write32(DPLL_ENABLE, read32(DPLL_ENABLE) | TGL_DPLL_ENABLE);
 	TRACE("DPLL_ENABLE(%" B_PRIx32 ") = %" B_PRIx32 "\n", DPLL_ENABLE, read32(DPLL_ENABLE));
 
-	// Wait for PLL to be enabled
-	while ((read32(DPLL_ENABLE) & TGL_DPLL_LOCK) == 0);
+	// Wait for the PLL to lock before allowing the port to use it.
+	if (!wait_for_pll_status(DPLL_ENABLE, TGL_DPLL_LOCK, true)) {
+		ERROR("%s: timed out waiting for DPLL %d to lock\n", __func__, which);
+		write32(DPLL_ENABLE, read32(DPLL_ENABLE) & ~TGL_DPLL_ENABLE);
+		read32(DPLL_ENABLE);
+		return B_ERROR;
+	}
 	TRACE("PLL is locked\n");
 
 	// TODO Display voltage frequency switching?

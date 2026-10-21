@@ -104,3 +104,26 @@ A further review of upstream i915's `intel_cursor.c` and `intel_cursor_regs.h` i
 Reference: https://github.com/torvalds/linux/blob/master/drivers/gpu/drm/i915/display/intel_cursor.c
 
 **Implementation gate:** before enabling Gen12 cursor hooks, resolve the exact Rocket Lake cursor-control format bits and CURBASE address requirements from the matching register definitions, and implement a Gen12-specific path with explicit ARGB8888 conversion (or another documented supported format), checked buffer sizing/alignment, signed position encoding, and documented update-arm order. Do not remove the existing generation gate based on this architectural comparison alone.
+
+## Haiku-header register trace checkpoint (2026-10-20)
+
+The first direct trace through Haiku's private header and current cursor.cpp narrows the audit, but does **not** close the Gen12 implementation gate.
+
+| Item | Current Haiku source evidence | Gen12/Rocket Lake disposition |
+|---|---|---|
+| Cursor control/base/position/palette/size | INTEL_CURSOR_CONTROL, INTEL_CURSOR_BASE, INTEL_CURSOR_POSITION, INTEL_CURSOR_PALETTE, and INTEL_CURSOR_SIZE are defined at offsets 0x0080, 0x0084, 0x0088, 0x0090, and 0x00a0 in REGS_NORTH_PLANE_CONTROL. | These definitions are shared legacy names without a demonstrated Rocket Lake register scope. Do not treat them as proof of the Gen12 cursor register map. |
+| Pipe selection | cursor.cpp::get_cursor_pipe_offsets() hard-codes offsets A=0, B=0x1000, C=0x2000, D=0xf000. | These offsets have not been reconciled with the Rocket Lake device-specific cursor register offsets. The current hook gate prevents these writes from being called on Gen12. |
+| Cursor data format | The implementation writes a fixed 64x64, 16-byte-per-row AND/XOR bitmap and programs the two-color palette format. The header also defines ARGB/XRGB format constants, but that alone does not validate the Gen12 mode bits. | Need a Gen12-supported format/mode and conversion path, not just a change to cursor_format. |
+| Cursor address | CURBASE is written as the truncated sum of physical_graphics_memory and cursor_buffer_offset. | Physical-address width, display-engine addressability, alignment, and the actual Gen12 base-register semantics are not proven by this expression. |
+| Position and update order | Haiku encodes signed coordinates and writes position/base/control through its legacy offsets. | i915's cursor register definitions expose explicit X/Y sign and coordinate masks; i915 also selects cursor register offsets per device/pipe and applies platform-specific update ordering. Haiku's register packing and update order must be reconciled before Gen12 writes. |
+
+Relevant upstream references:
+- [i915 cursor register definitions](https://codebrowser.dev/linux/linux/drivers/gpu/drm/i915/display/intel_cursor_regs.h.html) (control mode, base, position, and coordinate fields).
+- [i915 cursor programming](https://github.com/torvalds/linux/blob/master/drivers/gpu/drm/i915/display/intel_cursor.c) (format, address, and update behavior).
+- [i915 universal planes](https://github.com/torvalds/linux/blob/master/drivers/gpu/drm/i915/display/skl_universal_plane.c) (generation-specific plane setup).
+
+### Decision after tracing the Haiku header
+
+Do not add speculative Gen12 MMIO writes or un-gate the cursor hooks yet. The safe next implementation unit is a **register-definition/mapping patch backed by exact Rocket Lake/i915 device data**, followed by a separate Gen12 cursor implementation with explicit allocation/address validation and a tested update sequence. For video, keep the legacy overlay entry points gated and do not reuse INTEL_PLANE_OFFSET as a Gen12 sprite-plane map without a per-plane/per-pipe trace.
+
+The current source audit therefore establishes a concrete blocker list rather than a completed Gen12 cursor/overlay implementation. This is intentional fail-closed behavior, not a claim that the features are finished.

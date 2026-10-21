@@ -169,10 +169,12 @@ init_common(int device, bool isClone)
 			default:
 				ERROR("%s: Unknown pipe %d\n", __func__, i);
 		}
-		if (gInfo->pipes[i] == NULL)
+		if (gInfo->pipes[i] == NULL) {
 			ERROR("%s: Error allocating pipe %d\n", __func__, i);
-		else
-			gInfo->pipe_count++;
+			// Keep the pipe array contiguous: callers index it by pipe number.
+			break;
+		}
+		gInfo->pipe_count++;
 	}
 
 	return B_OK;
@@ -183,6 +185,19 @@ init_common(int device, bool isClone)
 static void
 uninit_common(void)
 {
+	// Ports reference pipes, so destroy them first. Pipes own their FDI and
+	// panel-fitter helpers.
+	for (uint32 i = 0; i < MAX_PORTS; i++) {
+		delete gInfo->ports[i];
+		gInfo->ports[i] = NULL;
+	}
+	for (uint32 i = 0; i < MAX_PIPES; i++) {
+		delete gInfo->pipes[i];
+		gInfo->pipes[i] = NULL;
+	}
+	gInfo->port_count = 0;
+	gInfo->pipe_count = 0;
+
 	intel_free_memory(gInfo->context_base);
 
 	delete_area(gInfo->regs_area);
@@ -547,12 +562,20 @@ intel_init_accelerant(int device)
 		ERROR("Warning: zero active displays were found!\n");
 
 	status = assign_pipes();
-
-	if (status != B_OK)
-		ERROR("Warning: error while assigning pipes!\n");
+	if (status != B_OK) {
+		ERROR("Error while assigning pipes (status %d)!\n", (int)status);
+		uninit_ring_buffer(info.primary_ring_buffer);
+		uninit_lock(&info.accelerant_lock);
+		uninit_lock(&info.engine_lock);
+		uninit_common();
+		return status;
+	}
 
 	status = create_mode_list();
 	if (status != B_OK) {
+		uninit_ring_buffer(info.primary_ring_buffer);
+		uninit_lock(&info.accelerant_lock);
+		uninit_lock(&info.engine_lock);
 		uninit_common();
 		return status;
 	}

@@ -928,12 +928,34 @@ intel_extreme_init(intel_info &info)
 			B_APERTURE_NEED_PHYSICAL,
 			(addr_t*)&info.shared_info->cursor_memory,
 			&info.shared_info->physical_cursor_memory);
+		if (cursorStatus == B_OK) {
+			// Keep the GPU-visible aperture offset distinct from both the CPU
+			// mapping and the physical backing address. The legacy cursor base
+			// register is derived from physical_graphics_memory + this offset.
+			addr_t cursorBase = (addr_t)info.shared_info->cursor_memory;
+			if (cursorBase < info.aperture_base) {
+				cursorStatus = B_BAD_VALUE;
+			} else {
+				addr_t offset = cursorBase - info.aperture_base;
+				if ((offset & (B_PAGE_SIZE - 1)) != 0
+					|| offset > info.shared_info->graphics_memory_size
+					|| B_PAGE_SIZE > info.shared_info->graphics_memory_size - offset
+					|| offset > 0xffffffffULL) {
+					cursorStatus = B_BAD_VALUE;
+				} else {
+					info.shared_info->cursor_buffer_offset = (uint32)offset;
+				}
+			}
+		}
 		if (cursorStatus != B_OK) {
-			// Cursor allocation is optional. Keep both address forms invalid
-			// so later code can fall back without observing partial state.
+			// Cursor allocation is optional. Release an invalid allocation and
+			// clear every published address so the accelerant cannot use it.
+			if (info.shared_info->cursor_memory != NULL)
+				intel_free_memory(info, (addr_t)info.shared_info->cursor_memory);
 			info.shared_info->cursor_memory = NULL;
 			info.shared_info->physical_cursor_memory = 0;
-			ERROR("could not allocate cursor memory: %s\n",
+			info.shared_info->cursor_buffer_offset = 0;
+			ERROR("could not initialize cursor memory: %s\n",
 				strerror(cursorStatus));
 		}
 	} else if (hardwareCursor) {

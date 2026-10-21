@@ -23,6 +23,33 @@ def fail(message: str) -> None:
 driver = DRIVER.read_text(encoding="utf-8")
 hooks = HOOKS.read_text(encoding="utf-8")
 
+# Catch duplicate active PCI IDs in the supported-device table. Entries inside
+# #if 0 blocks are intentionally excluded because they are not compiled.
+table_match = re.search(
+    r"kSupportedDevices\\s*\\[\\]\\s*=\\s*\\{(.*?)^\\};",
+    driver,
+    re.DOTALL | re.MULTILINE,
+)
+if table_match is None:
+    fail("supported-device table was not found")
+active_table = re.sub(
+    r"^\\s*#if\\s+0\\b.*?^\\s*#endif\\b[^\\n]*",
+    "",
+    table_match.group(1),
+    flags=re.DOTALL | re.MULTILINE,
+)
+device_ids = re.findall(r"^\\s*\\{\\s*(0x[0-9a-fA-F]+)\\s*,", active_table, re.MULTILINE)
+seen_ids = set()
+duplicate_ids = set()
+for device_id in device_ids:
+    normalized = device_id.lower()
+    if normalized in seen_ids:
+        duplicate_ids.add(normalized)
+    seen_ids.add(normalized)
+if duplicate_ids:
+    fail("duplicate active PCI device IDs: " + ", ".join(sorted(duplicate_ids)))
+
+
 for device_id in ("0x4c8a", "0x4c8b", "0x4c90", "0x4c9a"):
     if device_id not in driver.lower():
         fail(f"Rocket Lake allowlist entry {device_id} disappeared")

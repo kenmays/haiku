@@ -1847,6 +1847,11 @@ DisplayPort::_ProbeDisplayCapabilities()
 			__func__, PortName(), (int)status);
 		return;
 	}
+	if (message.size < 3) {
+		TRACE("%s: receiver DPCD capability read was short (%u/16 bytes) on %s\\n",
+			__func__, message.size, PortName());
+		return;
+	}
 
 	uint8 maxLaneCount = receiverCaps[2] & 0x1f;
 	const char* linkRate = "unknown";

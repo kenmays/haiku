@@ -323,10 +323,10 @@ create_mode_list(void)
 	if (has_supported_horizontal_span_pair()) {
 		uint32 spanCount = 0;
 		for (uint32 i = 0; i < count; i++) {
-			if ((uint32)list[i].timing.h_display * 2 <= UINT16_MAX)
+			if ((uint32)list[i].timing.h_display * 2 <= 0xffffU)
 				spanCount++;
 		}
-		uint64 expandedSize64 = (uint64)(count + spanCount)
+		uint64 expandedSize64 = ((uint64)count + spanCount)
 			* sizeof(display_mode);
 		if (spanCount > 0 && expandedSize64 <= (uint64)((size_t)-1)) {
 			display_mode* expandedModes = NULL;
@@ -337,7 +337,7 @@ create_mode_list(void)
 				memcpy(expandedModes, list, count * sizeof(display_mode));
 				uint32 output = count;
 				for (uint32 i = 0; i < count; i++) {
-					if ((uint32)list[i].timing.h_display * 2 > UINT16_MAX)
+					if ((uint32)list[i].timing.h_display * 2 > 0xffffU)
 						continue;
 					display_mode spanMode = list[i];
 					spanMode.virtual_width = spanMode.timing.h_display * 2;

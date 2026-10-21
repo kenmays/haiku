@@ -186,12 +186,15 @@ validate_edid_extension(const edid1_raw *raw)
 		if (offset != 0 && (offset < 4 || offset > 127))
 			return B_BAD_DATA;
 
-		if (offset >= 4) {
-			for (size_t i = 4; i < offset;) {
-				size_t blockLength = (data[i] & 0x1f) + 1;
-				if (i + blockLength > offset)
-					return B_BAD_DATA;
-				i += blockLength;
+		{
+			size_t dataEnd = offset == 0 ? 127 : offset;
+			if (dataEnd >= 4) {
+				for (size_t i = 4; i < dataEnd;) {
+					size_t blockLength = (data[i] & 0x1f) + 1;
+					if (i + blockLength > dataEnd)
+						return B_BAD_DATA;
+					i += blockLength;
+				}
 			}
 		}
 	} else if (data[0] == 0x70) {

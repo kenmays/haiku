@@ -107,6 +107,7 @@ def main() -> int:
     # Cursor coordinates must subtract each axis's own hotspot.
     cursor_move = function_body(cursor, "move_cursor(int32 x, int32 y)")
     cursor_shape = function_body(cursor, "intel_set_cursor_shape(")
+    cursor_move = function_body(cursor, "static void\nmove_cursor(")
     require(
         "x -= gInfo->shared_info->cursor_hot_x;" in cursor_move
         and "y -= gInfo->shared_info->cursor_hot_y;" in cursor_move,
@@ -143,10 +144,10 @@ def main() -> int:
         and "memset(data + 16 * y, 0xff, 8);" in cursor_shape
         and "hotX >= width || hotY >= height" in cursor_shape
         and "gInfo->shared_info->cursor_visible ? CURSOR_ENABLED : 0" in cursor_shape
-        and "uint32 encodedX = (uint32)x;" in cursor_shape
-        and "uint32 encodedY = (uint32)y;" in cursor_shape
-        and "x = CURSOR_POSITION_MASK;" in cursor_shape
-        and "y = CURSOR_POSITION_MASK;" in cursor_shape,
+        and "uint32 encodedX = (uint32)x;" in cursor_move
+        and "uint32 encodedY = (uint32)y;" in cursor_move
+        and "x = CURSOR_POSITION_MASK;" in cursor_move
+        and "y = CURSOR_POSITION_MASK;" in cursor_move,
         "cursor shape updates must clear stale mask data and preserve hidden state",
     )
 

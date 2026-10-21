@@ -137,8 +137,13 @@ intel_move_cursor(uint16 _x, uint16 _y)
 void
 intel_show_cursor(bool isVisible)
 {
-	if (gInfo->shared_info->cursor_visible == isVisible)
+	if (gInfo->shared_info->cursor_visible == isVisible) {
+		// Explicit hide requests also clear a cursor that may have been left
+		// enabled by firmware before the accelerant initialized.
+		if (!isVisible)
+			write32(INTEL_CURSOR_CONTROL, 0);
 		return;
+	}
 
 	write32(INTEL_CURSOR_CONTROL, (isVisible ? CURSOR_ENABLED : 0)
 		| gInfo->shared_info->cursor_format);

@@ -149,6 +149,51 @@ for required in ("wait_for_register(DPLL_ENABLE, TGL_DPLL_LOCK, false, 100000)",
 if not re.search(r"status_t\s+pllStatus\s*=\s*ProgramPLL\(", port_source) or "return pllStatus;" not in port_source:
     fail("Gen12 PLL programming errors are not propagated to the modeset caller")
 
+# Gen12 DPLL programming must validate arithmetic inputs and normalize a
+# rounded fractional carry before writing the DCO register.
+for required in (
+    "Pdiv != 2 && Pdiv != 3 && Pdiv != 5 && Pdiv != 7",
+    "ref_khz != 19200 && ref_khz != 24000",
+    "if (dco_frac >= (1 << 15))",
+    "dco_int++;",
+    "dco_frac = 0;",
+):
+    if required not in pll_source:
+        fail("Gen12 PLL parameter validation is missing: " + required)
+if "TGL_DPLL_DCO_INTEGER_SHIFT" in pll_source:
+    fail("PLL code references an undefined DCO integer shift macro")
+
+# The current Gen12 combo-PHY implementation is intentionally limited to
+# DDI A/B; ports using TC/MG PHYs must not be assigned DPLL0 by heuristic.
+set_display_mode = re.search(
+    r"DigitalDisplayInterface::SetDisplayMode\(.*?(?=\nstatus_t\nDigitalDisplayInterface::|\n[a-zA-Z_][a-zA-Z_0-9:*& ]+\nDigitalDisplayInterface::)",
+    port_source,
+    re.DOTALL,
+)
+if set_display_mode is None:
+    fail("DigitalDisplayInterface::SetDisplayMode body was not found")
+ddi_mode = set_display_mode.group(0)
+if not re.search(
+    r"Generation\(\) >= 12.*?PortIndex\(\) != INTEL_PORT_A"
+    r".*?PortIndex\(\) != INTEL_PORT_B.*?return B_NOT_SUPPORTED;",
+    ddi_mode,
+    re.DOTALL,
+):
+    fail("Gen12 DDI modeset must fail closed for unimplemented PHY ports")
+if "PortIndex() == INTEL_PORT_B ? 1 : 0" not in ddi_mode:
+    fail("Gen12 DDI A/B must select their matching combo DPLL")
+if "status_t linkStatus = _SetPortLinkGen8(" not in ddi_mode or "return linkStatus;" not in ddi_mode:
+    fail("DDI link M/N programming errors must propagate")
+
+# The DDI DP width field encodes 1/2/4 lanes, not a linear count.
+if not all(token in port_source for token in (
+    "case PIPE_DDI_DP_WIDTH_1:",
+    "case PIPE_DDI_DP_WIDTH_2:",
+    "case PIPE_DDI_DP_WIDTH_4:",
+    "Mode exceeds fixed Gen12 DP link capacity",
+)):
+    fail("DDI lane encodings and fixed-rate Gen12 DP bandwidth must be validated")
+
 # DDI clock selection updates must clear only the selected port's field, not
 # mask away unrelated clock selections and clock-off bits.
 for unsafe in ("config &= TGL_DPCLKA_DDIA_CLOCK_SELECT;",
@@ -172,5 +217,5 @@ for required in ("status_t portStatus = B_OK;", "portStatus = status;", "return 
     if required not in set_mode_block:
         fail("display mode failure propagation is missing: " + required)
 
-print("PASS: Rocket Lake IDs retained; Alchemist/Battlemage remain unclaimed; CPU-only 2D and engine/sync hooks fail closed; cursor/overlay Gen12 gates retained; PLL waits bounded, errors propagated and DDI clock masks preserve unrelated fields; port modeset errors propagate.")
+print("PASS: Rocket Lake IDs retained; Alchemist/Battlemage remain unclaimed; CPU-only 2D and engine/sync hooks fail closed; cursor/overlay Gen12 gates retained; PLL waits bounded; DCO arithmetic, DDI A/B routing, link errors, lane encoding and DP bandwidth guarded; cursor/overlay restrictions and modeset error propagation retained.")
 print("NOTE: source checks only; build and physical display validation are still required.")

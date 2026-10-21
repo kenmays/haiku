@@ -148,6 +148,36 @@ def main() -> int:
     )
 
     require(
+        "Pdiv != 2 && Pdiv != 3 && Pdiv != 5 && Pdiv != 7" in pll
+        and "ref_khz != 19200 && ref_khz != 24000" in pll
+        and "if (dco_frac >= (1 << 15))" in pll
+        and "dco_int++;" in pll and "dco_frac = 0;" in pll
+        and "TGL_DPLL_DCO_INTEGER_SHIFT" not in pll,
+        "PLL inputs and fractional carry must be validated before MMIO",
+    )
+
+    ddi_mode = function_body(ports, "DigitalDisplayInterface::SetDisplayMode(")
+    require(
+        "PortIndex() != INTEL_PORT_A" in ddi_mode
+        and "PortIndex() != INTEL_PORT_B" in ddi_mode
+        and "return B_NOT_SUPPORTED;" in ddi_mode
+        and "PortIndex() == INTEL_PORT_B ? 1 : 0" in ddi_mode,
+        "Gen12 must route DDI A/B to matching combo DPLLs and reject unimplemented PHY ports",
+    )
+    require(
+        "status_t linkStatus = _SetPortLinkGen8(" in ddi_mode
+        and "return linkStatus;" in ddi_mode,
+        "DDI link M/N errors must propagate to the modeset caller",
+    )
+    require(
+        "case PIPE_DDI_DP_WIDTH_1:" in ports
+        and "case PIPE_DDI_DP_WIDTH_2:" in ports
+        and "case PIPE_DDI_DP_WIDTH_4:" in ports
+        and "Mode exceeds fixed Gen12 DP link capacity" in ports,
+        "DDI lane encodings and fixed-rate Gen12 DP bandwidth must be validated",
+    )
+
+    require(
         "config &= ~TGL_DPCLKA_DDIA_CLOCK_SELECT;" in ports
         and "config &= ~TGL_DPCLKA_DDIB_CLOCK_SELECT;" in ports
         and "config &= TGL_DPCLKA_DDIA_CLOCK_SELECT;" not in ports

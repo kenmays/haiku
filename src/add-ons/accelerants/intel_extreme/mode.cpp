@@ -690,9 +690,9 @@ intel_set_display_mode(display_mode* mode)
 		// switched before a later output failed. Best-effort restore the prior
 		// mode on every still-connected output while the old allocation is
 		// still alive.
-		bool restoreFailed = false;
-		if (oldFrameBuffer != 0 && oldMode.timing.h_display != 0
-			&& oldMode.timing.v_display != 0) {
+		bool restoreFailed = oldFrameBuffer == 0
+			|| oldMode.timing.h_display == 0 || oldMode.timing.v_display == 0;
+		if (!restoreFailed) {
 			uint32 oldColorMode, oldBytesPerRow, oldBitsPerPixel;
 			if (get_color_space_format(oldMode, oldColorMode, oldBytesPerRow,
 					oldBitsPerPixel) == B_OK) {

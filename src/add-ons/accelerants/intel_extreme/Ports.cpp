@@ -1299,7 +1299,13 @@ LVDSPort::SetDisplayMode(display_mode* target, uint32 colorMode)
 		uint32 linkBandwidth = 0;
 		uint32 bitsPerPixel = 0;
 		link->PreTrain(&hardwareTarget, &linkBandwidth, &lanes, &bitsPerPixel);
-		fPipe->SetFDILink(hardwareTarget, linkBandwidth, lanes, bitsPerPixel);
+		status_t linkStatus = fPipe->SetFDILink(hardwareTarget, linkBandwidth,
+			lanes, bitsPerPixel);
+		if (linkStatus != B_OK) {
+			ERROR("%s: Failed to configure FDI link on %s (status %d)\n",
+				__func__, PortName(), (int)linkStatus);
+			return linkStatus;
+		}
 		link->Train(&hardwareTarget, lanes);
 	}
 

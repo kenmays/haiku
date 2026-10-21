@@ -378,7 +378,7 @@ intel_set_display_mode(display_mode* mode)
 	status = intel_allocate_memory(bytesPerRow * target.virtual_height, 0,
 		base);
 	if (status < B_OK) {
-		ERROR("%s: Failed to allocate framebuffer!\\n", __func__);
+		ERROR("%s: Failed to allocate framebuffer!\n", __func__);
 		set_display_power_mode(sharedInfo.dpms_mode);
 		return status;
 	}
@@ -473,19 +473,27 @@ intel_set_display_mode(display_mode* mode)
 	write32(INTEL_VGA_DISPLAY_CONTROL, VGA_DISPLAY_DISABLED);
 	read32(INTEL_VGA_DISPLAY_CONTROL);
 
-	// Go over each port and set the display mode
+	// Configure every connected port, but retain the first error so callers
+	// are not told that a mode change succeeded when output setup failed.
+	status_t portStatus = B_OK;
 	for (uint32 i = 0; i < gInfo->port_count; i++) {
 		if (gInfo->ports[i] == NULL)
 			continue;
 		if (!gInfo->ports[i]->IsConnected())
 			continue;
 
-		status_t status = gInfo->ports[i]->SetDisplayMode(&target, colorMode);
-		if (status != B_OK)
-			ERROR("%s: Unable to set display mode!\n", __func__);
+		status_t currentStatus = gInfo->ports[i]->SetDisplayMode(&target,
+			colorMode);
+		if (currentStatus != B_OK) {
+			ERROR("%s: Unable to set display mode on port %u (status %ld)!\n",
+				__func__, i, currentStatus);
+			if (portStatus == B_OK)
+				portStatus = currentStatus;
+		}
 	}
 
-	TRACE("%s: Port configuration completed successfully!\n", __func__);
+	if (portStatus == B_OK)
+		TRACE("%s: Port configuration completed successfully!\n", __func__);
 
 	// We set the same color mode across all pipes
 	program_pipe_color_modes(colorMode);
@@ -519,7 +527,7 @@ intel_set_display_mode(display_mode* mode)
 	// Second register dump
 	//dump_registers();
 
-	return B_OK;
+	return portStatus;
 }
 
 

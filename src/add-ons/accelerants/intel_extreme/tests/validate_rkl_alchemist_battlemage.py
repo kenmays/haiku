@@ -189,6 +189,13 @@ if "PortIndex() == INTEL_PORT_B ? 1 : 0" not in ddi_mode:
     fail("Gen12 DDI A/B must select their matching combo DPLL")
 if "validate_gen12_dp_bandwidth(fPipe, hardwareTarget)" not in ddi_mode:
     fail("Gen12 DP bandwidth must be checked before modeset register writes")
+if "_ValidateGen12DpLink()" not in ddi_mode or "return dpLinkStatus;" not in ddi_mode:
+    fail("Gen12 DP modeset must propagate trained-link preflight errors")
+for required in ("message.address = 0x100", "message.address = 0x202",
+                 "linkConfig[0] != 0x0a", "laneStatus & 0x07) != 0x07",
+                 "linkStatus[2] & 0x01"):
+    if required not in port_source:
+        fail("fixed-rate Gen12 DP trained-link validation is missing: " + required)
 if "mode != PIPE_DDI_MODE_DP_SST && mode != PIPE_DDI_MODE_DP_MST" not in port_source:
     fail("reserved DDI mode encodings must be rejected")
 

@@ -134,4 +134,4 @@ The proper long-term API must identify a screen/head in mode enumeration, mode p
 
 ## Current honest support statement
 
-Until per-head shared state, per-head surface allocation, generation-specific scanout programming, transactional rollback, and Haiku display enumeration are implemented and tested, report this driver as single-head with limited shared-mode clone behavior where verified. Independent multi-monitor/extended-desktop support is not yet complete.
+Current status: the driver remains a single logical head with shared-mode clone behavior and an initial opt-in horizontal-spanning compatibility bridge for exactly two connected outputs assigned to A/B. The bridge is source-implemented but not yet build- or hardware-validated. Independent multi-monitor/extended-desktop support remains incomplete until per-head shared state, per-head surface allocation, generation-specific scanout programming, transactional rollback, and Haiku display enumeration are implemented and tested.

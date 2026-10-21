@@ -8,6 +8,9 @@
 - Hardware drawing hooks and engine/synchronization hooks remain disabled. Display-plane features must not introduce a general-purpose GPU command-submission dependency.
 - The legacy hardware cursor hooks are now withheld for Generation 12 and newer. The existing cursor implementation uses `INTEL_CURSOR_*` register definitions and a two-plane monochrome payload, but the source audit has not established that those registers, formats, or pipe routing are correct for Rocket Lake.
 - The legacy overlay API remains unavailable on Generation 6 and newer. Its implementation relies on the legacy overlay engine and primary-ring command path, hard-codes pipe 0, and does not provide a safe Gen12 implementation template.
+- The current Gen12 combo-PHY modeset path now maps DDI A to DPLL0 and DDI B to DPLL1; DDI C and later ports fail with `B_NOT_SUPPORTED` until a TC/MG PHY-specific path exists.
+- Gen12 DP currently uses a fixed 2.7 Gbit/s link reference. The code decodes 1/2/4-lane widths and rejects modes over the configured lane capacity with 5% headroom before modeset register writes. It does not implement higher-rate selection or link training/retraining.
+- GitHub Actions source-only validation passes for the current branch; no Haiku C++ build or physical Rocket Lake test has been performed.
 - Cursor shape input rejects zero dimensions, dimensions above 64x64, null masks, and a missing cursor-memory allocation. This is basic input hardening only; it does not prove register or allocation correctness.
 - The Gen12 PLL code now uses bounded polling and returns timeout errors; the DDI mode-set caller propagates PLL programming failures. DPLL selection and port-clock masks remain unresolved blockers.
 

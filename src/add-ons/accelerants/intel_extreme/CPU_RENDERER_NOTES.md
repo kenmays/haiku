@@ -63,3 +63,30 @@ LVDS panel-status polling in `dpms.cpp` now has a bounded 500 ms timeout instead
 - `B_GET_EDID_INFO` now rejects null output/version pointers and undersized output buffers. The hook still exports Haiku's `edid1_info` structure; this is not a raw 128-byte-block/extension API.
 - **E-EDID extension limitation:** this path currently calls `ddc2_read_edid1()` and exposes only Haiku's parsed EDID 1.x structure. It does not preserve or expose arbitrary raw extension blocks (for example CTA-861 data blocks) to clients. Full extension-block transport/validation needs a suitable Haiku common DDC API or a separately designed raw-EDID interface; do not claim complete E-EDID extension support.
 - `B_PARALLEL_ACCESS` is now set on enumerated and proposed modes because the framebuffer is CPU mapped and the accelerant's 2D operations execute synchronously on the CPU. This advertises concurrent framebuffer access; it does not imply hardware validation of every PCI ID or guarantee that an untested chipset's display initialization is safe.
+
+## Back-buffer safety contract (not yet implemented)
+
+The current renderer writes directly to the active scanout framebuffer. It has no independent back buffer and does not promise tear-free presentation. Keep this distinction explicit in code and user-facing support claims.
+
+Do not add a shadow buffer and then silently advertise it as a back buffer: applications can access the framebuffer directly through `frame_buffer_config`, so rendering hooks alone cannot keep a shadow surface coherent with direct client writes. A shadow buffer would require a defined copy/present contract covering every writer, including app_server and direct framebuffer access.
+
+A future hardware double-buffer implementation must use two independently allocated scanout-capable surfaces and a per-generation flip mechanism verified against the matching Intel PRM. Its state machine must distinguish at least:
+
+- **Front**: the surface currently owned by scanout; never write to or free it while scanout can fetch it.
+- **Back**: the non-displayed surface that may be rendered into.
+- **Flip pending**: a flip was requested but completion has not been observed; neither reuse nor free the old front surface.
+- **Recovery**: the flip timed out or mode/DPMS/hotplug changed; keep both allocations alive until the hardware state is known, then restore a known-good front or disable the experimental path.
+
+Required invariants:
+
+1. Allocate and range-check both surfaces before changing live display state. Validate overflow, pitch, surface alignment, and full virtual-height size independently for each surface.
+2. Publish the back-buffer metadata only after allocation succeeds; do not overload `shared_info.frame_buffer` to mean both the active scanout surface and render target.
+3. Before a flip request, ensure all CPU/GPU writes to the target are visible to scanout using the documented memory-ordering/cache-flush method for that platform. A CPU lock alone is not a device cache-coherency guarantee.
+4. Use only the documented per-generation flip command/register sequence and synchronization signal. A ring command being consumed, an engine sync token completing, or a generic flush is not proof that the display flip completed.
+5. After the flip completion event, atomically update the front/back roles under the appropriate shared-state lock. Reuse the old front only after hardware completion is confirmed.
+6. On timeout, mode change, DPMS-off, suspend/resume, or unplug, stop issuing new flips. Keep both buffers allocated until scanout is disabled or its current surface is known; never free a possibly active surface on a timeout alone.
+7. Fall back to the existing single-buffer path when generation, plane, flip completion, memory coherency, or synchronization semantics are not fully supported.
+
+Intel PRMs explicitly distinguish a flip request from flip completion. For example, the Ironlake-era `MI_DISPLAY_FLIP` documentation notes that command-stream progress / `MI_FLUSH` does not by itself guarantee that a pending display flip has completed; the documented flip-pending or wait-for-event synchronization is required. This is not a universal recipe: command support, packet fields, cache flush requirements, and completion mechanisms differ by generation. See the [Ironlake PRM excerpt](https://kiwitree.net/~lina/intel-gfx-docs/prm/ilk/ilk_ihd_os_vol1_part3r2.pdf) and the [Intel Open Source Graphics PRM archive](https://github.com/Igalia/intel-osrc-gfx-prm).
+
+Until the state machine above exists and has hardware evidence, the robust behavior is to retain one scanout buffer, avoid speculative flips, and state plainly that tearing may occur.

@@ -113,7 +113,7 @@ if not re.search(r"return\s+NULL\s*;", engine_block.group(1)):
 
 # A failed per-port modeset must not be silently reported as success.
 set_mode_match = re.search(
-    r"status_t\\s+intel_set_display_mode\\s*\\(.*?(?=\\nstatus_t\\s+intel_get_display_mode\\s*\\()",
+    r"status_t\s+intel_set_display_mode\s*\(.*?(?=\nstatus_t\s+intel_get_display_mode\s*\()",
     mode_source,
     re.DOTALL,
 )

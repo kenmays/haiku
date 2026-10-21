@@ -1826,19 +1826,56 @@ DisplayPort::SetupI2c(i2c_bus *bus)
 }
 
 
-// Inspect the downstream-port DPCD fields over native AUX.
-// DPCD 0x80 is the downstream-port-present/capability byte, not an HDMI FRL
-// rate field. Do not infer HDMI 2.1 FRL or DSC support from it: PCON-specific
-// capability and configuration registers must be decoded separately before
-// exposing those modes to the mode list.
+// Read the receiver's standard DP capabilities independently of any
+// optional downstream converter. DPCD 0x00000-0x0000f reports the receiver's
+// DP revision, maximum link rate, and lane count; it does not establish that
+// the Intel source has negotiated or trained that link.
 void
 DisplayPort::_ProbePconCapabilities()
 {
+	uint8 receiverCaps[16] = {};
+	dp_aux_msg message;
+	memset(&message, 0, sizeof(message));
+	message.address = 0x0000;
+	message.request = DP_AUX_NATIVE_READ;
+	message.buffer = receiverCaps;
+	message.size = sizeof(receiverCaps);
+
+	status_t status = (status_t)_DpAuxTransfer(&message);
+	if (status != B_OK) {
+		TRACE("%s: unable to read receiver DPCD capabilities on %s (status %d)\\n",
+			__func__, PortName(), (int)status);
+		return;
+	}
+
+	uint8 maxLaneCount = receiverCaps[2] & 0x1f;
+	const char* linkRate = "unknown";
+	switch (receiverCaps[1]) {
+		case 0x06:
+			linkRate = "RBR (1.62 Gbit/s/lane)";
+			break;
+		case 0x0a:
+			linkRate = "HBR (2.7 Gbit/s/lane)";
+			break;
+		case 0x14:
+			linkRate = "HBR2 (5.4 Gbit/s/lane)";
+			break;
+		case 0x1e:
+			linkRate = "HBR3 (8.1 Gbit/s/lane)";
+			break;
+	}
+	TRACE("%s: receiver DPCD revision=0x%02x max-link-rate=%s (0x%02x) "
+		"max-lanes=%u on %s; this is sink capability, not negotiated link state\\n",
+		__func__, receiverCaps[0], linkRate, receiverCaps[1], maxLaneCount,
+		PortName());
+
+	// DPCD 0x80 is the downstream-port-present/capability byte, not an HDMI
+	// FRL rate field. Do not infer HDMI FRL or DSC support from it. PCON-specific
+	// capabilities and configuration registers must be decoded separately.
 	if (gInfo->shared_info->device_type.Generation() < 11)
 		return;
 
 	uint8 downstreamPortCaps[2] = {};
-	dp_aux_msg message;
 	memset(&message, 0, sizeof(message));
 	message.address = 0x0080;
 	message.request = DP_AUX_NATIVE_READ;

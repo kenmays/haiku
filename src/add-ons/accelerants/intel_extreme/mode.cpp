@@ -335,7 +335,10 @@ intel_propose_display_mode(display_mode* target, const display_mode* low,
 	}
 	// (most) modeflags are outputs from us (the driver). So we should
 	// set them depending on the mode and the current hardware config
-	target->flags |= B_SCROLL;
+	// The framebuffer is CPU-mapped and the accelerant exposes synchronous
+	// CPU drawing hooks, so clients may access it in parallel with display
+	// scanout. B_SCROLL remains the separate capability for display panning.
+	target->flags |= B_SCROLL | B_PARALLEL_ACCESS;
 
 	return is_display_mode_within_bounds(*target, *low, *high)
 		? B_OK : B_BAD_VALUE;
@@ -655,10 +658,12 @@ intel_get_preferred_mode(display_mode* preferredMode)
 status_t
 intel_get_edid_info(void* info, size_t size, uint32* _version)
 {
-	if (!gInfo->has_edid)
-		return B_ERROR;
+	if (info == NULL || _version == NULL)
+		return B_BAD_VALUE;
 	if (size < sizeof(struct edid1_info))
 		return B_BUFFER_OVERFLOW;
+	if (!gInfo->has_edid)
+		return B_ERROR;
 
 	memcpy(info, &gInfo->edid_info, sizeof(struct edid1_info));
 	*_version = EDID_VERSION_1;

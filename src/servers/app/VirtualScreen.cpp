@@ -187,6 +187,8 @@ VirtualScreen::AddScreen(Screen* screen, const ScreenConfigurations& configurati
 
 	if (!fScreenList.AddItem(item)) {
 		delete item;
+		screen->SetFrame(originalFrame);
+		UpdateFrame();
 		return B_NO_MEMORY;
 	}
 

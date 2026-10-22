@@ -9,6 +9,7 @@
 #define VIRTUAL_SCREEN_H
 
 
+#include "MultiheadScene.h"
 #include "ScreenConfigurations.h"
 #include "ScreenManager.h"
 
@@ -69,6 +70,7 @@ private:
 	};
 
 			BRect				fFrame;
+			MultiheadScene		fScene;
 			BObjectList<screen_item, true> fScreenList;
 			::DrawingEngine*	fDrawingEngine;
 			::HWInterface*		fHWInterface;

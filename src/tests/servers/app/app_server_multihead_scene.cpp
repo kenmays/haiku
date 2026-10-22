@@ -6,6 +6,7 @@
 #include "MultiheadScene.h"
 
 #include <assert.h>
+#include <float.h>
 #include <math.h>
 
 
@@ -59,6 +60,19 @@ main()
 
 	assert(scene.SetOutputScale(20, 2.0f) == B_OK);
 	assert(scene.SetOutputScale(20, -1.0f) == B_BAD_VALUE);
+
+	// Finite inputs can still overflow during arithmetic. Failed transforms
+	// must reject the result without partially overwriting the output point.
+	pixel.Set(7, 8);
+	assert(scene.GlobalToOutputPixel(20, BPoint(FLT_MAX, 0), pixel)
+		== B_BAD_VALUE);
+	assert(pixel.x == 7 && pixel.y == 8);
+	assert(scene.SetOutputScale(20, 1e-38f) == B_OK);
+	global.Set(9, 10);
+	assert(scene.OutputPixelToGlobal(20, BPoint(FLT_MAX, 0), global)
+		== B_BAD_VALUE);
+	assert(global.x == 9 && global.y == 10);
+	assert(scene.SetOutputScale(20, 2.0f) == B_OK);
 	assert(scene.SetOutputFrame(20, BRect(0, 1080, 1919, 2159)) == B_OK);
 	assert(scene.OutputAtPoint(BPoint(100, 1100)) == 20);
 	assert(scene.SetOutputFrame(20, BRect(0, 0, 1919, 1079)) == B_OK);

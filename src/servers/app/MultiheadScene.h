@@ -63,6 +63,7 @@ public:
 	const DisplayOutput*	OutputAt(int32 index) const;
 	const DisplayOutput*	OutputByID(int32 id) const;
 	int32				OutputAtPoint(BPoint point) const;
+	int32				OutputWithLargestIntersection(const BRect& frame) const;
 	status_t			GlobalToOutputPixel(int32 id, BPoint global,
 							BPoint& pixel) const;
 	status_t			OutputPixelToGlobal(int32 id, BPoint pixel,

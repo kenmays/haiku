@@ -286,3 +286,8 @@ requirements.
 ### Configuration-allocation failure handling
 
 The app_server now checks both insertion points in `ScreenConfigurations`: adding a newly allocated configuration during `Set()` and restoring a configuration from settings. Failed list insertion frees the unowned object and reports `B_NO_MEMORY`. `VirtualScreen::AddScreen()` also propagates failure from saving the active configuration and rolls back its temporary screen-list entry and desktop origin; screen-list allocation failure likewise restores the origin. This closes the local allocation-failure paths, but does not replace broader multi-head transaction/rollback work or runtime testing.
+
+
+### Preserve saved brightness during screen setup
+
+When rebuilding the current screen configuration, `VirtualScreen::AddScreen()` now carries forward the brightness value from the matching saved configuration instead of silently replacing it with the `ScreenConfigurations::Set()` default. New screens without a matching configuration retain the default value. This preserves configuration metadata; it does not itself apply hardware brightness or establish multi-head brightness control.

@@ -155,6 +155,40 @@ MultiheadScene::OutputAtPoint(BPoint point) const
 }
 
 
+status_t
+MultiheadScene::GlobalToOutputPixel(int32 id, BPoint global,
+	BPoint& pixel) const
+{
+	if (!std::isfinite(global.x) || !std::isfinite(global.y))
+		return B_BAD_VALUE;
+
+	const DisplayOutput* output = OutputByID(id);
+	if (output == NULL || !output->enabled)
+		return B_ENTRY_NOT_FOUND;
+
+	pixel.x = (global.x - output->frame.left) * output->scale;
+	pixel.y = (global.y - output->frame.top) * output->scale;
+	return B_OK;
+}
+
+
+status_t
+MultiheadScene::OutputPixelToGlobal(int32 id, BPoint pixel,
+	BPoint& global) const
+{
+	if (!std::isfinite(pixel.x) || !std::isfinite(pixel.y))
+		return B_BAD_VALUE;
+
+	const DisplayOutput* output = OutputByID(id);
+	if (output == NULL || !output->enabled)
+		return B_ENTRY_NOT_FOUND;
+
+	global.x = output->frame.left + pixel.x / output->scale;
+	global.y = output->frame.top + pixel.y / output->scale;
+	return B_OK;
+}
+
+
 void
 MultiheadScene::OutputsIntersecting(const BRect& frame,
 	std::vector<int32>& outputIDs) const

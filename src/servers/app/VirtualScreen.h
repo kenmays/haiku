@@ -55,6 +55,10 @@ public:
 			Screen*				ScreenAt(int32 index) const;
 			Screen*				ScreenByID(int32 id) const;
 			Screen*				ScreenAtPoint(BPoint point) const;
+			status_t			GlobalToScreenPixel(const Screen* screen,
+									BPoint global, BPoint& pixel) const;
+			status_t			ScreenPixelToGlobal(const Screen* screen,
+									BPoint pixel, BPoint& global) const;
 			BRect				ScreenFrameAt(int32 index) const;
 			int32				CountScreens() const;
 

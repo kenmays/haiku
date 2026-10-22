@@ -1,6 +1,6 @@
 # Multihead app_server and Scene Manager Design
 
-Status: architecture proposal; not yet an implementation.
+Status: staged design with an initial logical geometry model implemented; compositor, input, and hardware integration remain future work.
 
 ## Goal
 

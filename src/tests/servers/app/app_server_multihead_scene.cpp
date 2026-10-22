@@ -31,6 +31,18 @@ main()
 	assert(scene.OutputAtPoint(BPoint(100, 20)) == 20);
 	assert(scene.OutputAtPoint(BPoint(5000, 5000)) == -1);
 
+	// Window assignment follows the largest intersected output, not the
+	// output insertion order. Exact ties intentionally keep the first output.
+	assert(scene.OutputWithLargestIntersection(BRect(-1000, 0, -500, 300))
+		== 10);
+	assert(scene.OutputWithLargestIntersection(BRect(100, 0, 500, 300))
+		== 20);
+	assert(scene.OutputWithLargestIntersection(BRect(-100, 0, 99, 100))
+		== 10);
+	assert(scene.OutputWithLargestIntersection(BRect(5000, 5000, 5100, 5100))
+		== -1);
+	assert(scene.OutputWithLargestIntersection(BRect(10, 10, 0, 0)) == -1);
+
 	// Convert global logical coordinates to output-local physical pixels and
 	// back, including a scaled output positioned at a negative origin.
 	BPoint pixel;

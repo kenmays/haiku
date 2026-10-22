@@ -232,3 +232,17 @@ Current status: the driver remains a single logical head with shared-mode clone 
 ## Per-head ABI specification
 
 The next architecture artifact is [Haiku per-head display ABI proposal](haiku_per_head_display_abi.md). It defines version negotiation, stable head/connector identity, multi-head validate/prepare/commit/abort semantics, framebuffer ownership, per-head synchronization, app_server integration, and staged acceptance gates. It is a proposal for review; it is not an implemented ABI. Keep the Intel accelerant's current independent-head capability disabled until the contract and app_server work are implemented and validated.
+
+
+## Incremental app_server changes landed
+
+The branch now has a small app_server foundation change, not full multihead support:
+
+- `AS_VALID_SCREEN_ID` checks IDs against screens currently registered with `ScreenManager`.
+- `AS_GET_NEXT_SCREEN_ID` returns the next registered screen ID using the existing private protocol, or `B_ENTRY_NOT_FOUND` at the end.
+- `VirtualScreen::ScreenByID()` resolves the main-screen alias to the primary list entry before searching explicit IDs. This avoids the old reverse-loop behavior accidentally resolving the main-screen alias to the last screen.
+- The screen-brightness query routes through the selected screen's hardware interface instead of ignoring the requested ID and always using the desktop's default interface.
+
+These changes only expose and route screens that the app_server already registers. `ScreenManager::_ScanDrivers()` still initializes one accelerant interface, and the Intel accelerant still exposes singleton mode/framebuffer hooks. Consequently this change does **not** create additional Intel logical heads, implement independent modes, or make the spanning bridge hardware-validated.
+
+Review/build gate: verify the app_server compiles on the target Haiku revision; exercise zero/one/multiple registered screen IDs, invalid IDs, next-ID end-of-list behavior, main-screen alias resolution, and per-screen brightness routing with a test interface. Then continue with the versioned per-head accelerant contract and app_server geometry/compositor work.

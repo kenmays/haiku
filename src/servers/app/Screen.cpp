@@ -42,6 +42,7 @@ get_mode_frequency(const display_mode& mode)
 Screen::Screen(::HWInterface *interface, int32 id)
 	:
 	fID(id),
+	fOrigin(0, 0),
 	fHWInterface(interface),
 	fDriver(interface != NULL ? interface->CreateDrawingEngine() : NULL)
 {
@@ -50,7 +51,8 @@ Screen::Screen(::HWInterface *interface, int32 id)
 
 Screen::Screen()
 	:
-	fID(-1)
+	fID(-1),
+	fOrigin(0, 0)
 {
 }
 
@@ -220,7 +222,13 @@ Screen::GetMonitorInfo(monitor_info& info) const
 void
 Screen::SetFrame(const BRect& rect)
 {
-	// TODO: multi-monitor support...
+	if (!rect.IsValid())
+		return;
+
+	// Screen bounds are positioned in the virtual desktop, while their size
+	// follows the active mode. Keep only the requested origin here so a later
+	// mode change cannot leave stale bounds behind.
+	fOrigin = rect.LeftTop();
 }
 
 
@@ -230,7 +238,9 @@ Screen::Frame() const
 	display_mode mode;
 	fHWInterface->GetMode(&mode);
 
-	return BRect(0, 0, mode.virtual_width - 1, mode.virtual_height - 1);
+	return BRect(fOrigin.x, fOrigin.y,
+		fOrigin.x + mode.virtual_width - 1,
+		fOrigin.y + mode.virtual_height - 1);
 }
 
 

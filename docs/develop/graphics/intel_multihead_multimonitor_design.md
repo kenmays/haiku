@@ -242,6 +242,9 @@ The branch now has a small app_server foundation change, not full multihead supp
 - `AS_GET_NEXT_SCREEN_ID` returns the next registered screen ID using the existing private protocol, or `B_ENTRY_NOT_FOUND` at the end.
 - `VirtualScreen::ScreenByID()` resolves the main-screen alias to the primary list entry before searching explicit IDs. This avoids the old reverse-loop behavior accidentally resolving the main-screen alias to the last screen.
 - The screen-brightness query routes through the selected screen's hardware interface instead of ignoring the requested ID and always using the desktop's default interface.
+- `VirtualScreen::SetConfiguration()` now stops and releases the acquired screen set if any screen cannot be configured, rather than silently reporting success with a partial configuration.
+- `VirtualScreen::AddScreen()` checks screen-list insertion failure and returns `B_NO_MEMORY` instead of leaving an untracked screen.
+- `ScreenManager::ScreenChanged()` ignores notifications for screens that currently have no owner, avoiding a null-owner callback during lifecycle transitions.
 
 These changes only expose and route screens that the app_server already registers. `ScreenManager::_ScanDrivers()` still initializes one accelerant interface, and the Intel accelerant still exposes singleton mode/framebuffer hooks. Consequently this change does **not** create additional Intel logical heads, implement independent modes, or make the spanning bridge hardware-validated.
 

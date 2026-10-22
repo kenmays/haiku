@@ -251,3 +251,18 @@ The branch now has a small app_server foundation change, not full multihead supp
 These changes improve geometry bookkeeping only. They do not yet make `Screen::SetFrame()` functional, route compositor drawing to each screen, or implement independent per-head modes. `ScreenManager::_ScanDrivers()` still initializes one accelerant interface, and the Intel accelerant still exposes singleton mode/framebuffer hooks. Consequently this change does **not** create additional Intel logical heads, implement independent modes, or make the spanning bridge hardware-validated.
 
 Review/build gate: verify the app_server compiles on the target Haiku revision; exercise zero/one/multiple registered screen IDs, invalid IDs, next-ID end-of-list behavior, main-screen alias resolution, and per-screen brightness routing with a test interface. Then continue with the versioned per-head accelerant contract and app_server geometry/compositor work.
+
+
+### Screen-frame origin implementation
+
+The app_server now stores a desktop origin on each `Screen`. `Screen::Frame()`
+derives its bounds from that origin and the active mode dimensions, and
+`Screen::SetFrame()` rejects invalid rectangles and records the requested
+origin. `VirtualScreen` keeps its per-screen rectangles synchronized with
+those origins and recalculates the virtual desktop union from the current
+mode sizes. Newly added screens retain their temporary left-to-right
+placement through this synchronization.
+
+This is geometry plumbing, not complete multihead support: it does not yet
+persist a user-selected layout, route compositor/drawing operations to each
+screen, or provide independent per-head modesets and framebuffer surfaces.

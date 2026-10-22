@@ -33,14 +33,13 @@ VirtualScreen::~VirtualScreen()
 void
 VirtualScreen::_Reset()
 {
-	ScreenList list;
+	// Release ownership one screen at a time without allocating a temporary
+	// list. Cleanup must still work when memory pressure caused the reset.
 	for (int32 i = 0; i < fScreenList.CountItems(); i++) {
 		screen_item* item = fScreenList.ItemAt(i);
-
-		list.AddItem(item->screen);
+		gScreenManager->ReleaseScreen(item->screen);
 	}
 
-	gScreenManager->ReleaseScreens(list);
 	fScreenList.MakeEmpty();
 
 	while (fScene.CountOutputs() > 0) {
@@ -103,9 +102,7 @@ VirtualScreen::SetConfiguration(Desktop& desktop, const ScreenConfigurations& co
 			if (firstAddError == B_OK)
 				firstAddError = addStatus;
 
-			ScreenList failedScreen;
-			if (failedScreen.AddItem(screen))
-				gScreenManager->ReleaseScreens(failedScreen);
+			gScreenManager->ReleaseScreen(screen);
 			continue;
 		}
 
@@ -211,17 +208,11 @@ VirtualScreen::RemoveScreen(Screen* screen)
 		if (item->screen != screen)
 			continue;
 
-		// Prepare the release list before mutating the scene. If allocation
-		// fails, leave both the scene and screen list unchanged.
-		ScreenList releasedScreens;
-		if (!releasedScreens.AddItem(screen))
-			return B_NO_MEMORY;
-
 		status_t status = fScene.RemoveOutput(screen->ID());
 		if (status != B_OK)
 			return status;
 
-		gScreenManager->ReleaseScreens(releasedScreens);
+		gScreenManager->ReleaseScreen(screen);
 
 		item = fScreenList.RemoveItem(i);
 		delete item;

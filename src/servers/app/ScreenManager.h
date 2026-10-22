@@ -48,6 +48,7 @@ class ScreenManager : public BLooper {
 							int32 wishCount, const char* target, bool force,
 							ScreenList& list);
 		void			ReleaseScreens(ScreenList& list);
+		void			ReleaseScreen(Screen* screen);
 
 		void			ScreenChanged(Screen* screen);
 

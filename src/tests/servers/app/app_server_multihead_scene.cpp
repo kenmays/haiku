@@ -30,6 +30,23 @@ main()
 	assert(scene.OutputAtPoint(BPoint(100, 20)) == 20);
 	assert(scene.OutputAtPoint(BPoint(5000, 5000)) == -1);
 
+	// Convert global logical coordinates to output-local physical pixels and
+	// back, including a scaled output positioned at a negative origin.
+	BPoint pixel;
+	assert(scene.GlobalToOutputPixel(10, BPoint(-1180, 120), pixel) == B_OK);
+	assert(pixel.x == 100 && pixel.y == 120);
+	BPoint global;
+	assert(scene.OutputPixelToGlobal(10, pixel, global) == B_OK);
+	assert(global.x == -1180 && global.y == 120);
+	assert(scene.GlobalToOutputPixel(20, BPoint(100, 100), pixel) == B_OK);
+	assert(pixel.x == 150 && pixel.y == 150);
+	assert(scene.OutputPixelToGlobal(20, pixel, global) == B_OK);
+	assert(global.x == 100 && global.y == 100);
+	assert(scene.GlobalToOutputPixel(999, BPoint(0, 0), pixel)
+		== B_ENTRY_NOT_FOUND);
+	assert(scene.GlobalToOutputPixel(20, BPoint(INFINITY, 0), pixel)
+		== B_BAD_VALUE);
+
 	std::vector<int32> intersecting;
 	scene.OutputsIntersecting(BRect(-20, 10, 20, 30), intersecting);
 	assert(intersecting.size() == 2);

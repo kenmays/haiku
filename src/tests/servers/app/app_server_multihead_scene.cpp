@@ -6,6 +6,7 @@
 #include "MultiheadScene.h"
 
 #include <assert.h>
+#include <math.h>
 
 
 int
@@ -21,6 +22,9 @@ main()
 		== B_NAME_IN_USE);
 	assert(scene.AddOutput(-1, BRect(0, 0, 10, 10), 1.0f) == B_BAD_VALUE);
 	assert(scene.AddOutput(30, BRect(0, 0, 10, 10), 0.0f) == B_BAD_VALUE);
+	assert(scene.AddOutput(30, BRect(10, 10, 0, 0), 1.0f) == B_BAD_VALUE);
+	assert(scene.AddOutput(30, BRect(0, 0, INFINITY, 10), 1.0f)
+		== B_BAD_VALUE);
 
 	assert(scene.OutputAtPoint(BPoint(-100, 20)) == 10);
 	assert(scene.OutputAtPoint(BPoint(100, 20)) == 20);
@@ -38,9 +42,17 @@ main()
 
 	assert(scene.SetOutputScale(20, 2.0f) == B_OK);
 	assert(scene.SetOutputScale(20, -1.0f) == B_BAD_VALUE);
+	assert(scene.SetOutputFrame(20, BRect(0, 1080, 1919, 2159)) == B_OK);
+	assert(scene.OutputAtPoint(BPoint(100, 1100)) == 20);
+	assert(scene.SetOutputFrame(20, BRect(0, 0, 1919, 1079)) == B_OK);
 	assert(scene.SetOutputEnabled(10, false) == B_OK);
 	assert(scene.OutputAtPoint(BPoint(-100, 20)) == -1);
 	assert(scene.Bounds().left == 0);
+	std::vector<int32> afterDisable;
+	scene.OutputsIntersecting(BRect(-20, 10, 20, 30), afterDisable);
+	assert(afterDisable.size() == 1 && afterDisable[0] == 20);
+	assert(scene.SetOutputEnabled(10, true) == B_OK);
+	assert(scene.OutputAtPoint(BPoint(-100, 20)) == 10);
 
 	assert(scene.RemoveOutput(10) == B_OK);
 	assert(scene.RemoveOutput(10) == B_ENTRY_NOT_FOUND);

@@ -155,17 +155,20 @@ VirtualScreen::AddScreen(Screen* screen, const ScreenConfigurations& configurati
 		}
 	}
 
+	item->frame = screen->Frame();
+	if (!fScreenList.AddItem(item)) {
+		delete item;
+		return B_NO_MEMORY;
+	}
+
 	monitor_info info;
 	bool hasInfo = screen->GetMonitorInfo(info) == B_OK;
-	currentConfigurations.Set(screen->ID(), hasInfo ? &info : NULL, screen->Frame(), mode);
+	currentConfigurations.Set(screen->ID(), hasInfo ? &info : NULL, item->frame, mode);
 
 	// TODO: this works only for single screen configurations
 	fDrawingEngine = screen->GetDrawingEngine();
 	fHWInterface = screen->HWInterface();
-	fFrame = screen->Frame();
-	item->frame = fFrame;
-
-	fScreenList.AddItem(item);
+	fFrame = item->frame;
 
 	return B_OK;
 }

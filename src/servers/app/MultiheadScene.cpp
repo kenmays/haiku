@@ -5,6 +5,7 @@
 
 #include "MultiheadScene.h"
 
+#include <algorithm>
 #include <cmath>
 
 

@@ -155,6 +155,9 @@ VirtualScreen::AddScreen(Screen* screen, const ScreenConfigurations& configurati
 		}
 	}
 
+	// Use the actual active mode, including when the fallback mode setter
+	// succeeded without updating the local mode variable.
+	screen->GetMode(mode);
 	item->frame = screen->Frame();
 
 	// Restore the saved desktop origin when a matching configuration exists.

@@ -134,7 +134,10 @@ ScreenConfigurations::Set(int32 id, const monitor_info* info,
 		if (configuration == NULL)
 			return B_NO_MEMORY;
 
-		fConfigurations.AddItem(configuration);
+		if (!fConfigurations.AddItem(configuration)) {
+			delete configuration;
+			return B_NO_MEMORY;
+		}
 	}
 
 	configuration->id = id;
@@ -257,7 +260,10 @@ ScreenConfigurations::Restore(const BMessage& settings)
 		if (stored.FindFloat("brightness", &configuration->brightness) != B_OK)
 			configuration->brightness = 1.0f;
 
-		fConfigurations.AddItem(configuration);
+		if (!fConfigurations.AddItem(configuration)) {
+			delete configuration;
+			return B_NO_MEMORY;
+		}
 	}
 
 	return B_OK;

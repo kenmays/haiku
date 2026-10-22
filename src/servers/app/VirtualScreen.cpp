@@ -262,6 +262,28 @@ VirtualScreen::SetScreenFrame(int32 index, BRect frame)
 }
 
 
+status_t
+VirtualScreen::SetScreenScale(int32 index, float scale)
+{
+	screen_item* item = fScreenList.ItemAt(index);
+	if (item == NULL)
+		return B_BAD_INDEX;
+
+	return fScene.SetOutputScale(item->screen->ID(), scale);
+}
+
+
+float
+VirtualScreen::ScreenScaleAt(int32 index) const
+{
+	screen_item* item = fScreenList.ItemAt(index);
+	if (item == NULL)
+		return 1.0f;
+
+	const DisplayOutput* output = fScene.OutputByID(item->screen->ID());
+	return output != NULL ? output->scale : 1.0f;
+}
+
 /*!	Returns the smallest frame that spans over all screens
 */
 BRect

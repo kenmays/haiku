@@ -281,3 +281,8 @@ This restores stored positions at configuration setup; it does not add a
 user-facing layout editor or prove that drawing and input are correctly
 routed across independent heads. Those remain separate integration and test
 requirements.
+
+
+### Configuration-allocation failure handling
+
+The app_server now checks both insertion points in `ScreenConfigurations`: adding a newly allocated configuration during `Set()` and restoring a configuration from settings. Failed list insertion frees the unowned object and reports `B_NO_MEMORY`. `VirtualScreen::AddScreen()` also propagates failure from saving the active configuration and rolls back its temporary screen-list entry and desktop origin; screen-list allocation failure likewise restores the origin. This closes the local allocation-failure paths, but does not replace broader multi-head transaction/rollback work or runtime testing.

@@ -51,6 +51,8 @@ public:
 			// TODO: we need to play with a real multi-screen configuration to
 			//	figure out the specifics here
 			void				SetScreenFrame(int32 index, BRect frame);
+			status_t		SetScreenScale(int32 index, float scale);
+			float			ScreenScaleAt(int32 index) const;
 
 			Screen*				ScreenAt(int32 index) const;
 			Screen*				ScreenByID(int32 id) const;

@@ -224,8 +224,10 @@ ScreenConfigurations::Restore(const BMessage& settings)
 
 		screen_configuration* configuration
 			= new(std::nothrow) screen_configuration;
-		if (configuration == NULL)
+		if (configuration == NULL) {
+			fConfigurations.MakeEmpty();
 			return B_NO_MEMORY;
+		}
 
 		configuration->id = id;
 
@@ -262,6 +264,7 @@ ScreenConfigurations::Restore(const BMessage& settings)
 
 		if (!fConfigurations.AddItem(configuration)) {
 			delete configuration;
+			fConfigurations.MakeEmpty();
 			return B_NO_MEMORY;
 		}
 	}

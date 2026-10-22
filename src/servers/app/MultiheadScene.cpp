@@ -155,6 +155,40 @@ MultiheadScene::OutputAtPoint(BPoint point) const
 }
 
 
+int32
+MultiheadScene::OutputWithLargestIntersection(const BRect& frame) const
+{
+	if (!_IsValidFrame(frame))
+		return -1;
+
+	int32 bestID = -1;
+	double bestArea = 0.0;
+
+	for (size_t i = 0; i < fOutputs.size(); i++) {
+		const DisplayOutput& output = fOutputs[i];
+		if (!output.enabled || !output.frame.Intersects(frame))
+			continue;
+
+		double left = std::max((double)frame.left,
+			(double)output.frame.left);
+		double top = std::max((double)frame.top,
+			(double)output.frame.top);
+		double right = std::min((double)frame.right,
+			(double)output.frame.right);
+		double bottom = std::min((double)frame.bottom,
+			(double)output.frame.bottom);
+		double area = (right - left + 1.0) * (bottom - top + 1.0);
+
+		// Keep the first output on ties so selection remains deterministic.
+		if (area > bestArea) {
+			bestArea = area;
+			bestID = output.id;
+		}
+	}
+
+	return bestID;
+}
+
 status_t
 MultiheadScene::GlobalToOutputPixel(int32 id, BPoint global,
 	BPoint& pixel) const

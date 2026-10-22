@@ -227,3 +227,8 @@ The proper long-term API must identify a screen/head in mode enumeration, mode p
 ## Current honest support statement
 
 Current status: the driver remains a single logical head with shared-mode clone behavior and an initial opt-in horizontal-spanning compatibility bridge for exactly two connected outputs assigned to A/B. The bridge is source-implemented but not yet build- or hardware-validated. Independent multi-monitor/extended-desktop support remains incomplete until per-head shared state, per-head surface allocation, generation-specific scanout programming, transactional rollback, and Haiku display enumeration are implemented and tested.
+
+
+## Per-head ABI specification
+
+The next architecture artifact is [Haiku per-head display ABI proposal](haiku_per_head_display_abi.md). It defines version negotiation, stable head/connector identity, multi-head validate/prepare/commit/abort semantics, framebuffer ownership, per-head synchronization, app_server integration, and staged acceptance gates. It is a proposal for review; it is not an implemented ABI. Keep the Intel accelerant's current independent-head capability disabled until the contract and app_server work are implemented and validated.

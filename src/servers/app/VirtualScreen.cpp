@@ -287,6 +287,17 @@ VirtualScreen::ScreenByID(int32 id) const
 }
 
 
+Screen*
+VirtualScreen::ScreenAtPoint(BPoint point) const
+{
+	int32 outputID = fScene.OutputAtPoint(point);
+	if (outputID < 0)
+		return NULL;
+
+	return ScreenByID(outputID);
+}
+
+
 BRect
 VirtualScreen::ScreenFrameAt(int32 index) const
 {

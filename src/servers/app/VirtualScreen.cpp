@@ -158,7 +158,8 @@ VirtualScreen::AddScreen(Screen* screen, const ScreenConfigurations& configurati
 	// Use the actual active mode, including when the fallback mode setter
 	// succeeded without updating the local mode variable.
 	screen->GetMode(mode);
-	item->frame = screen->Frame();
+	BRect originalFrame = screen->Frame();
+	item->frame = originalFrame;
 
 	// Restore the saved desktop origin when a matching configuration exists.
 	monitor_info info;
@@ -189,7 +190,16 @@ VirtualScreen::AddScreen(Screen* screen, const ScreenConfigurations& configurati
 		return B_NO_MEMORY;
 	}
 
-	currentConfigurations.Set(screen->ID(), hasInfo ? &info : NULL, item->frame, mode);
+	status = currentConfigurations.Set(screen->ID(), hasInfo ? &info : NULL,
+		item->frame, mode);
+	if (status != B_OK) {
+		// The list owns screen_item; remove it and restore the Screen's previous
+		// desktop origin so a failed configuration save cannot leave partial state.
+		fScreenList.RemoveItem(item);
+		screen->SetFrame(originalFrame);
+		UpdateFrame();
+		return status;
+	}
 
 	// TODO: this works only for single screen configurations
 	fDrawingEngine = screen->GetDrawingEngine();

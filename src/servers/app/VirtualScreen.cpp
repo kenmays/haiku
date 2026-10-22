@@ -152,6 +152,10 @@ VirtualScreen::AddScreen(Screen* screen, const ScreenConfigurations& configurati
 		}
 	}
 
+	// SetMode() fallbacks may have succeeded without updating the local mode.
+	// Always record the actual active mode in the saved configuration.
+	screen->GetMode(mode);
+
 	monitor_info info;
 	bool hasInfo = screen->GetMonitorInfo(info) == B_OK;
 	currentConfigurations.Set(screen->ID(), hasInfo ? &info : NULL, screen->Frame(), mode);

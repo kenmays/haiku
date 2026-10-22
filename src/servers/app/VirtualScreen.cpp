@@ -316,6 +316,28 @@ VirtualScreen::ScreenAtPoint(BPoint point) const
 }
 
 
+status_t
+VirtualScreen::GlobalToScreenPixel(const Screen* screen, BPoint global,
+	BPoint& pixel) const
+{
+	if (screen == NULL || ScreenByID(screen->ID()) != screen)
+		return B_BAD_VALUE;
+
+	return fScene.GlobalToOutputPixel(screen->ID(), global, pixel);
+}
+
+
+status_t
+VirtualScreen::ScreenPixelToGlobal(const Screen* screen, BPoint pixel,
+	BPoint& global) const
+{
+	if (screen == NULL || ScreenByID(screen->ID()) != screen)
+		return B_BAD_VALUE;
+
+	return fScene.OutputPixelToGlobal(screen->ID(), pixel, global);
+}
+
+
 BRect
 VirtualScreen::ScreenFrameAt(int32 index) const
 {

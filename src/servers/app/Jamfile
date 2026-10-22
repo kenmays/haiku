@@ -79,6 +79,7 @@ Application app_server :
 	IntPoint.cpp
 	IntRect.cpp
 	Layer.cpp
+	MultiheadScene.cpp
 	MessageLooper.cpp
 	MultiLocker.cpp
 	OffscreenServerWindow.cpp

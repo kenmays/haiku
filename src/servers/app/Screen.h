@@ -61,6 +61,7 @@ private:
 									uint32 colorspace, float frequency) const;
 
 			int32				fID;
+			BPoint				fOrigin;
 			ObjectDeleter< ::HWInterface>
 								fHWInterface;
 			ObjectDeleter<DrawingEngine>

@@ -67,6 +67,7 @@
 #include "ServerTokenSpace.h"
 #include "ServerWindow.h"
 #include "Window.h"
+#include "VirtualScreen.h"
 
 
 //#define DEBUG_SERVERAPP
@@ -3412,10 +3413,17 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 		{
 			STRACE(("ServerApp %s: AS_SCREEN_GET_BRIGHTNESS\n", Signature()));
 			int32 id;
-			link.Read<int32>(&id);
+			status_t result = link.Read<int32>(&id);
 
 			float brightness;
-			status_t result = fDesktop->HWInterface()->GetBrightness(&brightness);
+			if (result == B_OK) {
+				Screen* screen = fDesktop->VirtualScreen().ScreenByID(id);
+				if (screen != NULL && screen->HWInterface() != NULL)
+					result = screen->HWInterface()->GetBrightness(&brightness);
+				else
+					result = B_BAD_VALUE;
+			}
+
 			fLink.StartMessage(result);
 			if (result == B_OK)
 				fLink.Attach<float>(brightness);

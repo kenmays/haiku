@@ -211,13 +211,17 @@ VirtualScreen::RemoveScreen(Screen* screen)
 		if (item->screen != screen)
 			continue;
 
+		// Prepare the release list before mutating the scene. If allocation
+		// fails, leave both the scene and screen list unchanged.
+		ScreenList releasedScreens;
+		if (!releasedScreens.AddItem(screen))
+			return B_NO_MEMORY;
+
 		status_t status = fScene.RemoveOutput(screen->ID());
 		if (status != B_OK)
 			return status;
 
-		ScreenList releasedScreens;
-		if (releasedScreens.AddItem(screen))
-			gScreenManager->ReleaseScreens(releasedScreens);
+		gScreenManager->ReleaseScreens(releasedScreens);
 
 		item = fScreenList.RemoveItem(i);
 		delete item;

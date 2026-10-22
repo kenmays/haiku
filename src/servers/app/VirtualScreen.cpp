@@ -186,8 +186,6 @@ VirtualScreen::AddScreen(Screen* screen, const ScreenConfigurations& configurati
 		return B_NO_MEMORY;
 	}
 
-	monitor_info info;
-	bool hasInfo = screen->GetMonitorInfo(info) == B_OK;
 	currentConfigurations.Set(screen->ID(), hasInfo ? &info : NULL, item->frame, mode);
 
 	// TODO: this works only for single screen configurations

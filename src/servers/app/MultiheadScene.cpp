@@ -166,8 +166,12 @@ MultiheadScene::GlobalToOutputPixel(int32 id, BPoint global,
 	if (output == NULL || !output->enabled)
 		return B_ENTRY_NOT_FOUND;
 
-	pixel.x = (global.x - output->frame.left) * output->scale;
-	pixel.y = (global.y - output->frame.top) * output->scale;
+	BPoint result((global.x - output->frame.left) * output->scale,
+		(global.y - output->frame.top) * output->scale);
+	if (!std::isfinite(result.x) || !std::isfinite(result.y))
+		return B_BAD_VALUE;
+
+	pixel = result;
 	return B_OK;
 }
 
@@ -183,8 +187,12 @@ MultiheadScene::OutputPixelToGlobal(int32 id, BPoint pixel,
 	if (output == NULL || !output->enabled)
 		return B_ENTRY_NOT_FOUND;
 
-	global.x = output->frame.left + pixel.x / output->scale;
-	global.y = output->frame.top + pixel.y / output->scale;
+	BPoint result(output->frame.left + pixel.x / output->scale,
+		output->frame.top + pixel.y / output->scale);
+	if (!std::isfinite(result.x) || !std::isfinite(result.y))
+		return B_BAD_VALUE;
+
+	global = result;
 	return B_OK;
 }
 

@@ -266,3 +266,18 @@ placement through this synchronization.
 This is geometry plumbing, not complete multihead support: it does not yet
 persist a user-selected layout, route compositor/drawing operations to each
 screen, or provide independent per-head modesets and framebuffer surfaces.
+
+
+### Saved screen-position restoration
+
+`VirtualScreen::AddScreen()` now looks up the matching saved screen
+configuration and restores its desktop origin while deriving the rectangle
+size from the active mode. Screens without a valid saved frame retain the
+deterministic right-of-desktop fallback. The active mode is queried after
+fallback mode selection before it is written into the current configuration,
+avoiding use of an uninitialized or stale local mode value on that path.
+
+This restores stored positions at configuration setup; it does not add a
+user-facing layout editor or prove that drawing and input are correctly
+routed across independent heads. Those remain separate integration and test
+requirements.

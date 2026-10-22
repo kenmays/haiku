@@ -93,10 +93,21 @@ VirtualScreen::SetConfiguration(Desktop& desktop, const ScreenConfigurations& co
 		return status;
 	}
 
+	status_t firstAddError = B_OK;
 	for (int32 i = 0; i < list.CountItems(); i++) {
 		Screen* screen = list.ItemAt(i);
 
-		AddScreen(screen, configurations, currentConfigurations);
+		status_t addStatus = AddScreen(screen, configurations,
+			currentConfigurations);
+		if (addStatus != B_OK) {
+			if (firstAddError == B_OK)
+				firstAddError = addStatus;
+
+			ScreenList failedScreen;
+			if (failedScreen.AddItem(screen))
+				gScreenManager->ReleaseScreens(failedScreen);
+			continue;
+		}
 
 		if (!previousModesFailed && _changedScreens != NULL) {
 			// Figure out which screens have changed their mode
@@ -111,6 +122,9 @@ VirtualScreen::SetConfiguration(Desktop& desktop, const ScreenConfigurations& co
 	}
 
 	UpdateFrame();
+	if (fScreenList.CountItems() == 0)
+		return firstAddError != B_OK ? firstAddError : B_ERROR;
+
 	return B_OK;
 }
 

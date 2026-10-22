@@ -157,9 +157,19 @@ VirtualScreen::AddScreen(Screen* screen, const ScreenConfigurations& configurati
 
 	item->frame = screen->Frame();
 
-	// Until explicit layout is restored from screen preferences, place newly
-	// added screens to the right of the existing virtual-screen bounds.
-	if (fScreenList.CountItems() > 0) {
+	// Restore the saved desktop origin when a matching configuration exists.
+	monitor_info info;
+	bool hasInfo = screen->GetMonitorInfo(info) == B_OK;
+	screen_configuration* configuration = configurations.BestFit(
+		screen->ID(), hasInfo ? &info : NULL);
+	bool hasSavedFrame = configuration != NULL
+		&& configuration->frame.IsValid();
+	if (hasSavedFrame)
+		item->frame.OffsetTo(configuration->frame.LeftTop());
+
+	// Place screens without saved positions to the right of the current
+	// virtual desktop. Explicit saved positions are preserved.
+	if (!hasSavedFrame && fScreenList.CountItems() > 0) {
 		float right = fFrame.right;
 		for (int32 i = 0; i < fScreenList.CountItems(); i++) {
 			screen_item* existing = fScreenList.ItemAt(i);

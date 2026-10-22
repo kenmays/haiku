@@ -1,0 +1,52 @@
+/*
+ * Copyright 2026, Haiku, Inc.
+ * Distributed under the terms of the MIT License.
+ */
+
+#include "MultiheadScene.h"
+
+#include <assert.h>
+
+
+int
+main()
+{
+	MultiheadScene scene;
+
+	// Negative coordinates are valid: the left monitor is not the origin.
+	assert(scene.AddOutput(10, BRect(-1280, 0, -1, 719), 1.0f) == B_OK);
+	assert(scene.AddOutput(20, BRect(0, 0, 1919, 1079), 1.5f) == B_OK);
+	assert(scene.CountOutputs() == 2);
+	assert(scene.AddOutput(20, BRect(1920, 0, 3839, 1079), 1.0f)
+		== B_NAME_IN_USE);
+	assert(scene.AddOutput(-1, BRect(0, 0, 10, 10), 1.0f) == B_BAD_VALUE);
+	assert(scene.AddOutput(30, BRect(0, 0, 10, 10), 0.0f) == B_BAD_VALUE);
+
+	assert(scene.OutputAtPoint(BPoint(-100, 20)) == 10);
+	assert(scene.OutputAtPoint(BPoint(100, 20)) == 20);
+	assert(scene.OutputAtPoint(BPoint(5000, 5000)) == -1);
+
+	std::vector<int32> intersecting;
+	scene.OutputsIntersecting(BRect(-20, 10, 20, 30), intersecting);
+	assert(intersecting.size() == 2);
+	assert(intersecting[0] == 10);
+	assert(intersecting[1] == 20);
+
+	BRect bounds = scene.Bounds();
+	assert(bounds.left == -1280 && bounds.top == 0);
+	assert(bounds.right == 1919 && bounds.bottom == 1079);
+
+	assert(scene.SetOutputScale(20, 2.0f) == B_OK);
+	assert(scene.SetOutputScale(20, -1.0f) == B_BAD_VALUE);
+	assert(scene.SetOutputEnabled(10, false) == B_OK);
+	assert(scene.OutputAtPoint(BPoint(-100, 20)) == -1);
+	assert(scene.Bounds().left == 0);
+
+	assert(scene.RemoveOutput(10) == B_OK);
+	assert(scene.RemoveOutput(10) == B_ENTRY_NOT_FOUND);
+	assert(scene.OutputByID(20) != NULL);
+	assert(scene.OutputAt(-1) == NULL);
+	assert(scene.OutputAt(100) == NULL);
+
+	return 0;
+}

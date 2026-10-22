@@ -197,6 +197,10 @@ VirtualScreen::RemoveScreen(Screen* screen)
 		if (status != B_OK)
 			return status;
 
+		ScreenList releasedScreens;
+		if (releasedScreens.AddItem(screen))
+			gScreenManager->ReleaseScreens(releasedScreens);
+
 		item = fScreenList.RemoveItem(i);
 		delete item;
 

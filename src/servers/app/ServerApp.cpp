@@ -59,6 +59,7 @@
 #include "InputManager.h"
 #include "OffscreenServerWindow.h"
 #include "Screen.h"
+#include "ScreenManager.h"
 #include "ServerBitmap.h"
 #include "ServerConfig.h"
 #include "ServerCursor.h"
@@ -2947,12 +2948,21 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			// 1) int32 screen
 
 			int32 id;
-			if (link.Read<int32>(&id) == B_OK
-				&& id == B_MAIN_SCREEN_ID.id)
-				fLink.StartMessage(B_OK);
-			else
-				fLink.StartMessage(B_ERROR);
+			status_t status = B_BAD_VALUE;
+			if (link.Read<int32>(&id) == B_OK && gScreenManager != NULL) {
+				BAutolock locker(gScreenManager);
+				if (locker.IsLocked()) {
+					for (int32 i = 0; i < gScreenManager->CountScreens(); i++) {
+						Screen* screen = gScreenManager->ScreenAt(i);
+						if (screen != NULL && screen->ID() == id) {
+							status = B_OK;
+							break;
+						}
+					}
+				}
+			}
 
+			fLink.StartMessage(status);
 			fLink.Flush();
 			break;
 		}
@@ -2963,10 +2973,41 @@ ServerApp::_DispatchMessage(int32 code, BPrivate::LinkReceiver& link)
 			// 1) int32 screen
 
 			int32 id;
-			link.Read<int32>(&id);
+			status_t status = link.Read<int32>(&id);
+			int32 nextID = -1;
 
-			// TODO: for now, just say we're the last one
-			fLink.StartMessage(B_ENTRY_NOT_FOUND);
+			if (status == B_OK && gScreenManager != NULL) {
+				BAutolock locker(gScreenManager);
+				if (locker.IsLocked()) {
+					bool found = false;
+					for (int32 i = 0; i < gScreenManager->CountScreens(); i++) {
+						Screen* screen = gScreenManager->ScreenAt(i);
+						if (screen == NULL)
+							continue;
+
+						if (found) {
+							nextID = screen->ID();
+							break;
+						}
+						if (screen->ID() == id)
+							found = true;
+					}
+
+					if (nextID >= 0) {
+						status = B_OK;
+						fLink.StartMessage(status);
+						fLink.Attach<int32>(nextID);
+					} else {
+						status = B_ENTRY_NOT_FOUND;
+						fLink.StartMessage(status);
+					}
+				} else {
+					fLink.StartMessage(B_ERROR);
+				}
+			} else {
+				fLink.StartMessage(B_BAD_VALUE);
+			}
+
 			fLink.Flush();
 			break;
 		}

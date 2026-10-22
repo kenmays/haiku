@@ -3512,8 +3512,8 @@ Desktop::_DetermineScreenFor(BRect frame)
 
 	// If the window is wholly outside all outputs, use its center as a
 	// deterministic hint before falling back to the primary/first screen.
-	BPoint center((frame.left + frame.right) / 2.0f,
-		(frame.top + frame.bottom) / 2.0f);
+	BPoint center(frame.left / 2.0f + frame.right / 2.0f,
+		frame.top / 2.0f + frame.bottom / 2.0f);
 	Screen* screen = fVirtualScreen.ScreenAtPoint(center);
 	return screen != NULL ? screen : fVirtualScreen.ScreenAt(0);
 }

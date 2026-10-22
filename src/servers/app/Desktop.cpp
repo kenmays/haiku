@@ -3477,8 +3477,45 @@ Desktop::_DetermineScreenFor(BRect frame)
 {
 	AutoReadLocker _(fScreenLock);
 
-	// TODO: choose the screen depending on where most of the area is
-	return fVirtualScreen.ScreenAt(0);
+	if (!frame.IsValid())
+		return fVirtualScreen.ScreenAt(0);
+
+	// Prefer the output covered by the largest portion of the window. This
+	// keeps decorations and screen-dependent behavior stable for windows that
+	// straddle a display boundary, instead of always assigning them to screen 0.
+	Screen* bestScreen = NULL;
+	float bestArea = -1.0f;
+
+	for (int32 i = 0; i < fVirtualScreen.CountScreens(); i++) {
+		BRect screenFrame = fVirtualScreen.ScreenFrameAt(i);
+		if (!screenFrame.IsValid() || !screenFrame.Intersects(frame))
+			continue;
+
+		float left = frame.left > screenFrame.left
+			? frame.left : screenFrame.left;
+		float top = frame.top > screenFrame.top
+			? frame.top : screenFrame.top;
+		float right = frame.right < screenFrame.right
+			? frame.right : screenFrame.right;
+		float bottom = frame.bottom < screenFrame.bottom
+			? frame.bottom : screenFrame.bottom;
+		float area = (right - left + 1.0f) * (bottom - top + 1.0f);
+
+		if (area > bestArea) {
+			bestArea = area;
+			bestScreen = fVirtualScreen.ScreenAt(i);
+		}
+	}
+
+	if (bestScreen != NULL)
+		return bestScreen;
+
+	// If the window is wholly outside all outputs, use its center as a
+	// deterministic hint before falling back to the primary/first screen.
+	BPoint center((frame.left + frame.right) / 2.0f,
+		(frame.top + frame.bottom) / 2.0f);
+	Screen* screen = fVirtualScreen.ScreenAtPoint(center);
+	return screen != NULL ? screen : fVirtualScreen.ScreenAt(0);
 }
 
 

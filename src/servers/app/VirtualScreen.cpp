@@ -168,6 +168,9 @@ VirtualScreen::AddScreen(Screen* screen, const ScreenConfigurations& configurati
 		item->frame.OffsetTo(right + 1, 0);
 	}
 
+	// Keep the Screen object's origin and the virtual-screen layout in sync.
+	screen->SetFrame(item->frame);
+
 	if (!fScreenList.AddItem(item)) {
 		delete item;
 		return B_NO_MEMORY;
@@ -202,7 +205,13 @@ VirtualScreen::UpdateFrame()
 
 	for (int32 i = 0; i < fScreenList.CountItems(); i++) {
 		screen_item* item = fScreenList.ItemAt(i);
-		if (item == NULL || !item->frame.IsValid())
+		if (item == NULL || item->screen == NULL)
+			continue;
+
+		// Rebuild dimensions from the current mode but preserve the assigned
+		// desktop origin. This keeps geometry coherent after a mode change.
+		item->frame = item->screen->Frame();
+		if (!item->frame.IsValid())
 			continue;
 
 		if (!hasFrame) {
@@ -227,7 +236,8 @@ VirtualScreen::SetScreenFrame(int32 index, BRect frame)
 	if (item == NULL || !frame.IsValid())
 		return;
 
-	item->frame = frame;
+	item->screen->SetFrame(frame);
+	item->frame = item->screen->Frame();
 	UpdateFrame();
 }
 

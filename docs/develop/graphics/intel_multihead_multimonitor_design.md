@@ -137,6 +137,64 @@ This review was checked against the current branch's app_server and Screen prefe
 6. **Add compatibility and tests.** Existing single-head accelerants should continue working via wrappers. Test two independent modes, arbitrary display arrangement, cursor and window movement across boundaries, different DPMS states, hotplug/reconnect, failure rollback, multi-workspace configurations, direct framebuffer clients, overlays, and simultaneous drawing. Include a non-Intel multi-head implementation in the regression matrix.
 7. **Build and stage the work across PRs.** Land the API/app_server scaffolding and tests separately from Intel hardware programming. Enable the Intel capability only after per-generation modeset and hardware validation. Until those layers land, advertise the Intel feature as spanning/clone only, not true independent multihead.
 
+## Gap analysis against Linux Xe / shared Intel display code
+
+This comparison uses the Linux kernel Xe documentation and Intel display documentation. Important architecture distinction: Xe owns the DRM device and GPU-specific services, while the Intel display/KMS implementation is shared with i915 under `drivers/gpu/drm/i915/display`. The right comparison is therefore Haiku's display stack versus Intel's shared display/KMS stack used by Xe, not just files under `drivers/gpu/drm/xe`.
+
+### Capability gap matrix
+
+| Area | Linux Xe + Intel display/KMS | Current Haiku Intel Extreme branch | Gap / action |
+|---|---|---|---|
+| Head/CRTC model | DRM exposes CRTCs, connectors, encoders, and planes as separate objects with routing constraints. | Ports can be detected and assigned pipes, but the accelerant publishes one current mode and one framebuffer configuration. | **Blocker:** introduce stable per-head objects and explicit port/pipe/plane routing. Do not treat connected ports as independent heads automatically. |
+| Atomic modeset | Atomic state collects affected CRTCs/connectors/planes, validates the whole configuration, checks shared resources, then commits or rejects it. | The mode setter applies one target to all connected ports and has hand-written rollback. | **Critical:** add validate/prepare/commit/rollback phases for the complete requested head set. Reject impossible combinations before touching active hardware. |
+| Plane state and surfaces | Plane source/destination rectangles, framebuffer format/modifier, offsets, and CRTC assignment are stateful and validated. | One shared framebuffer, pitch, bpp, and current mode feed A/B scanout programming. The current CPU renderer writes the active surface. | **Critical:** separate per-head framebuffer/plane state, validate alignment and stride for each generation, and add a real page-flip/synchronization contract before claiming tear-free rendering. |
+| PLL and clock allocation | Display atomic checks reserve/release PLLs and validate clocks across affected CRTCs; shared resources may couple otherwise separate outputs. | PLL calculations and per-port setup exist, but the global modeset path is not a transaction across independently requested modes. | **Critical:** model PLLs as allocatable shared resources, calculate all heads together, and reject conflicts without partially programming outputs. |
+| Link training and bandwidth | DisplayPort/eDP link capability negotiation, training, lane/rate selection, and MST topology are part of the Intel display stack. | Port classes and link setup exist, but there is no per-head state machine exposed through a multihead API; feature parity must be assessed by generation and port. | **High:** track negotiated link state and bandwidth per connector/head; implement bounded retries, cancellation, and cleanup. Do not advertise MST or modern link features until end-to-end support exists. |
+| Hotplug and connector lifecycle | Hotplug detection and work handling update connector state and trigger reprobe/revalidation. | Port discovery and connection/EDID checks are present, but the existing logical screen configuration is not dynamically re-enumerated as independent heads. | **High:** add hotplug events, stable head identity, stale-ID invalidation, and safe teardown/rebuild of affected modes and surfaces. |
+| EDID and monitor modes | Connector-specific probing feeds mode validation and link/resource checks. | Haiku DDC reads parsed EDID 1.x into `edid1_info`; the current public hook returns a single EDID record, not per-head raw E-EDID/CTA data. | **High:** bind EDID/mode data to each connector, validate extension checksums and lengths using supported Haiku APIs, and separate connector capability from current-head mode. |
+| DPMS and power | Power domains, panel sequencing, link/PLL state, and runtime power are coordinated with display state. | DPMS is global and touches A/B PLL/plane state; there is no independently addressed per-head power operation. | **High:** per-head DPMS plus shared-resource reference counting and ordered panel/link/PLL sequencing. Preserve power state through rollback and suspend/resume. |
+| Vblank, flips, and completion | KMS has per-CRTC vblank/event and page-flip semantics; display code supports synchronous and asynchronous flip paths where supported. | A shared vblank semaphore and bounded wait exist, but there is no per-head flip completion contract for independent scanout. | **High:** add per-head retrace/flip completion and distinguish a register write or generic completion from the hardware latch event. |
+| Display geometry and compositor | DRM supplies per-CRTC modes and userspace display servers compose a desktop across output rectangles. | `VirtualScreen` has a single drawing-engine/hardware-interface assumption and computes concatenated geometry without actual monitor positions; `Screen::SetFrame()` is a TODO. | **Blocker outside accelerant:** implement app_server screen enumeration, independent bounds, compositor/drawing routing, and cursor/window geometry. |
+| Capability reporting | DRM objects/properties expose supported features and constraints to userspace. | Screen preferences uses a Radeon-private combine-mode marker; Intel has no generic per-head capability query. | **High:** replace private probing with a versioned, generic capability contract and expose only implemented features. |
+| Memory and execution services | Xe also provides GPU VM/buffer management, execution queues, synchronization, migration, and other GPU services beyond display. | This branch's requested CPU-only renderer is a software drawing path, not a Xe-equivalent GPU execution/memory stack. | **Separate scope:** do not claim full Linux Xe parity. Implement only the kernel/display/memory services required by the stated CPU-rendered scanout goal. |
+| Validation | Linux display code uses atomic validation and has substantial CI/platform-specific checks and hardware workarounds. | No successful Haiku build or per-generation physical-hardware results have been established for the new spanning bridge. | **Release blocker:** compile and run tests first; then validate each generation, output class, failure path, and dual-head configuration on hardware. |
+
+### Priority-ranked gaps
+
+**P0 — architecture blockers**
+
+1. Independent head enumeration and stable head identity across accelerant, shared state, app_server, and preferences.
+2. Independent per-head modes and scanout surfaces, with plane/pipe routing represented explicitly.
+3. Transactional multi-head mode validation and commit, including rollback of all affected pipes, PLLs, links, power state, and framebuffer ownership.
+4. app_server multi-screen enumeration and correct screen geometry/compositing. The accelerant cannot compensate for the current singleton-oriented app_server paths.
+
+**P1 — correctness and feature parity**
+
+5. Joint PLL, pixel-clock, link-bandwidth, lane/rate, and connector routing validation.
+6. Per-connector EDID/mode data, hotplug lifecycle, and monitor identity.
+7. Per-head DPMS/panel sequencing and per-head vblank/flip completion.
+8. Plane/format/pitch/alignment validation and a documented framebuffer ownership/synchronization contract.
+
+**P2 — advanced parity (only where the hardware generation supports it)**
+
+9. DisplayPort MST, DSC, FEC, HDMI/DP protocol features, PSR/DRRS/VRR, HDR/color pipeline, overlays, cursor planes, and audio coordination.
+10. Power-domain/runtime-PM integration, underrun diagnostics, link recovery, suspend/resume, and systematic fault injection.
+
+These are capability categories, not claims that every Intel generation supports every feature. The supported matrix must be per-generation and per-connector; the Xe display stack's current features cannot be transplanted wholesale into Gen2–Gen9.5 hardware.
+
+### Important PCI-ID qualification
+
+An upstream Xe PCI ID means the Linux driver recognizes that device for the Xe driver path; it does **not** prove that the Haiku driver can program its display engine, that the ID belongs to the same display IP generation, or that two simultaneous outputs work. The current inventory's user-requested “valid/imported” status must remain distinct from independently hardware-validated status. Keep separate fields for: `upstream_xe_id`, `Haiku_device_match`, `display_ip_identified`, `mode_set_tested`, and `multihead_tested`.
+
+### Recommended Xe-informed implementation plan
+
+1. Define the Haiku per-head API and shared-state version first. Specify ownership, stable IDs, supported capabilities, framebuffer lifetime, and synchronization semantics before changing register programming.
+2. Add app_server enumeration and geometry support, with legacy accelerant wrappers for existing single-head drivers. This needs to be a coordinated Haiku API/app_server change, not an Intel-only private marker.
+3. Implement a head/connector/pipe/plane resource model for Intel Extreme. Keep physical connectors, logical heads, pipes, planes, and shared PLL/link resources as distinct objects.
+4. Implement a complete configuration planner: validate all heads, allocate surfaces, reserve compatible resources, prepare links/panels, commit the new configuration, and roll back safely on any failure.
+5. Add per-head EDID, hotplug, DPMS, vblank/flip, and mode reporting. Add MST/DSC/VRR or other advanced features only after the core multihead path is stable.
+6. Establish build/test gates and hardware evidence. For every enabled generation, record single-head modes, dual independent modes, clone, hotplug, DPMS, sleep/wake, rollback/fault injection, and concurrent drawing results. Keep untested IDs imported but explicitly unvalidated.
+
 ## Acceptance matrix
 
 For each supported generation and exact PCI ID, test:

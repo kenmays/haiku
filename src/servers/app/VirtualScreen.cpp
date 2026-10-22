@@ -215,10 +215,17 @@ VirtualScreen::ScreenAt(int32 index) const
 Screen*
 VirtualScreen::ScreenByID(int32 id) const
 {
+	// The main screen is the first screen in the virtual-screen list.
+	// Resolve it before searching explicit IDs; otherwise the main-screen
+	// alias matches every item and the reverse loop returns the last screen.
+	if (id == B_MAIN_SCREEN_ID.id) {
+		screen_item* item = fScreenList.ItemAt(0);
+		return item != NULL ? item->screen : NULL;
+	}
+
 	for (int32 i = fScreenList.CountItems(); i-- > 0;) {
 		screen_item* item = fScreenList.ItemAt(i);
-
-		if (item->screen->ID() == id || id == B_MAIN_SCREEN_ID.id)
+		if (item->screen->ID() == id)
 			return item->screen;
 	}
 

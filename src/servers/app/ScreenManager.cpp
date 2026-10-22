@@ -177,6 +177,24 @@ ScreenManager::ReleaseScreens(ScreenList& list)
 
 
 void
+ScreenManager::ReleaseScreen(Screen* screen)
+{
+	if (screen == NULL)
+		return;
+
+	BAutolock locker(this);
+
+	for (int32 i = 0; i < fScreenList.CountItems(); i++) {
+		screen_item* item = fScreenList.ItemAt(i);
+		if (item->screen.Get() == screen) {
+			item->owner = NULL;
+			return;
+		}
+	}
+}
+
+
+void
 ScreenManager::ScreenChanged(Screen* screen)
 {
 	BAutolock locker(this);

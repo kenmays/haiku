@@ -192,8 +192,9 @@ VirtualScreen::AddScreen(Screen* screen, const ScreenConfigurations& configurati
 		return B_NO_MEMORY;
 	}
 
+	float brightness = configuration != NULL ? configuration->brightness : 1.0f;
 	status = currentConfigurations.Set(screen->ID(), hasInfo ? &info : NULL,
-		item->frame, mode);
+		item->frame, mode, brightness);
 	if (status != B_OK) {
 		// The list owns screen_item; remove it and restore the Screen's previous
 		// desktop origin so a failed configuration save cannot leave partial state.

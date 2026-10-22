@@ -156,6 +156,18 @@ VirtualScreen::AddScreen(Screen* screen, const ScreenConfigurations& configurati
 	}
 
 	item->frame = screen->Frame();
+
+	// Until explicit layout is restored from screen preferences, place newly
+	// added screens to the right of the existing virtual-screen bounds.
+	if (fScreenList.CountItems() > 0) {
+		float right = fFrame.right;
+		for (int32 i = 0; i < fScreenList.CountItems(); i++) {
+			screen_item* existing = fScreenList.ItemAt(i);
+			right = max_c(right, existing->frame.right);
+		}
+		item->frame.OffsetTo(right + 1, 0);
+	}
+
 	if (!fScreenList.AddItem(item)) {
 		delete item;
 		return B_NO_MEMORY;
@@ -168,7 +180,7 @@ VirtualScreen::AddScreen(Screen* screen, const ScreenConfigurations& configurati
 	// TODO: this works only for single screen configurations
 	fDrawingEngine = screen->GetDrawingEngine();
 	fHWInterface = screen->HWInterface();
-	fFrame = item->frame;
+	UpdateFrame();
 
 	return B_OK;
 }
@@ -185,22 +197,38 @@ VirtualScreen::RemoveScreen(Screen* screen)
 void
 VirtualScreen::UpdateFrame()
 {
-	int32 virtualWidth = 0, virtualHeight = 0;
+	bool hasFrame = false;
+	BRect frame(0, 0, -1, -1);
 
 	for (int32 i = 0; i < fScreenList.CountItems(); i++) {
-		Screen* screen = fScreenList.ItemAt(i)->screen;
+		screen_item* item = fScreenList.ItemAt(i);
+		if (item == NULL || !item->frame.IsValid())
+			continue;
 
-		uint16 width, height;
-		uint32 colorSpace;
-		float frequency;
-		screen->GetMode(width, height, colorSpace, frequency);
-
-		// TODO: compute virtual size depending on the actual screen position!
-		virtualWidth += width;
-		virtualHeight = max_c(virtualHeight, height);
+		if (!hasFrame) {
+			frame = item->frame;
+			hasFrame = true;
+		} else {
+			frame.left = min_c(frame.left, item->frame.left);
+			frame.top = min_c(frame.top, item->frame.top);
+			frame.right = max_c(frame.right, item->frame.right);
+			frame.bottom = max_c(frame.bottom, item->frame.bottom);
+		}
 	}
 
-	fFrame.Set(0, 0, virtualWidth - 1, virtualHeight - 1);
+	fFrame = hasFrame ? frame : BRect(0, 0, -1, -1);
+}
+
+
+void
+VirtualScreen::SetScreenFrame(int32 index, BRect frame)
+{
+	screen_item* item = fScreenList.ItemAt(index);
+	if (item == NULL || !frame.IsValid())
+		return;
+
+	item->frame = frame;
+	UpdateFrame();
 }
 
 

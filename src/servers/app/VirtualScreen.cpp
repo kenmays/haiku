@@ -43,6 +43,12 @@ VirtualScreen::_Reset()
 	gScreenManager->ReleaseScreens(list);
 	fScreenList.MakeEmpty();
 
+	while (fScene.CountOutputs() > 0) {
+		const DisplayOutput* output = fScene.OutputAt(0);
+		if (output == NULL || fScene.RemoveOutput(output->id) != B_OK)
+			break;
+	}
+
 	fFrame.Set(0, 0, 0, 0);
 	fDrawingEngine = NULL;
 	fHWInterface = NULL;
@@ -150,14 +156,31 @@ VirtualScreen::AddScreen(Screen* screen, const ScreenConfigurations& configurati
 	bool hasInfo = screen->GetMonitorInfo(info) == B_OK;
 	currentConfigurations.Set(screen->ID(), hasInfo ? &info : NULL, screen->Frame(), mode);
 
-	// TODO: this works only for single screen configurations
+	// Keep the existing drawing backend as the compatibility path, while
+	// recording each screen's logical placement independently.
 	fDrawingEngine = screen->GetDrawingEngine();
 	fHWInterface = screen->HWInterface();
-	fFrame = screen->Frame();
-	item->frame = fFrame;
 
-	fScreenList.AddItem(item);
+	BRect screenFrame = screen->Frame();
+	if (fScene.CountOutputs() > 0) {
+		BRect bounds = fScene.Bounds();
+		screenFrame.OffsetTo(bounds.right + 1, bounds.top);
+	}
+	item->frame = screenFrame;
 
+	status = fScene.AddOutput(screen->ID(), item->frame);
+	if (status != B_OK) {
+		delete item;
+		return status;
+	}
+
+	if (!fScreenList.AddItem(item)) {
+		fScene.RemoveOutput(screen->ID());
+		delete item;
+		return B_NO_MEMORY;
+	}
+
+	UpdateFrame();
 	return B_OK;
 }
 
@@ -165,30 +188,60 @@ VirtualScreen::AddScreen(Screen* screen, const ScreenConfigurations& configurati
 status_t
 VirtualScreen::RemoveScreen(Screen* screen)
 {
-	// not implemented yet (config changes when running)
-	return B_ERROR;
+	for (int32 i = 0; i < fScreenList.CountItems(); i++) {
+		screen_item* item = fScreenList.ItemAt(i);
+		if (item->screen != screen)
+			continue;
+
+		status_t status = fScene.RemoveOutput(screen->ID());
+		if (status != B_OK)
+			return status;
+
+		item = fScreenList.RemoveItem(i);
+		delete item;
+
+		if (fScreenList.CountItems() == 0) {
+			fDrawingEngine = NULL;
+			fHWInterface = NULL;
+		} else {
+			screen_item* remaining = fScreenList.ItemAt(0);
+			fDrawingEngine = remaining->screen->GetDrawingEngine();
+			fHWInterface = remaining->screen->HWInterface();
+		}
+
+		UpdateFrame();
+		return B_OK;
+	}
+
+	return B_ENTRY_NOT_FOUND;
 }
 
 
 void
 VirtualScreen::UpdateFrame()
 {
-	int32 virtualWidth = 0, virtualHeight = 0;
-
-	for (int32 i = 0; i < fScreenList.CountItems(); i++) {
-		Screen* screen = fScreenList.ItemAt(i)->screen;
-
-		uint16 width, height;
-		uint32 colorSpace;
-		float frequency;
-		screen->GetMode(width, height, colorSpace, frequency);
-
-		// TODO: compute virtual size depending on the actual screen position!
-		virtualWidth += width;
-		virtualHeight = max_c(virtualHeight, height);
+	if (fScene.CountOutputs() == 0) {
+		fFrame.Set(0, 0, 0, 0);
+		return;
 	}
 
-	fFrame.Set(0, 0, virtualWidth - 1, virtualHeight - 1);
+	fFrame = fScene.Bounds();
+}
+
+
+void
+VirtualScreen::SetScreenFrame(int32 index, BRect frame)
+{
+	screen_item* item = fScreenList.ItemAt(index);
+	if (item == NULL || !frame.IsValid())
+		return;
+
+	status_t status = fScene.SetOutputFrame(item->screen->ID(), frame);
+	if (status != B_OK)
+		return;
+
+	item->frame = frame;
+	UpdateFrame();
 }
 
 

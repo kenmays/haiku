@@ -329,6 +329,13 @@ VirtualScreen::ScreenAtPoint(BPoint point) const
 }
 
 
+Screen*
+VirtualScreen::ScreenForFrame(BRect frame) const
+{
+	int32 outputID = fScene.OutputWithLargestIntersection(frame);
+	return outputID >= 0 ? ScreenByID(outputID) : NULL;
+}
+
 status_t
 VirtualScreen::GlobalToScreenPixel(const Screen* screen, BPoint global,
 	BPoint& pixel) const

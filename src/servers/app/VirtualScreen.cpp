@@ -90,7 +90,16 @@ VirtualScreen::SetConfiguration(Desktop& desktop, const ScreenConfigurations& co
 	for (int32 i = 0; i < list.CountItems(); i++) {
 		Screen* screen = list.ItemAt(i);
 
-		AddScreen(screen, configurations, currentConfigurations);
+		status = AddScreen(screen, configurations, currentConfigurations);
+		if (status != B_OK) {
+			// Do not leave screens acquired when one screen cannot be
+			// configured. Drop any partially built virtual-screen state
+			// and release the complete acquisition list, including screens
+			// that were not added to fScreenList.
+			_Reset();
+			gScreenManager->ReleaseScreens(list);
+			return status;
+		}
 
 		if (!previousModesFailed && _changedScreens != NULL) {
 			// Figure out which screens have changed their mode

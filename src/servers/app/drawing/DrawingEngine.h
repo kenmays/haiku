@@ -211,6 +211,8 @@ private:
 							fPainter;
 			HWInterface*	fGraphicsCard;
 			bool			fCopyToFront;
+			int32			fRendererOffsetX;
+			int32			fRendererOffsetY;
 };
 
 #endif // DRAWING_ENGINE_H_

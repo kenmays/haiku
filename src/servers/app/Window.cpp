@@ -1868,15 +1868,20 @@ Window::_TriggerContentRedraw(BRegion& dirty, const BRegion& expose)
 			continue;
 
 		intersectsOutput = true;
-		if (virtualScreen.ScreenScaleAt(i) != 1.0f
+		float scale = virtualScreen.ScreenScaleAt(i);
+		double pixelLeft = (double)frame.left * scale;
+		double pixelTop = (double)frame.top * scale;
+		if (!(scale > 0.0f) || !isfinite(scale)
 			|| screen->HWInterface() == NULL
 			|| !frame.IsValid()
 			|| frame.left != floorf(frame.left)
 			|| frame.top != floorf(frame.top)
-			|| (double)frame.left < -2147483647.0
-			|| (double)frame.left > 2147483647.0
-			|| (double)frame.top < -2147483647.0
-			|| (double)frame.top > 2147483647.0) {
+			|| pixelLeft < -2147483647.0
+			|| pixelLeft > 2147483647.0
+			|| pixelTop < -2147483647.0
+			|| pixelTop > 2147483647.0
+			|| pixelLeft != floor(pixelLeft)
+			|| pixelTop != floor(pixelTop)) {
 			canFanOut = false;
 			break;
 		}

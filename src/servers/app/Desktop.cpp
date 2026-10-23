@@ -829,6 +829,49 @@ Desktop::GetLastMouseState(BPoint* position, int32* buttons) const
 
 
 status_t
+Desktop::SetScreenScale(int32 id, float scale)
+{
+	AutoWriteLocker windowLocker(fWindowLock);
+	AutoWriteLocker screenLocker(fScreenLock);
+
+	Screen* screen = fVirtualScreen.ScreenByID(id);
+	if (screen == NULL)
+		return B_NAME_NOT_FOUND;
+
+	int32 index = -1;
+	for (int32 i = 0; i < fVirtualScreen.CountScreens(); i++) {
+		if (fVirtualScreen.ScreenAt(i) == screen) {
+			index = i;
+			break;
+		}
+	}
+	if (index < 0)
+		return B_ENTRY_NOT_FOUND;
+
+	status_t status = fVirtualScreen.SetScreenScale(index, scale);
+	if (status != B_OK)
+		return status;
+
+	// Persist the resulting logical frame. The mode remains a physical pixel
+	// mode; scale changes logical geometry only.
+	display_mode mode;
+	screen->GetMode(mode);
+	monitor_info info;
+	bool hasInfo = screen->GetMonitorInfo(info) == B_OK;
+	BRect frame = fVirtualScreen.ScreenFrameAt(index);
+	fWorkspaces[fCurrentWorkspace].CurrentScreenConfiguration().Set(id,
+		hasInfo ? &info : NULL, frame, mode);
+	fWorkspaces[fCurrentWorkspace].StoredScreenConfiguration().Set(id,
+		hasInfo ? &info : NULL, frame, mode);
+	StoreWorkspaceConfiguration(fCurrentWorkspace);
+
+	screenLocker.Unlock();
+	_ScreenChanged(screen);
+	return B_OK;
+}
+
+
+status_t
 Desktop::SetScreenMode(int32 workspace, int32 id, const display_mode& mode,
 	bool makeDefault)
 {

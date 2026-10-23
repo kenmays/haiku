@@ -2663,8 +2663,12 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 		}
 
 	} catch (...) {
-		BRegion dirty(fCurrentDrawingRegion);
-		fWindow->MarkContentDirtyAsync(dirty);
+		// Do not let a second allocation failure prevent output restoration.
+		try {
+			BRegion dirty(fCurrentDrawingRegion);
+			fWindow->MarkContentDirtyAsync(dirty);
+		} catch (...) {
+		}
 		bool recovered = fWindow->BindDrawingEngineOutput(originalScreen);
 		if (!recovered)
 			recovered = fWindow->BindDrawingEngineOutput(originalScreen);

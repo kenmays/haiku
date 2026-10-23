@@ -10,12 +10,13 @@ Implemented on the working branch:
 - Output-local damage clipping with scale-aware outward rounding, and per-output background fills using each output's drawing engine.
 - Per-window drawing engines can bind to the selected unit-scale output; renderer offsets translate global drawing coordinates and damage/copy invalidation into framebuffer-local coordinates. Cross-output moves fall back to repaint instead of blitting between framebuffers.
 - Enumeration of distinct graphics device nodes into separate accelerant interfaces, while retaining the legacy VESA/framebuffer fallback.
+- Hardware cursor shape/position routing to the output under the global pointer, plus use of the input server's global event stream when multiple outputs are active.
 - Geometry tests for scene transforms, selection, invalid input, and output lifecycle.
 
 Still required before calling this a complete multi-monitor implementation:
 - Output enumeration for multiple connectors/heads on a single graphics device; separate `/dev/graphics` nodes are not equivalent to physical-output enumeration.
 - Rendering a window simultaneously across multiple outputs, complete per-output decoration/copy/overlay handling, and renderer scaling for non-unit DPI remain incomplete. Each window is currently bound to one selected output; a spanning window is not yet composited across all outputs.
-- Cursor and input routing per output, output hotplug/removal recovery, and transactional mode/layout changes.
+- Full input aggregation/routing for independent hardware devices, output hotplug/removal recovery, and transactional mode/layout changes. Cursor routing is only wired to the current global pointer stream and does not replace those missing pieces.
 - End-to-end virtual-output tests and a real Haiku build/test run. No build or test execution has been verified for the current changes.
 
 

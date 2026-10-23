@@ -63,10 +63,9 @@ public:
 									BPoint global, BPoint& pixel) const;
 			status_t			ScreenPixelToGlobal(const Screen* screen,
 									BPoint pixel, BPoint& global) const;
-			// Clips a global-coordinate damage region to one output and
-			// translates it to that output's framebuffer coordinates.
-			// Non-unit scale is rejected until raster damage scaling is wired
-			// through the rendering path.
+			// Clips global-coordinate damage to one output and converts it
+			// to framebuffer coordinates, rounding scaled bounds outwards.
+			// Drawing operations still need their own per-output transform.
 			status_t			ClipRegionToScreen(const Screen* screen,
 									const BRegion& globalRegion,
 									BRegion& screenRegion) const;

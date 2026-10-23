@@ -111,9 +111,13 @@ public:
 		BRegion deviceDirty(fDirty);
 		deviceDirty.OffsetBy(fEngine->fRendererOffsetX,
 			fEngine->fRendererOffsetY);
-		fOverlaysHidden
-			= fEngine->fGraphicsCard->HideFloatingOverlays(
-				deviceDirty.Frame());
+		BRegion framebufferBounds(fEngine->fPainter->Bounds());
+		deviceDirty.IntersectWith(&framebufferBounds);
+		if (deviceDirty.CountRects() > 0) {
+			fOverlaysHidden
+				= fEngine->fGraphicsCard->HideFloatingOverlays(
+					deviceDirty.Frame());
+		}
 	}
 
 	DrawTransaction(DrawingEngine *engine)
@@ -127,9 +131,13 @@ public:
 		BRegion deviceDirty(fDirty);
 		deviceDirty.OffsetBy(fEngine->fRendererOffsetX,
 			fEngine->fRendererOffsetY);
-		fOverlaysHidden
-			= fEngine->fGraphicsCard->HideFloatingOverlays(
-				deviceDirty.Frame());
+		BRegion framebufferBounds(fEngine->fPainter->Bounds());
+		deviceDirty.IntersectWith(&framebufferBounds);
+		if (deviceDirty.CountRects() > 0) {
+			fOverlaysHidden
+				= fEngine->fGraphicsCard->HideFloatingOverlays(
+					deviceDirty.Frame());
+		}
 	}
 
 	DrawTransaction(DrawingEngine *engine, const BRegion &region)
@@ -144,9 +152,13 @@ public:
 		BRegion deviceDirty(fDirty);
 		deviceDirty.OffsetBy(fEngine->fRendererOffsetX,
 			fEngine->fRendererOffsetY);
-		fOverlaysHidden
-			= fEngine->fGraphicsCard->HideFloatingOverlays(
-				deviceDirty.Frame());
+		BRegion framebufferBounds(fEngine->fPainter->Bounds());
+		deviceDirty.IntersectWith(&framebufferBounds);
+		if (deviceDirty.CountRects() > 0) {
+			fOverlaysHidden
+				= fEngine->fGraphicsCard->HideFloatingOverlays(
+					deviceDirty.Frame());
+		}
 	}
 
 	~DrawTransaction()
@@ -155,7 +167,10 @@ public:
 			BRegion deviceDirty(fDirty);
 			deviceDirty.OffsetBy(fEngine->fRendererOffsetX,
 				fEngine->fRendererOffsetY);
-			fEngine->fGraphicsCard->InvalidateRegion(deviceDirty);
+			BRegion framebufferBounds(fEngine->fPainter->Bounds());
+			deviceDirty.IntersectWith(&framebufferBounds);
+			if (deviceDirty.CountRects() > 0)
+				fEngine->fGraphicsCard->InvalidateRegion(deviceDirty);
 		}
 		if (fOverlaysHidden)
 			fEngine->fGraphicsCard->ShowFloatingOverlays();
@@ -305,14 +320,12 @@ DrawingEngine::SetCopyToFrontEnabled(bool enable)
 void
 DrawingEngine::CopyToFront(/*const*/ BRegion& region)
 {
-	if (fRendererOffsetX == 0 && fRendererOffsetY == 0) {
-		fGraphicsCard->InvalidateRegion(region);
-		return;
-	}
-
 	BRegion deviceRegion(region);
 	deviceRegion.OffsetBy(fRendererOffsetX, fRendererOffsetY);
-	fGraphicsCard->InvalidateRegion(deviceRegion);
+	BRegion framebufferBounds(fPainter->Bounds());
+	deviceRegion.IntersectWith(&framebufferBounds);
+	if (deviceRegion.CountRects() > 0)
+		fGraphicsCard->InvalidateRegion(deviceRegion);
 }
 
 

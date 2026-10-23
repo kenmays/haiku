@@ -124,6 +124,7 @@ public:
 
 			status_t			SetScreenMode(int32 workspace, int32 id,
 									const display_mode& mode, bool makeDefault);
+			status_t			SetScreenScale(int32 id, float scale);
 			status_t			GetScreenMode(int32 workspace, int32 id,
 									display_mode& mode);
 			status_t			GetScreenFrame(int32 workspace, int32 id,

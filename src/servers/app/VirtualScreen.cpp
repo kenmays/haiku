@@ -320,6 +320,21 @@ VirtualScreen::SetScreenScale(int32 index, float scale)
 	BRect frame = previousFrame;
 	frame.right = frame.left + (mode.virtual_width - 1) / scale;
 	frame.bottom = frame.top + (mode.virtual_height - 1) / scale;
+	if (!frame.IsValid()
+		|| !isfinite(frame.left) || !isfinite(frame.top)
+		|| !isfinite(frame.right) || !isfinite(frame.bottom)
+		|| (double)frame.left < -2147483648.0
+		|| (double)frame.left > 2147483647.0
+		|| (double)frame.top < -2147483648.0
+		|| (double)frame.top > 2147483647.0
+		|| (double)frame.right < -2147483648.0
+		|| (double)frame.right > 2147483647.0
+		|| (double)frame.bottom < -2147483648.0
+		|| (double)frame.bottom > 2147483647.0) {
+		fScene.SetOutputScale(item->screen->ID(), previousScale);
+		return B_BAD_VALUE;
+	}
+
 	status = fScene.SetOutputFrame(item->screen->ID(), frame);
 	if (status != B_OK) {
 		fScene.SetOutputScale(item->screen->ID(), previousScale);

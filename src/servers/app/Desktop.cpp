@@ -586,7 +586,14 @@ Desktop::Init()
 	gInputManager->AddStream(new InputServerStream);
 #endif
 
-	EventStream* stream = fVirtualScreen.HWInterface()->CreateEventStream();
+	// A per-device event stream cannot aggregate input across several
+	// graphics devices. Keep the legacy direct stream for one output, and use
+	// the input server's global stream when multiple outputs are active.
+	EventStream* stream = NULL;
+	if (fVirtualScreen.CountScreens() == 1
+		&& fVirtualScreen.HWInterface() != NULL) {
+		stream = fVirtualScreen.HWInterface()->CreateEventStream();
+	}
 	if (stream == NULL)
 		stream = gInputManager->GetStream();
 

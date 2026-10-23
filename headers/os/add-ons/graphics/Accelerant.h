@@ -55,6 +55,18 @@ enum {
 	B_SET_BRIGHTNESS,                   /* optional */
 	B_GET_BRIGHTNESS,                   /* optional */
 
+	/* optional independent-output hooks; absent hooks mean one output */
+	B_ACCELERANT_MULTI_OUTPUT_START = 0x500,
+	B_GET_MULTI_OUTPUT_COUNT,
+	B_GET_MULTI_OUTPUT_INFO,
+	B_GET_MULTI_OUTPUT_MODE_COUNT,
+	B_GET_MULTI_OUTPUT_MODE_LIST,
+	B_GET_MULTI_OUTPUT_DISPLAY_MODE,
+	B_SET_MULTI_OUTPUT_DISPLAY_MODE,
+	B_GET_MULTI_OUTPUT_FRAME_BUFFER_CONFIG,
+	B_GET_MULTI_OUTPUT_EDID_INFO,
+	B_GET_MULTI_OUTPUT_GENERATION,
+
 	/* cursor managment */
 	B_MOVE_CURSOR = 0x200,				/* optional */
 	B_SET_CURSOR_SHAPE,					/* optional */
@@ -119,6 +131,53 @@ typedef struct {
 	uint32			flags;				/* mode flags (Some drivers use this */
 										/* for dual head related options.) */
 } display_mode;
+
+/*
+ * Optional multi-output accelerant interface.
+ *
+ * Output IDs are stable for the lifetime of a device connection and must not
+ * be derived from the current enumeration index. The app_server must query
+ * each hook independently and treat a missing hook as unsupported; legacy
+ * accelerants continue to expose their existing single-output interface.
+ */
+#define B_MULTI_OUTPUT_INFO_VERSION 1
+
+enum {
+	B_OUTPUT_CONNECTOR_UNKNOWN = 0,
+	B_OUTPUT_CONNECTOR_VGA,
+	B_OUTPUT_CONNECTOR_DVI,
+	B_OUTPUT_CONNECTOR_HDMI,
+	B_OUTPUT_CONNECTOR_DISPLAYPORT,
+	B_OUTPUT_CONNECTOR_EDP,
+	B_OUTPUT_CONNECTOR_LVDS,
+	B_OUTPUT_CONNECTOR_USB,
+	B_OUTPUT_CONNECTOR_VIRTUAL
+};
+
+enum {
+	B_OUTPUT_CONNECTION_UNKNOWN = 0,
+	B_OUTPUT_CONNECTED,
+	B_OUTPUT_DISCONNECTED
+};
+
+enum {
+	B_OUTPUT_CAPABILITY_INDEPENDENT_MODE = 1 << 0,
+	B_OUTPUT_CAPABILITY_FRAME_BUFFER = 1 << 1,
+	B_OUTPUT_CAPABILITY_PRESENT = 1 << 2,
+	B_OUTPUT_CAPABILITY_HARDWARE_CURSOR = 1 << 3
+};
+
+typedef struct {
+	uint32	size;					/* caller sets sizeof(accelerant_output_info) */
+	uint32	version;				/* B_MULTI_OUTPUT_INFO_VERSION */
+	uint64	output_id;			/* stable within this graphics device */
+	uint32	connector_type;		/* B_OUTPUT_CONNECTOR_* */
+	uint32	connection_state;	/* B_OUTPUT_CONNECTION_* */
+	uint32	capabilities;		/* B_OUTPUT_CAPABILITY_* */
+	uint32	reserved[4];			/* initialize to zero */
+	char	name[64];				/* diagnostic connector name */
+} accelerant_output_info;
+
 
 typedef struct {
 	void*	frame_buffer;				/* pointer to first byte of frame */
@@ -309,6 +368,23 @@ typedef status_t (*get_monitor_info)(monitor_info* info);
 typedef status_t (*get_edid_info)(void* info, uint32 size, uint32* _version);
 typedef status_t (*set_brightness)(float brightness);
 typedef status_t (*get_brightness)(float* brightness);
+
+/* Optional multi-output hook signatures. */
+typedef uint32 (*get_multi_output_count)(void);
+typedef status_t (*get_multi_output_info)(uint32 index,
+	accelerant_output_info* info);
+typedef uint32 (*get_multi_output_mode_count)(uint64 outputID);
+typedef status_t (*get_multi_output_mode_list)(uint64 outputID,
+	display_mode* modeList);
+typedef status_t (*get_multi_output_display_mode)(uint64 outputID,
+	display_mode* currentMode);
+typedef status_t (*set_multi_output_display_mode)(uint64 outputID,
+	display_mode* modeToSet);
+typedef status_t (*get_multi_output_frame_buffer_config)(uint64 outputID,
+	frame_buffer_config* frameBuffer);
+typedef status_t (*get_multi_output_edid_info)(uint64 outputID, void* info,
+	uint32 size, uint32* _version);
+typedef status_t (*get_multi_output_generation)(uint64* generation);
 
 typedef sem_id (*accelerant_retrace_semaphore)(void);
 

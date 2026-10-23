@@ -106,6 +106,7 @@ public:
 			void				SetCursor(ServerCursor* cursor);
 			ServerCursorReference Cursor() const;
 			void				SetManagementCursor(ServerCursor* newCursor);
+			void				UpdateCursorPosition(const BPoint& position);
 
 			void				SetLastMouseState(const BPoint& position,
 									int32 buttons, Window* windowUnderMouse);

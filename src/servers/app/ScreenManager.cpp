@@ -19,6 +19,7 @@
 #include <Autolock.h>
 #include <Entry.h>
 #include <NodeMonitor.h>
+#include <unistd.h>
 
 #include <new>
 
@@ -68,6 +69,7 @@ ScreenChangeListener::ScreenChanged(HWInterface* interface)
 ScreenManager::ScreenManager()
 	:
 	BLooper("screen manager"),
+	fNextScreenID(0),
 	fKnownGraphicsDeviceCount(0),
 	fScreenList(4)
 {
@@ -243,55 +245,39 @@ void
 ScreenManager::_ScanDrivers()
 {
 #ifndef HAIKU_TARGET_PLATFORM_LIBBE_TEST
-	// Enumerate graphics devices independently. The legacy accelerant
-	// constructor searches forward for the first usable device; using it for
-	// every entry would make several Screen objects alias one framebuffer.
+	// Enumerate by stable device path, not by the current ordinal. Device
+	// indices shift when a graphics node is removed; reopening by path avoids
+	// aliasing a surviving output or overlooking a newly-added one.
 	int32 deviceCount = AccelerantHWInterface::CountGraphicsDevices();
 	if (deviceCount < 0)
 		deviceCount = 0;
 
-	// Retry previously failed indices first. A device node can appear before
-	// its accelerant is ready, so treating one failed initialization as
-	// permanently processed would lose that output until app_server restarts.
-	for (size_t i = 0; i < fFailedGraphicsDevices.size();) {
-		int32 deviceIndex = fFailedGraphicsDevices[i];
-		HWInterface* interface = new(nothrow) AccelerantHWInterface(deviceIndex);
-		if (interface == NULL) {
-			// Keep it queued for the next node-monitor notification.
-			++i;
+	for (int32 i = 0; i < deviceCount; i++) {
+		BString devicePath;
+		if (AccelerantHWInterface::GetGraphicsDevicePath(i, devicePath) != B_OK)
 			continue;
-		}
 
-		if (_AddHWInterface(interface) != NULL) {
-			fFailedGraphicsDevices.erase(fFailedGraphicsDevices.begin() + i);
-		} else {
-			// _AddHWInterface consumes the interface on both success and failure.
-			++i;
-		}
-	}
-
-	// Probe every newly enumerated index once. Remember failures separately so
-	// one temporarily unavailable device does not block later outputs.
-	for (int32 i = fKnownGraphicsDeviceCount; i < deviceCount; i++) {
-		HWInterface* interface = new(nothrow) AccelerantHWInterface(i);
-		if (interface == NULL) {
-			// Leave the enumeration boundary here. The next scan will retry
-			// this index through the normal new-device loop.
-			break;
-		}
-
-		if (_AddHWInterface(interface) == NULL) {
-			try {
-				fFailedGraphicsDevices.push_back(i);
-			} catch (...) {
-				// If we cannot remember this failed index, leave the boundary
-				// here so the next scan retries it rather than losing the device.
-				fKnownGraphicsDeviceCount = i;
+		bool alreadyOpen = false;
+		for (int32 j = 0; j < fScreenList.CountItems(); j++) {
+			screen_item* item = fScreenList.ItemAt(j);
+			AccelerantHWInterface* existing =
+				dynamic_cast<AccelerantHWInterface*>(
+					item->screen->HWInterface());
+			if (existing != NULL && devicePath == existing->DevicePath()) {
+				alreadyOpen = true;
 				break;
 			}
 		}
-		fKnownGraphicsDeviceCount = i + 1;
+		if (alreadyOpen)
+			continue;
+
+		HWInterface* interface = new(nothrow) AccelerantHWInterface(
+			-1, devicePath.String());
+		if (interface != NULL)
+			_AddHWInterface(interface);
 	}
+
+	fKnownGraphicsDeviceCount = deviceCount;
 
 	// Preserve VESA/framebuffer fallback when no enumerated device initializes,
 	// including safe-video mode where accelerant enumeration is disabled.
@@ -308,7 +294,7 @@ ScreenManager::screen_item*
 ScreenManager::_AddHWInterface(HWInterface* interface)
 {
 	ObjectDeleter<Screen> screen(
-		new(nothrow) Screen(interface, fScreenList.CountItems()));
+		new(nothrow) Screen(interface, fNextScreenID++));
 	if (!screen.IsSet()) {
 		delete interface;
 		return NULL;
@@ -374,14 +360,30 @@ ScreenManager::MessageReceived(BMessage* message)
 #ifndef HAIKU_TARGET_PLATFORM_LIBBE_TEST
 		{
 			int32 opcode;
-			if (message->FindInt32("opcode", &opcode) == B_OK
-				&& opcode == B_ENTRY_CREATED) {
-				// Retry the scan on every directory addition. Usually the known
-				// boundary makes this a no-op; if interface allocation failed
-				// earlier, it lets us retry the first unprocessed device index.
-				// Removing an active Screen still requires coordinated owner
-				// notification and framebuffer teardown.
-				_ScanDrivers();
+			if (message->FindInt32("opcode", &opcode) == B_OK) {
+				if (opcode == B_ENTRY_REMOVED) {
+					// Remove only accelerant-backed screens whose stable node path
+					// disappeared. ScreenRemoved detaches the output before the
+					// Screen and its framebuffer interface are destroyed.
+					for (int32 i = 0; i < fScreenList.CountItems();) {
+						screen_item* item = fScreenList.ItemAt(i);
+						AccelerantHWInterface* accelerant =
+							dynamic_cast<AccelerantHWInterface*>(
+								item->screen->HWInterface());
+						const char* path = accelerant != NULL
+							? accelerant->DevicePath() : NULL;
+						if (path != NULL && path[0] != '\\0'
+							&& access(path, F_OK) != 0) {
+							RemoveScreen(item->screen.Get());
+							continue;
+						}
+						i++;
+					}
+					fKnownGraphicsDeviceCount
+						= AccelerantHWInterface::CountGraphicsDevices();
+				}
+				if (opcode == B_ENTRY_CREATED || opcode == B_ENTRY_REMOVED)
+					_ScanDrivers();
 			}
 		}
 #endif

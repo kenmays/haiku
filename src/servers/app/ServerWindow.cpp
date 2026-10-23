@@ -33,6 +33,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <memory>
+#include <utility>
 
 #include <AppDefs.h>
 #include <Autolock.h>
@@ -2637,29 +2638,29 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 
 	bool renderedAny = false;
 	try {
-	for (size_t i = 0; i < targets.size(); i++) {
-		const OutputRenderTarget& target = targets[i];
-		if (!virtualScreen.IsRenderTargetCurrent(target))
-			break;
+		for (size_t i = 0; i < targets.size(); i++) {
+			const OutputRenderTarget& target = targets[i];
+			if (!virtualScreen.IsRenderTargetCurrent(target))
+				break;
 
-		Screen* screen = virtualScreen.ScreenByID(target.screenID);
-		if (screen == NULL)
-			continue;
+			Screen* screen = virtualScreen.ScreenByID(target.screenID);
+			if (screen == NULL)
+				continue;
 
-		if (!fWindow->BindDrawingEngineOutput(screen))
-			continue;
+			if (!fWindow->BindDrawingEngineOutput(screen))
+				continue;
 
-		_DispatchViewDrawingMessageSingleOutput(code, *replayReceivers[i],
-			!renderedAny);
-		renderedAny = true;
-	}
+			_DispatchViewDrawingMessageSingleOutput(code, *replayReceivers[i],
+				!renderedAny);
+			renderedAny = true;
+		}
 
 	} catch (...) {
 		bool recovered = fWindow->BindDrawingEngineOutput(originalScreen);
 		if (!recovered)
 			recovered = fWindow->BindDrawingEngineOutput(originalScreen);
 		if (!recovered) {
-			debug_printf("ServerWindow %s: failed to restore drawing output after exception\\n",
+			debug_printf("ServerWindow %s: failed to restore drawing output after exception\n",
 				Title());
 		}
 		throw;

@@ -2533,48 +2533,30 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 		return;
 	}
 
-	// NOTE: the region is not copied, Painter keeps a pointer,
-	// that's why you need to use the clipping only for as long
-	// as you have it locked. A window's engine is currently bound to one
-	// output at a time, so do not let global desktop damage belonging to
-	// another output be translated into this output's framebuffer.
+	// Painter borrows the clipping region until the drawing transaction ends.
+	// Build a pointer-free output plan and select the target matching this
+	// window's current engine binding. This keeps the legacy single-engine
+	// path bounded to its output while providing one shared target-selection
+	// implementation for the multi-output dispatcher.
 	BRegion outputDrawingRegion;
 	const BRegion* drawingRegion = &fCurrentDrawingRegion;
 	const ::Screen* output = fWindow->Screen();
 	const VirtualScreen& virtualScreen = fDesktop->VirtualScreen();
 	if (output != NULL) {
-		// A bound output that is no longer present in the virtual scene must
-		// not fall back to the unbounded global drawing region. This can happen
-		// while hot-unplug is detaching the window from a removed screen.
 		drawingRegion = &outputDrawingRegion;
-		for (int32 i = 0; i < virtualScreen.CountScreens(); i++) {
-			if (virtualScreen.ScreenAt(i) != output)
-				continue;
-
-			// Keep clipping eligibility in sync with Window's output binding.
-			// The Painter applies the same output scale to geometry and clipping;
-			// only origins that map to an exact integer pixel are supported.
-			BRect outputFrame = virtualScreen.ScreenFrameAt(i);
-			float scale = virtualScreen.ScreenScaleAt(i);
-			double pixelLeft = (double)outputFrame.left * scale;
-			double pixelTop = (double)outputFrame.top * scale;
-			if (scale > 0.0f && isfinite(scale)
-				&& outputFrame.IsValid()
-				&& outputFrame.left == floorf(outputFrame.left)
-				&& outputFrame.top == floorf(outputFrame.top)
-				&& pixelLeft >= -2147483647.0
-				&& pixelLeft <= 2147483647.0
-				&& pixelTop >= -2147483647.0
-				&& pixelTop <= 2147483647.0
-				&& pixelLeft == floor(pixelLeft)
-				&& pixelTop == floor(pixelTop)
-				&& output->HWInterface() != NULL) {
-				outputDrawingRegion = fCurrentDrawingRegion;
-				BRegion outputBounds(outputFrame);
-				outputDrawingRegion.IntersectWith(&outputBounds);
+		std::vector<OutputRenderTarget> renderTargets;
+		status_t planStatus = virtualScreen.BuildRenderPlan(
+			fCurrentDrawingRegion, renderTargets);
+		if (planStatus == B_OK) {
+			for (size_t i = 0; i < renderTargets.size(); i++) {
+				if (renderTargets[i].screenID != output->ID())
+					continue;
+				outputDrawingRegion = renderTargets[i].globalClip;
+				break;
 			}
-			break;
 		}
+		// An absent, invalid, or concurrently detached output leaves an empty
+		// clip. Never fall back to the global region for a stale binding.
 	}
 	drawingEngine->ConstrainClippingRegion(drawingRegion);
 

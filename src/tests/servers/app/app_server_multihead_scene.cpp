@@ -51,6 +51,15 @@ main()
 	BPoint global;
 	assert(scene.OutputPixelToGlobal(10, pixel, global) == B_OK);
 	assert(global.x == -1180 && global.y == 120);
+
+	// Scaling is independent of the output's negative global origin.
+	assert(scene.SetOutputScale(10, 2.0f) == B_OK);
+	assert(scene.GlobalToOutputPixel(10, BPoint(-1180, 120), pixel) == B_OK);
+	assert(pixel.x == 200 && pixel.y == 240);
+	assert(scene.OutputPixelToGlobal(10, pixel, global) == B_OK);
+	assert(global.x == -1180 && global.y == 120);
+	assert(scene.SetOutputScale(10, 1.0f) == B_OK);
+
 	assert(scene.GlobalToOutputPixel(20, BPoint(100, 100), pixel) == B_OK);
 	assert(pixel.x == 150 && pixel.y == 150);
 	assert(scene.OutputPixelToGlobal(20, pixel, global) == B_OK);

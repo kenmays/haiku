@@ -266,6 +266,8 @@ MouseFilter::Filter(BMessage* message, EventTarget** _target, int32* _viewToken,
 	if (message->FindPoint("where", &where) != B_OK)
 		return B_DISPATCH_MESSAGE;
 
+	fDesktop->UpdateCursorPosition(where);
+
 	int32 buttons;
 	if (message->FindInt32("buttons", &buttons) != B_OK)
 		buttons = 0;
@@ -577,9 +579,7 @@ Desktop::Init()
 
 	fCursorManager.InitializeCursors(fSettings->DefaultBoldFont().Size() / 12.0f);
 
-	fVirtualScreen.HWInterface()->MoveCursorTo(
-		fVirtualScreen.Frame().Width() / 2,
-		fVirtualScreen.Frame().Height() / 2);
+
 
 #if TEST_MODE
 	gInputManager->AddStream(new InputServerStream);
@@ -616,7 +616,12 @@ Desktop::Init()
 	SetCursor(NULL);
 		// this will set the default cursor
 
-	fVirtualScreen.HWInterface()->SetCursorVisible(true);
+	BRect initialScreenFrame = fVirtualScreen.ScreenFrameAt(0);
+	if (initialScreenFrame.IsValid()) {
+		UpdateCursorPosition(BPoint(
+			(initialScreenFrame.left + initialScreenFrame.right) / 2,
+			(initialScreenFrame.top + initialScreenFrame.bottom) / 2));
+	}
 
 	return B_OK;
 }
@@ -720,8 +725,13 @@ Desktop::SetCursor(ServerCursor* newCursor)
 
 	fCursor.SetTo(newCursor, false);
 
-	if (!fManagementCursor.IsSet())
-		HWInterface()->SetCursor(newCursor);
+	if (!fManagementCursor.IsSet()) {
+		for (int32 i = 0; i < fVirtualScreen.CountScreens(); i++) {
+			Screen* screen = fVirtualScreen.ScreenAt(i);
+			if (screen != NULL && screen->HWInterface() != NULL)
+				screen->HWInterface()->SetCursor(newCursor);
+		}
+	}
 }
 
 
@@ -742,7 +752,37 @@ Desktop::SetManagementCursor(ServerCursor* newCursor)
 
 	fManagementCursor.SetTo(newCursor, false);
 
-	HWInterface()->SetCursor(newCursor != NULL ? newCursor : fCursor.Get());
+	ServerCursor* cursor = newCursor != NULL ? newCursor : fCursor.Get();
+	for (int32 i = 0; i < fVirtualScreen.CountScreens(); i++) {
+		Screen* screen = fVirtualScreen.ScreenAt(i);
+		if (screen != NULL && screen->HWInterface() != NULL)
+			screen->HWInterface()->SetCursor(cursor);
+	}
+}
+
+
+void
+Desktop::UpdateCursorPosition(const BPoint& position)
+{
+	Screen* targetScreen = fVirtualScreen.ScreenAtPoint(position);
+
+	for (int32 i = 0; i < fVirtualScreen.CountScreens(); i++) {
+		Screen* screen = fVirtualScreen.ScreenAt(i);
+		if (screen == NULL || screen->HWInterface() == NULL)
+			continue;
+
+		if (screen != targetScreen) {
+			screen->HWInterface()->SetCursorVisible(false);
+			continue;
+		}
+
+		BPoint pixel;
+		if (fVirtualScreen.GlobalToScreenPixel(screen, position, pixel) == B_OK) {
+			screen->HWInterface()->MoveCursorTo(pixel.x, pixel.y);
+			screen->HWInterface()->SetCursorVisible(true);
+		} else
+			screen->HWInterface()->SetCursorVisible(false);
+	}
 }
 
 

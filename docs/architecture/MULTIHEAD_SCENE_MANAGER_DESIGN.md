@@ -1,6 +1,6 @@
 # Multihead app_server and Scene Manager Design
 
-Status: staged design with partial geometry, configuration, damage, and device-enumeration groundwork. Full multi-output rendering, compositor, input routing, and hotplug are not yet implemented.
+Status: partial geometry, configuration, damage, device discovery, and graphics-device-addition handling. Full multi-output client rendering, connector enumeration, comprehensive input routing, and safe output removal/recovery are not yet implemented.
 
 ## Current implementation status
 
@@ -9,7 +9,7 @@ Implemented on the working branch:
 - Saved output-position restoration with overlap fallback and persistence of the selected geometry.
 - Output-local damage clipping with scale-aware outward rounding, and per-output background fills using each output's drawing engine.
 - Per-window drawing engines can bind to unit-scale outputs; renderer offsets translate global drawing coordinates and damage/copy invalidation into framebuffer-local coordinates. Expose redraws and decorations are fanned out to intersected unit-scale outputs, while cross-output moves fall back to repaint instead of blitting between framebuffers. Client-issued drawing command streams are still bound to one selected output, so this is not yet correct full spanning-window rendering.
-- Drawing-engine transaction, region-copy, and bitmap-read paths now tolerate a missing hardware interface instead of dereferencing a detached output; this is failure hardening, not output hotplug recovery.
+- Drawing-engine transaction, region-copy, and bitmap-read paths now tolerate a missing hardware interface instead of dereferencing a detached output. The screen manager monitors /dev/graphics and can add newly discovered device nodes to the active virtual desktop; safe device removal and recovery remain unimplemented.
 - Enumeration of distinct graphics device nodes into separate accelerant interfaces, while retaining the legacy VESA/framebuffer fallback.
 - Hardware cursor shape/position routing to the output under the global pointer, plus use of the input server's global event stream when multiple outputs are active.
 - Geometry tests for scene transforms, selection, invalid input, and output lifecycle.
@@ -17,7 +17,7 @@ Implemented on the working branch:
 Still required before calling this a complete multi-monitor implementation:
 - Output enumeration for multiple connectors/heads on a single graphics device; separate `/dev/graphics` nodes are not equivalent to physical-output enumeration.
 - Full rendering of client-issued drawing commands across all intersected outputs, complete per-output copy/overlay handling, and renderer scaling for non-unit DPI remain incomplete. Server-side expose and decoration redraws are fanned out on unit-scale outputs, but a spanning window's client content is not yet replicated across all outputs.
-- Full input aggregation/routing for independent hardware devices, output hotplug/removal recovery, and transactional mode/layout changes. Cursor routing is only wired to the current global pointer stream and does not replace those missing pieces.
+- Full input aggregation/routing for independent hardware devices, output-removal recovery, and transactional mode/layout changes. Cursor routing is only wired to the current global pointer stream and does not replace those missing pieces.
 - End-to-end virtual-output tests and a real Haiku build/test run. No build or test execution has been verified for the current changes.
 
 

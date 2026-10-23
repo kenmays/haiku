@@ -2599,6 +2599,7 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 	if (!fWindow->SetScreen(originalScreen))
 		canBindAll = false;
 	if (!canBindAll) {
+		free(message);
 		_DispatchViewDrawingMessageSingleOutput(code, link);
 		return;
 	}

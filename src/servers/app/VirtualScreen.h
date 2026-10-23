@@ -35,6 +35,16 @@ struct OutputRenderTarget {
 	BRegion globalClip;
 	BRegion pixelClip;
 
+ 	OutputRenderTarget()
+		:
+		screenID(-1),
+		frame(0, 0, 0, 0),
+		scale(1.0f),
+		rendererOffsetX(0),
+		rendererOffsetY(0)
+	{
+	}
+
 	OutputRenderTarget(int32 id, const BRect& outputFrame, float outputScale,
 		int32 offsetX, int32 offsetY, const BRegion& logicalClip,
 		const BRegion& physicalClip)
@@ -104,6 +114,9 @@ public:
 			// coordinates. Hardware targets must be resolved later by screenID.
 			status_t			BuildRenderPlan(const BRegion& globalDamage,
 									std::vector<OutputRenderTarget>& targets) const;
+			status_t			BuildRenderTarget(const Screen* screen,
+									const BRegion& globalDamage,
+									OutputRenderTarget& target) const;
 			BRect				ScreenFrameAt(int32 index) const;
 			int32				CountScreens() const;
 

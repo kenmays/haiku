@@ -2487,6 +2487,8 @@ static bool
 is_replay_safe_drawing_command(int32 code)
 {
 	switch (code) {
+		case AS_STROKE_LINE:
+		case AS_STROKE_LINE_GRADIENT:
 		case AS_VIEW_INVERT_RECT:
 		case AS_STROKE_RECT:
 		case AS_FILL_RECT:
@@ -2628,7 +2630,8 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 		if (!fWindow->BindDrawingEngineOutput(screen))
 			continue;
 
-		_DispatchViewDrawingMessageSingleOutput(code, replay);
+		_DispatchViewDrawingMessageSingleOutput(code, replay,
+			!renderedAny);
 		renderedAny = true;
 	}
 
@@ -2650,7 +2653,7 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 
 void
 ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
-	BPrivate::LinkReceiver &link)
+	BPrivate::LinkReceiver &link, bool updateLogicalState)
 {
 	if (!fCurrentView->IsVisible() || !fWindow->IsVisible()) {
 		if (link.NeedsReply()) {
@@ -2754,7 +2757,8 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			// for DrawString(), also there needs to be a decision, if the pen
 			// location is in View coordinates (I think it should be) or in
 			// screen coordinates.
-			fCurrentView->CurrentState()->SetPenLocation(penPos);
+			if (updateLogicalState)
+				fCurrentView->CurrentState()->SetPenLocation(penPos);
 			break;
 		}
 		case AS_STROKE_LINE_GRADIENT:
@@ -2789,7 +2793,8 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			// for DrawString(), also there needs to be a decision, if the pen
 			// location is in View coordinates (I think it should be) or in
 			// screen coordinates.
-			fCurrentView->CurrentState()->SetPenLocation(penPos);
+			if (updateLogicalState)
+				fCurrentView->CurrentState()->SetPenLocation(penPos);
 			break;
 		}
 		case AS_VIEW_INVERT_RECT:

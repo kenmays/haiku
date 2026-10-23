@@ -764,6 +764,7 @@ Desktop::SetManagementCursor(ServerCursor* newCursor)
 void
 Desktop::UpdateCursorPosition(const BPoint& position)
 {
+	AutoReadLocker _(fScreenLock);
 	Screen* targetScreen = fVirtualScreen.ScreenAtPoint(position);
 
 	for (int32 i = 0; i < fVirtualScreen.CountScreens(); i++) {

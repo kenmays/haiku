@@ -382,13 +382,17 @@ ScreenManager::_WatchGraphicsDirectories(const char* path)
 	if (entry.InitCheck() != B_OK || entry.GetNodeRef(&nodeRef) != B_OK)
 		return;
 
+	bool alreadyWatched = false;
 	for (size_t i = 0; i < fWatchedDirectories.size(); i++) {
 		if (fWatchedDirectories[i].device == nodeRef.device
-			&& fWatchedDirectories[i].node == nodeRef.node)
-				goto scan_children;
+			&& fWatchedDirectories[i].node == nodeRef.node) {
+			alreadyWatched = true;
+			break;
+		}
 	}
 
-	if (watch_node(&nodeRef, B_WATCH_DIRECTORY, this) == B_OK) {
+	if (!alreadyWatched
+		&& watch_node(&nodeRef, B_WATCH_DIRECTORY, this) == B_OK) {
 		try {
 			fWatchedDirectories.push_back(nodeRef);
 		} catch (...) {
@@ -396,7 +400,6 @@ ScreenManager::_WatchGraphicsDirectories(const char* path)
 		}
 	}
 
-scan_children:
 	BDirectory directory(path);
 	BEntry child;
 	while (directory.GetNextEntry(&child, false) == B_OK) {

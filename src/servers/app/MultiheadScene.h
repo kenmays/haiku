@@ -83,12 +83,18 @@ public:
 
 	BRect				Bounds() const;
 
+	// Changes whenever output membership, geometry, scale, or enabled state
+	// changes. Render batches can reject stale target plans after hot-plug.
+	uint64				Generation() const { return fGeneration; }
+
 private:
 	static bool		_IsValidFrame(const BRect& frame);
 	static bool		_IsValidScale(float scale);
 	int32				_FindOutputIndex(int32 id) const;
+	void				_AdvanceGeneration();
 
 	std::vector<DisplayOutput> fOutputs;
+	uint64				fGeneration;
 };
 
 #endif // MULTIHEAD_SCENE_H

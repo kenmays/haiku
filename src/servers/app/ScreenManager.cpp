@@ -255,6 +255,26 @@ ScreenManager::_ScanDrivers()
 	if (deviceCount < 0)
 		deviceCount = 0;
 
+	// Reconcile existing screens against their stable device paths on every
+	// scan, not only in response to B_ENTRY_REMOVED. Node-monitor notifications
+	// can be coalesced or missed while app_server is busy; leaving a dead
+	// framebuffer attached would keep stale Screen/HWInterface pointers in
+	// windows and the virtual scene. RemoveScreen() detaches the owner before
+	// the Screen and its interface are released.
+	for (int32 i = 0; i < fScreenList.CountItems();) {
+		screen_item* item = fScreenList.ItemAt(i);
+		AccelerantHWInterface* accelerant =
+			dynamic_cast<AccelerantHWInterface*>(
+				item->screen->HWInterface());
+		const char* path = accelerant != NULL
+			? accelerant->DevicePath() : NULL;
+		if (path != NULL && path[0] != '\\0' && access(path, F_OK) != 0) {
+			RemoveScreen(item->screen.Get());
+			continue;
+		}
+		i++;
+	}
+
 	// If a real graphics node has appeared after the fallback backend was
 	// selected, detach the fallback first so it cannot remain a phantom output.
 	if (deviceCount > 0) {

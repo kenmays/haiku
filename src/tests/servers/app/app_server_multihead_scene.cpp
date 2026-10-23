@@ -8,6 +8,7 @@
 #include <assert.h>
 #include <float.h>
 #include <math.h>
+#include <Region.h>
 
 
 int
@@ -60,6 +61,23 @@ main()
 	assert(global.x == -1180 && global.y == 120);
 	assert(scene.SetOutputScale(10, 1.0f) == B_OK);
 
+	// Damage clipping intersects global coordinates with the output and
+	// converts the result to bounded framebuffer-local coordinates.
+	BRegion damage;
+	damage.Include(BRect(-1300, 100, -1100, 200));
+	BRegion pixelDamage;
+	assert(scene.ClipRegionToOutput(10, damage, 1280, 720, pixelDamage)
+		== B_OK);
+	assert(pixelDamage.Frame() == BRect(0, 100, 180, 200));
+	assert(scene.ClipRegionToOutput(10, damage, 0, 720, pixelDamage)
+		== B_BAD_VALUE);
+	assert(pixelDamage.CountRects() == 0);
+	assert(scene.SetOutputScale(10, 2.0f) == B_OK);
+	assert(scene.ClipRegionToOutput(10, damage, 1280, 720, pixelDamage)
+		== B_OK);
+	assert(pixelDamage.Frame() == BRect(0, 200, 360, 400));
+	assert(scene.SetOutputScale(10, 1.0f) == B_OK);
+
 	assert(scene.GlobalToOutputPixel(20, BPoint(100, 100), pixel) == B_OK);
 	assert(pixel.x == 150 && pixel.y == 150);
 	assert(scene.OutputPixelToGlobal(20, pixel, global) == B_OK);
@@ -98,6 +116,9 @@ main()
 	assert(scene.OutputAtPoint(BPoint(100, 1100)) == 20);
 	assert(scene.SetOutputFrame(20, BRect(0, 0, 1919, 1079)) == B_OK);
 	assert(scene.SetOutputEnabled(10, false) == B_OK);
+	assert(scene.ClipRegionToOutput(10, damage, 1280, 720, pixelDamage)
+		== B_ENTRY_NOT_FOUND);
+	assert(pixelDamage.CountRects() == 0);
 	assert(scene.OutputAtPoint(BPoint(-100, 20)) == -1);
 	assert(scene.Bounds().left == 0);
 	std::vector<int32> afterDisable;

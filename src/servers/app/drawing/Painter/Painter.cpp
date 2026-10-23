@@ -216,6 +216,7 @@ Painter::Painter()
 	fRendererScale(1.0f),
 	fScaledClippingRegion(),
 	fPenSize(1.0),
+	fSourceClippingRegion(NULL),
 	fClippingRegion(NULL),
 	fDrawingMode(B_OP_COPY),
 	fAlphaSrcMode(B_PIXEL_ALPHA),
@@ -360,9 +361,10 @@ Painter::SetDrawState(const DrawState* state, int32 xOffset, int32 yOffset)
 
 
 // ConstrainClipping
-oid
+void
 Painter::ConstrainClipping(const BRegion* region)
 {
+	fSourceClippingRegion = region;
 	if (region == NULL) {
 		fClippingRegion = NULL;
 		fBaseRenderer.set_clipping_region(NULL);
@@ -398,7 +400,7 @@ Painter::ConstrainClipping(const BRegion* region)
 }
 
 
-oid
+void
 Painter::SetTransform(BAffineTransform transform, int32 xOffset, int32 yOffset)
 {
 	fBaseTransform = transform;
@@ -418,8 +420,10 @@ Painter::SetRendererScale(float scale)
 
 	fRendererScale = scale;
 	_UpdateTransform();
-	if (fClippingRegion != NULL)
-		ConstrainClipping(fClippingRegion);
+	if (fSourceClippingRegion != NULL) {
+		const BRegion* source = fSourceClippingRegion;
+		ConstrainClipping(source);
+	}
 }
 
 

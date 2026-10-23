@@ -14,6 +14,7 @@
 #include "ScreenManager.h"
 
 #include <Message.h>
+#include <Region.h>
 
 
 class Desktop;

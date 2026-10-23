@@ -2552,8 +2552,8 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			if (virtualScreen.ScreenScaleAt(i) == 1.0f
 				&& output->HWInterface() != NULL) {
 				outputDrawingRegion = fCurrentDrawingRegion;
-				outputDrawingRegion.IntersectWith(
-					virtualScreen.ScreenFrameAt(i));
+				BRegion outputBounds(virtualScreen.ScreenFrameAt(i));
+				outputDrawingRegion.IntersectWith(&outputBounds);
 				drawingRegion = &outputDrawingRegion;
 			}
 			break;

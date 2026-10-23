@@ -557,6 +557,15 @@ DrawingEngine::CopyRegion(/*const*/ BRegion* region, int32 xOffset,
 	BRegion localRegion(*region);
 	localRegion.OffsetBy(fRendererOffsetX, fRendererOffsetY);
 
+	BRegion framebufferBounds(fPainter->Bounds());
+	BRegion allowedSourceBounds(framebufferBounds);
+	BRegion allowedDestinationSourceBounds(framebufferBounds);
+	allowedDestinationSourceBounds.OffsetBy(-xOffset, -yOffset);
+	allowedSourceBounds.IntersectWith(&allowedDestinationSourceBounds);
+	localRegion.IntersectWith(&allowedSourceBounds);
+	if (localRegion.CountRects() == 0)
+		return;
+
 	BRect frame = localRegion.Frame();
 	frame = frame | frame.OffsetByCopy(xOffset, yOffset);
 
@@ -905,29 +914,22 @@ DrawingEngine::FillRegion(BRegion& r, const rgb_color& color)
 {
 	ASSERT_PARALLEL_LOCKED();
 
-	// NOTE: region expected to be already clipped correctly!!
-	BRect frame = r.Frame();
-	frame.OffsetBy(fRendererOffsetX, fRendererOffsetY);
-	if (!fPainter->Bounds().Contains(frame)) {
-		// NOTE: I am not quite sure yet how this can happen, but apparently it
-		// can (see bug #634).
-		// This function is used for internal app_server painting, in the case of
-		// bug #634, the background of views is painted. But the view region
-		// should never be outside the frame buffer bounds.
-//		char message[1024];
-//		BRect bounds = fPainter->Bounds();
-//		sprintf(message, "FillRegion() - painter: (%d, %d)->(%d, %d), region: (%d, %d)->(%d, %d)",
-//			(int)bounds.left, (int)bounds.top, (int)bounds.right, (int)bounds.bottom,
-//			(int)frame.left, (int)frame.top, (int)frame.right, (int)frame.bottom);
-//		debugger(message);
+	// View regions are in global desktop coordinates and can extend beyond
+	// the output selected for this engine. Clip to the framebuffer's logical
+	// bounds instead of dropping the entire fill when only part is in bounds.
+	BRect globalBounds = fPainter->Bounds();
+	globalBounds.OffsetBy(-fRendererOffsetX, -fRendererOffsetY);
+	BRegion clipped(r);
+	BRegion outputBounds(globalBounds);
+	clipped.IntersectWith(&outputBounds);
+	if (clipped.CountRects() == 0)
 		return;
-	}
 
-	DrawTransaction transaction(this, r);
+	DrawTransaction transaction(this, clipped);
 
-	int32 count = r.CountRects();
+	int32 count = clipped.CountRects();
 	for (int32 i = 0; i < count; i++)
-		fPainter->FillRectNoClipping(r.RectAtInt(i), color);
+		fPainter->FillRectNoClipping(clipped.RectAtInt(i), color);
 }
 
 

@@ -2233,9 +2233,20 @@ Desktop::MarkDirty(BRegion& dirtyRegion, BRegion& exposeRegion)
 	if (dirtyRegion.CountRects() == 0)
 		return;
 
+	// The virtual desktop's bounding frame can contain gaps between outputs.
+	// Clip a local copy to the union of output frames, preserving the caller's
+	// regions and preventing off-output damage from entering window updates.
+	BRegion screenDirty(dirtyRegion);
+	screenDirty.IntersectWith(&fScreenRegion);
+	if (screenDirty.CountRects() == 0)
+		return;
+
+	BRegion screenExpose(exposeRegion);
+	screenExpose.IntersectWith(&fScreenRegion);
+
 	if (LockAllWindows()) {
-		// send redraw messages to all windows intersecting the dirty region
-		_TriggerWindowRedrawing(dirtyRegion, exposeRegion);
+		// send redraw messages to all windows intersecting drawable screen area
+		_TriggerWindowRedrawing(screenDirty, screenExpose);
 
 		UnlockAllWindows();
 	}
@@ -2245,7 +2256,8 @@ Desktop::MarkDirty(BRegion& dirtyRegion, BRegion& exposeRegion)
 void
 Desktop::Redraw()
 {
-	BRegion dirty(fVirtualScreen.Frame());
+	// Redraw only real output rectangles; Frame() is merely their bounding box.
+	BRegion dirty(fScreenRegion);
 	MarkDirty(dirty);
 }
 

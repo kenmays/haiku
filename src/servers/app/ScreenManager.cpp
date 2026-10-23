@@ -17,8 +17,10 @@
 #include "RemoteHWInterface.h"
 
 #include <Autolock.h>
+#include <Directory.h>
 #include <Entry.h>
 #include <NodeMonitor.h>
+#include <Path.h>
 #include <unistd.h>
 
 #include <new>
@@ -82,17 +84,18 @@ ScreenManager::ScreenManager()
 #else
 	_ScanDrivers();
 
-	// turn on node monitoring the graphics driver directory
-	BEntry entry("/dev/graphics");
-	node_ref nodeRef;
-	if (entry.InitCheck() == B_OK && entry.GetNodeRef(&nodeRef) == B_OK)
-		watch_node(&nodeRef, B_WATCH_DIRECTORY, this);
+	// Watch the complete graphics-device tree. Some drivers publish their
+	// device nodes in vendor subdirectories, so watching only /dev/graphics
+	// misses hotplug events below that directory.
+	_WatchGraphicsDirectories("/dev/graphics");
 #endif
 }
 
 
 ScreenManager::~ScreenManager()
 {
+	for (size_t i = 0; i < fWatchedDirectories.size(); i++)
+		unwatch_node(&fWatchedDirectories[i], this);
 }
 
 
@@ -369,6 +372,45 @@ ScreenManager::_AddHWInterface(HWInterface* interface)
 
 
 void
+ScreenManager::_WatchGraphicsDirectories(const char* path)
+{
+	if (path == NULL || path[0] == '\0')
+		return;
+
+	BEntry entry(path);
+	node_ref nodeRef;
+	if (entry.InitCheck() != B_OK || entry.GetNodeRef(&nodeRef) != B_OK)
+		return;
+
+	for (size_t i = 0; i < fWatchedDirectories.size(); i++) {
+		if (fWatchedDirectories[i].device == nodeRef.device
+			&& fWatchedDirectories[i].node == nodeRef.node)
+				goto scan_children;
+	}
+
+	if (watch_node(&nodeRef, B_WATCH_DIRECTORY, this) == B_OK) {
+		try {
+			fWatchedDirectories.push_back(nodeRef);
+		} catch (...) {
+			unwatch_node(&nodeRef, this);
+		}
+	}
+
+scan_children:
+	BDirectory directory(path);
+	BEntry child;
+	while (directory.GetNextEntry(&child, false) == B_OK) {
+		if (!child.IsDirectory() || child.IsSymLink())
+			continue;
+
+		BPath childPath;
+		if (child.GetPath(&childPath) == B_OK)
+			_WatchGraphicsDirectories(childPath.Path());
+	}
+}
+
+
+void
 ScreenManager::MessageReceived(BMessage* message)
 {
 	switch (message->what) {
@@ -398,8 +440,10 @@ ScreenManager::MessageReceived(BMessage* message)
 					fKnownGraphicsDeviceCount
 						= AccelerantHWInterface::CountGraphicsDevices();
 				}
-				if (opcode == B_ENTRY_CREATED || opcode == B_ENTRY_REMOVED)
+				if (opcode == B_ENTRY_CREATED || opcode == B_ENTRY_REMOVED) {
+					_WatchGraphicsDirectories("/dev/graphics");
 					_ScanDrivers();
+				}
 			}
 		}
 #endif

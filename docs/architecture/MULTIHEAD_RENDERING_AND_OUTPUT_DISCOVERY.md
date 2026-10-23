@@ -2,6 +2,26 @@
 
 Status: implementation contract for the next multihead stage. This document does not claim that client drawing fan-out or connector enumeration is implemented.
 
+## Implementation snapshot
+
+The current branch now has a pointer-free `OutputRenderTarget` record and
+`VirtualScreen::BuildRenderPlan()`. The plan calculates per-output logical
+clips, physical-pixel damage, scale, and integer renderer offsets. The
+`ServerWindow` drawing path uses it to constrain the currently bound output,
+and invalid targets are skipped without invalidating surviving outputs.
+Geometry-level regression tests cover negative origins, mixed-scale pixel
+clipping, and largest-intersection output selection.
+
+This does **not** yet fan out a client drawing command to multiple engines.
+The dispatcher still consumes and executes each protocol message once against
+the window's currently bound engine. Do not treat the plan as a completed
+render dispatcher. The remaining work is to parse each message once into a
+replay-safe immutable command representation, execute it on every planned
+target, and preserve canonical state/reply/layer/picture semantics. The plan's
+pixel clip is currently metadata for that execution stage; the existing engine
+continues to consume its logical clip.
+
+
 ## 1. Client drawing fan-out
 
 ### Required invariant

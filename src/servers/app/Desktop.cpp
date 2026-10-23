@@ -22,6 +22,7 @@
 #include "Desktop.h"
 
 #include <stdio.h>
+#include <math.h>
 #include <string.h>
 #include <syslog.h>
 
@@ -1608,10 +1609,33 @@ Desktop::MoveWindowBy(Window* window, float x, float y, int32 workspace)
 	newDirtyRegion.Include(&window->VisibleRegion());
 
 	// A same-output move can use the window's output-bound drawing engine.
-	// Cross-output moves must repaint both old and new areas instead of
-	// copying coordinates from one framebuffer into another.
-	bool copied = false;
+	// Restrict the blit to that output's framebuffer; a window's visible region
+	// may span several outputs even though its current renderer targets one.
+	bool canBlit = false;
 	if (previousScreen != NULL && window->Screen() == previousScreen) {
+		for (int32 i = 0; i < fVirtualScreen.CountScreens(); i++) {
+			if (fVirtualScreen.ScreenAt(i) != previousScreen)
+				continue;
+
+			BRect frame = fVirtualScreen.ScreenFrameAt(i);
+			if (fVirtualScreen.ScreenScaleAt(i) == 1.0f
+				&& frame.IsValid()
+				&& frame.left == floorf(frame.left)
+				&& frame.top == floorf(frame.top)
+				&& (double)frame.left >= -2147483647.0
+				&& (double)frame.left <= 2147483647.0
+				&& (double)frame.top >= -2147483647.0
+				&& (double)frame.top <= 2147483647.0) {
+				BRegion outputBounds(frame);
+				copyRegion.IntersectWith(&outputBounds);
+				canBlit = true;
+			}
+			break;
+		}
+	}
+
+	bool copied = false;
+	if (canBlit && copyRegion.CountRects() > 0) {
 		DrawingEngine* engine = window->GetDrawingEngine();
 		if (engine != NULL && engine->LockParallelAccess()) {
 			engine->CopyRegion(&copyRegion, (int32)x, (int32)y);

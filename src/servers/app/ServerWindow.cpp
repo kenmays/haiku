@@ -2491,6 +2491,9 @@ is_replay_safe_drawing_command(int32 code)
 	switch (code) {
 		case AS_STROKE_LINE:
 		case AS_STROKE_LINE_GRADIENT:
+		case AS_DRAW_STRING:
+		case AS_DRAW_STRING_WITH_DELTA:
+		case AS_DRAW_STRING_WITH_OFFSETS:
 		case AS_VIEW_INVERT_RECT:
 		case AS_STROKE_RECT:
 		case AS_FILL_RECT:
@@ -3430,8 +3433,17 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			BPoint penLocation = drawingEngine->DrawString(string,
 				info.stringLength, info.location, delta);
 
+			// DrawingEngine returns the endpoint after the output transform.
+			// Remove only the physical-output scale before converting back to
+			// view coordinates so the public pen position remains logical.
+			float outputScale = drawingEngine->RendererScale();
+			if (outputScale > 0.0f && outputScale != 1.0f) {
+				penLocation.x /= outputScale;
+				penLocation.y /= outputScale;
+			}
 			fCurrentView->ScreenToPenTransform().Apply(&penLocation);
-			fCurrentView->CurrentState()->SetPenLocation(penLocation);
+			if (updateLogicalState)
+				fCurrentView->CurrentState()->SetPenLocation(penLocation);
 
 			break;
 		}
@@ -3474,8 +3486,14 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			BPoint penLocation = drawingEngine->DrawString(string,
 				stringLength, locations);
 
+			float outputScale = drawingEngine->RendererScale();
+			if (outputScale > 0.0f && outputScale != 1.0f) {
+				penLocation.x /= outputScale;
+				penLocation.y /= outputScale;
+			}
 			fCurrentView->ScreenToPenTransform().Apply(&penLocation);
-			fCurrentView->CurrentState()->SetPenLocation(penLocation);
+			if (updateLogicalState)
+				fCurrentView->CurrentState()->SetPenLocation(penLocation);
 
 			break;
 		}

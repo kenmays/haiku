@@ -1,6 +1,22 @@
 # Multihead app_server and Scene Manager Design
 
-Status: staged design with an initial logical geometry model implemented; compositor, input, and hardware integration remain future work.
+Status: staged design with partial geometry, configuration, damage, and device-enumeration groundwork. Full multi-output rendering, compositor, input routing, and hotplug are not yet implemented.
+
+## Current implementation status
+
+Implemented on the working branch:
+- Global output geometry, scale metadata, negative coordinates, lookup/intersection helpers, and coordinate transforms.
+- Saved output-position restoration with overlap fallback and persistence of the selected geometry.
+- Output-local damage clipping with scale-aware outward rounding, and per-output background fills using each output's drawing engine.
+- Enumeration of distinct graphics device nodes into separate accelerant interfaces, while retaining the legacy VESA/framebuffer fallback.
+- Geometry tests for scene transforms, selection, invalid input, and output lifecycle.
+
+Still required before calling this a complete multi-monitor implementation:
+- Output enumeration for multiple connectors/heads on a single graphics device; separate `/dev/graphics` nodes are not equivalent to physical-output enumeration.
+- Correct per-output window content and decoration rendering, renderer transforms, and framebuffer copy/invalidation routing. Most window drawing still uses the legacy single-engine path.
+- Cursor and input routing per output, output hotplug/removal recovery, and transactional mode/layout changes.
+- End-to-end virtual-output tests and a real Haiku build/test run. No build or test execution has been verified for the current changes.
+
 
 ## Goal
 

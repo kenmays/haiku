@@ -3655,13 +3655,33 @@ Desktop::_ScreenChanged(Screen* screen)
 {
 	ASSERT_MULTI_WRITE_LOCKED(fWindowLock);
 
-	// the entire screen is dirty, because we're actually
-	// operating on an all new buffer in memory
-	BRegion dirty(screen->Frame());
+	// A mode change invalidates the full logical desktop, not just the
+	// changed output. Build the region from individual output frames so gaps
+	// between monitors are not treated as drawable screen space.
+	fVirtualScreen.UpdateFrame();
+	fScreenRegion.MakeEmpty();
+	BRect changedScreenFrame;
+	for (int32 i = 0; i < fVirtualScreen.CountScreens(); i++) {
+		BRect frame = fVirtualScreen.ScreenFrameAt(i);
+		if (!frame.IsValid())
+			continue;
 
-	// update our cached screen region
-	fScreenRegion.Set(screen->Frame());
-	gInputManager->UpdateScreenBounds(screen->Frame());
+		fScreenRegion.Include(frame);
+		if (fVirtualScreen.ScreenAt(i) == screen)
+			changedScreenFrame = frame;
+	}
+
+	// Keep the legacy behavior if the screen isn't represented in the
+	// virtual-screen list yet (for example during early initialization).
+	if (fScreenRegion.CountRects() == 0) {
+		changedScreenFrame = screen->Frame();
+		fScreenRegion.Include(changedScreenFrame);
+	}
+	if (!changedScreenFrame.IsValid())
+		changedScreenFrame = screen->Frame();
+
+	BRegion dirty(fScreenRegion);
+	gInputManager->UpdateScreenBounds(fVirtualScreen.Frame());
 
 	BRegion background;
 	_RebuildClippingForAllWindows(background);
@@ -3674,13 +3694,11 @@ Desktop::_ScreenChanged(Screen* screen)
 	dirty.Exclude(&background);
 	_TriggerWindowRedrawing(dirty, dirty);
 
-	// send B_SCREEN_CHANGED to windows on that screen
+	// send B_SCREEN_CHANGED to windows on the changed output
 	BMessage update(B_SCREEN_CHANGED);
 	update.AddInt64("when", real_time_clock_usecs());
-	update.AddRect("frame", screen->Frame());
+	update.AddRect("frame", changedScreenFrame);
 	update.AddInt32("mode", screen->ColorSpace());
-
-	fVirtualScreen.UpdateFrame();
 
 	for (Window* window = fAllWindows.FirstWindow(); window != NULL;
 			window = window->NextWindow(kAllWindowList)) {

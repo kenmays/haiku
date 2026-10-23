@@ -680,6 +680,49 @@ Window::SetScreen(const ::Screen* screen)
 	// TODO this assert fails in Desktop::ShowWindow
 	//ASSERT_MULTI_WRITE_LOCKED(fDesktop->ScreenLocker());
 	fScreen = screen;
+
+	if (fDrawingEngine.IsSet() == false || fDesktop == NULL)
+		return;
+
+	const VirtualScreen& virtualScreen = fDesktop->VirtualScreen();
+	HWInterface* interface = fDesktop->HWInterface();
+	int32 offsetX = 0;
+	int32 offsetY = 0;
+	bool useOutput = false;
+
+	if (screen != NULL) {
+		for (int32 i = 0; i < virtualScreen.CountScreens(); i++) {
+			if (virtualScreen.ScreenAt(i) != screen)
+				continue;
+
+			BRect frame = virtualScreen.ScreenFrameAt(i);
+			if (virtualScreen.ScreenScaleAt(i) == 1.0f
+				&& frame.IsValid()
+				&& frame.left == floorf(frame.left)
+				&& frame.top == floorf(frame.top)
+				&& (double)frame.left >= -2147483647.0
+				&& (double)frame.left <= 2147483647.0
+				&& (double)frame.top >= -2147483647.0
+				&& (double)frame.top <= 2147483647.0) {
+				interface = screen->HWInterface();
+				offsetX = -((int32)frame.left);
+				offsetY = -((int32)frame.top);
+				useOutput = true;
+			}
+			break;
+		}
+	}
+
+	// Keep the single-output fallback for outputs whose scaled renderer is not
+	// implemented yet. For unit-scale outputs, bind this window's engine to
+	// the selected hardware interface and translate global coordinates into
+	// that framebuffer's local coordinate space.
+	fDrawingEngine->SetHWInterface(interface);
+	if (fDrawingEngine->LockExclusiveAccess()) {
+		fDrawingEngine->SetRendererOffset(useOutput ? offsetX : 0,
+			useOutput ? offsetY : 0);
+		fDrawingEngine->UnlockExclusiveAccess();
+	}
 }
 
 

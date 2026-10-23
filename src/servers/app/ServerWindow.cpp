@@ -2582,6 +2582,31 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 		return;
 	}
 
+	std::vector<BPrivate::LinkReceiver*> replayReceivers;
+	bool replayReady = true;
+	try {
+		replayReceivers.reserve(targets.size());
+		for (size_t i = 0; i < targets.size(); i++) {
+			BPrivate::LinkReceiver* replay
+				= new(nothrow) BPrivate::LinkReceiver(-1);
+			if (replay == NULL || replay->SetToMessage(message, messageSize) != B_OK) {
+				delete replay;
+				replayReady = false;
+				break;
+			}
+			replayReceivers.push_back(replay);
+		}
+	} catch (...) {
+		replayReady = false;
+	}
+	if (!replayReady) {
+		for (size_t i = 0; i < replayReceivers.size(); i++)
+			delete replayReceivers[i];
+		free(message);
+		_DispatchViewDrawingMessageSingleOutput(code, link);
+		return;
+	}
+
 	const ::Screen* originalScreen = fWindow->Screen();
 	// Check that each target can be bound before drawing to any of them. This
 	// avoids the common partial-update case where one engine lock fails after
@@ -2602,12 +2627,16 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 	if (!restored)
 		restored = fWindow->BindDrawingEngineOutput(originalScreen);
 	if (!restored) {
+		for (size_t i = 0; i < replayReceivers.size(); i++)
+			delete replayReceivers[i];
 		free(message);
 		debug_printf("ServerWindow %s: failed to restore drawing output after preflight\n",
 			Title());
 		return;
 	}
 	if (!canBindAll) {
+		for (size_t i = 0; i < replayReceivers.size(); i++)
+			delete replayReceivers[i];
 		free(message);
 		_DispatchViewDrawingMessageSingleOutput(code, link);
 		return;
@@ -2623,14 +2652,10 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 		if (screen == NULL)
 			continue;
 
-		BPrivate::LinkReceiver replay(-1);
-		if (replay.SetToMessage(message, messageSize) != B_OK)
-			break;
-
 		if (!fWindow->BindDrawingEngineOutput(screen))
 			continue;
 
-		_DispatchViewDrawingMessageSingleOutput(code, replay,
+		_DispatchViewDrawingMessageSingleOutput(code, *replayReceivers[i],
 			!renderedAny);
 		renderedAny = true;
 	}
@@ -2639,6 +2664,8 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 	restored = fWindow->BindDrawingEngineOutput(originalScreen);
 	if (!restored)
 		restored = fWindow->BindDrawingEngineOutput(originalScreen);
+	for (size_t i = 0; i < replayReceivers.size(); i++)
+		delete replayReceivers[i];
 	free(message);
 	if (!restored) {
 		debug_printf("ServerWindow %s: failed to restore drawing output after fan-out\n",

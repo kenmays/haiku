@@ -2581,6 +2581,28 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 	}
 
 	const ::Screen* originalScreen = fWindow->Screen();
+	// Check that each target can be bound before drawing to any of them. This
+	// avoids the common partial-update case where one engine lock fails after
+	// earlier outputs have already been painted.
+	bool canBindAll = true;
+	for (size_t i = 0; i < targets.size(); i++) {
+		if (!virtualScreen.IsRenderTargetCurrent(targets[i])) {
+			canBindAll = false;
+			break;
+		}
+		Screen* screen = virtualScreen.ScreenByID(targets[i].screenID);
+		if (screen == NULL || !fWindow->SetScreen(screen)) {
+			canBindAll = false;
+			break;
+		}
+	}
+	if (!fWindow->SetScreen(originalScreen))
+		canBindAll = false;
+	if (!canBindAll) {
+		_DispatchViewDrawingMessageSingleOutput(code, link);
+		return;
+	}
+
 	bool renderedAny = false;
 	for (size_t i = 0; i < targets.size(); i++) {
 		const OutputRenderTarget& target = targets[i];

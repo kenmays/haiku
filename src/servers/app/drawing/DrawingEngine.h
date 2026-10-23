@@ -201,6 +201,7 @@ public:
 			// Offsets global drawing coordinates into one output's framebuffer.
 			// Damage and copy invalidation are translated by the same offset.
 			void			SetRendererOffset(int32 offsetX, int32 offsetY);
+			void			SetRendererScale(float scale);
 
 private:
 	friend class DrawTransaction;

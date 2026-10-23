@@ -171,10 +171,15 @@ VirtualScreen::AddScreen(Screen* screen, const ScreenConfigurations& configurati
 	bool hasInfo = screen->GetMonitorInfo(info) == B_OK;
 	currentConfigurations.Set(screen->ID(), hasInfo ? &info : NULL, screen->Frame(), mode);
 
-	// Keep the existing drawing backend as the compatibility path, while
-	// recording each screen's logical placement independently.
-	fDrawingEngine = screen->GetDrawingEngine();
-	fHWInterface = screen->HWInterface();
+	// Keep the first screen as the deterministic legacy rendering backend.
+	// The current Desktop and Window paths still expose a single DrawingEngine;
+	// replacing it on every AddScreen() would silently route all drawing to
+	// whichever output happened to be enumerated last. Per-output rendering
+	// must be introduced at the call sites, not by changing this fallback.
+	if (fScreenList.CountItems() == 0) {
+		fDrawingEngine = screen->GetDrawingEngine();
+		fHWInterface = screen->HWInterface();
+	}
 
 	BRect screenFrame = screen->Frame();
 	if (fScene.CountOutputs() > 0) {

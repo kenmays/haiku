@@ -132,10 +132,11 @@ public:
 		if (fDirty.CountRects() == 0)
 			return;
 
-		BRegion deviceDirty;
-		transform_region_to_framebuffer(fDirty, deviceDirty,
-			fEngine->fRendererScale, fEngine->fRendererOffsetX,
-			fEngine->fRendererOffsetY, fEngine->fPainter->Bounds());
+		BRegion deviceDirty(fDirty);
+		deviceDirty.OffsetBy(fEngine->fRendererOffsetX,
+			fEngine->fRendererOffsetY);
+		BRegion framebufferBounds(fEngine->fPainter->Bounds());
+		deviceDirty.IntersectWith(&framebufferBounds);
 		if (fEngine->fGraphicsCard != NULL
 			&& deviceDirty.CountRects() > 0) {
 			fOverlaysHidden
@@ -153,10 +154,11 @@ public:
 		if (fDirty.CountRects() == 0)
 			return;
 
-		BRegion deviceDirty;
-		transform_region_to_framebuffer(fDirty, deviceDirty,
-			fEngine->fRendererScale, fEngine->fRendererOffsetX,
-			fEngine->fRendererOffsetY, fEngine->fPainter->Bounds());
+		BRegion deviceDirty(fDirty);
+		deviceDirty.OffsetBy(fEngine->fRendererOffsetX,
+			fEngine->fRendererOffsetY);
+		BRegion framebufferBounds(fEngine->fPainter->Bounds());
+		deviceDirty.IntersectWith(&framebufferBounds);
 		if (fEngine->fGraphicsCard != NULL
 			&& deviceDirty.CountRects() > 0) {
 			fOverlaysHidden
@@ -175,10 +177,11 @@ public:
 		if (fDirty.CountRects() == 0)
 			return;
 
-		BRegion deviceDirty;
-		transform_region_to_framebuffer(fDirty, deviceDirty,
-			fEngine->fRendererScale, fEngine->fRendererOffsetX,
-			fEngine->fRendererOffsetY, fEngine->fPainter->Bounds());
+		BRegion deviceDirty(fDirty);
+		deviceDirty.OffsetBy(fEngine->fRendererOffsetX,
+			fEngine->fRendererOffsetY);
+		BRegion framebufferBounds(fEngine->fPainter->Bounds());
+		deviceDirty.IntersectWith(&framebufferBounds);
 		if (fEngine->fGraphicsCard != NULL
 			&& deviceDirty.CountRects() > 0) {
 			fOverlaysHidden
@@ -191,10 +194,11 @@ public:
 	{
 		if (fEngine->fCopyToFront) {
 
-		BRegion deviceDirty;
-		transform_region_to_framebuffer(fDirty, deviceDirty,
-			fEngine->fRendererScale, fEngine->fRendererOffsetX,
-			fEngine->fRendererOffsetY, fEngine->fPainter->Bounds());
+		BRegion deviceDirty(fDirty);
+		deviceDirty.OffsetBy(fEngine->fRendererOffsetX,
+			fEngine->fRendererOffsetY);
+		BRegion framebufferBounds(fEngine->fPainter->Bounds());
+		deviceDirty.IntersectWith(&framebufferBounds);
 			if (fEngine->fGraphicsCard != NULL
 				&& deviceDirty.CountRects() > 0) {
 				fEngine->fGraphicsCard->InvalidateRegion(deviceDirty);

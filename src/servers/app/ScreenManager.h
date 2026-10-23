@@ -12,6 +12,9 @@
 #include <AutoDeleter.h>
 #include <Looper.h>
 #include <ObjectList.h>
+#include <Node.h>
+
+#include <vector>
 
 
 
@@ -65,10 +68,12 @@ class ScreenManager : public BLooper {
 		};
 
 		void			_ScanDrivers();
+		void			_WatchGraphicsDirectories(const char* path);
 		screen_item*	_AddHWInterface(HWInterface* interface);
 
 		int32				fNextScreenID;
 		int32				fKnownGraphicsDeviceCount;
+		std::vector<node_ref>		fWatchedDirectories;
 			BObjectList<screen_item, true>	fScreenList;
 };
 

@@ -113,7 +113,8 @@ public:
 			fEngine->fRendererOffsetY);
 		BRegion framebufferBounds(fEngine->fPainter->Bounds());
 		deviceDirty.IntersectWith(&framebufferBounds);
-		if (deviceDirty.CountRects() > 0) {
+		if (fEngine->fGraphicsCard != NULL
+			&& deviceDirty.CountRects() > 0) {
 			fOverlaysHidden
 				= fEngine->fGraphicsCard->HideFloatingOverlays(
 					deviceDirty.Frame());
@@ -133,7 +134,8 @@ public:
 			fEngine->fRendererOffsetY);
 		BRegion framebufferBounds(fEngine->fPainter->Bounds());
 		deviceDirty.IntersectWith(&framebufferBounds);
-		if (deviceDirty.CountRects() > 0) {
+		if (fEngine->fGraphicsCard != NULL
+			&& deviceDirty.CountRects() > 0) {
 			fOverlaysHidden
 				= fEngine->fGraphicsCard->HideFloatingOverlays(
 					deviceDirty.Frame());
@@ -154,7 +156,8 @@ public:
 			fEngine->fRendererOffsetY);
 		BRegion framebufferBounds(fEngine->fPainter->Bounds());
 		deviceDirty.IntersectWith(&framebufferBounds);
-		if (deviceDirty.CountRects() > 0) {
+		if (fEngine->fGraphicsCard != NULL
+			&& deviceDirty.CountRects() > 0) {
 			fOverlaysHidden
 				= fEngine->fGraphicsCard->HideFloatingOverlays(
 					deviceDirty.Frame());
@@ -169,10 +172,12 @@ public:
 				fEngine->fRendererOffsetY);
 			BRegion framebufferBounds(fEngine->fPainter->Bounds());
 			deviceDirty.IntersectWith(&framebufferBounds);
-			if (deviceDirty.CountRects() > 0)
+			if (fEngine->fGraphicsCard != NULL
+				&& deviceDirty.CountRects() > 0) {
 				fEngine->fGraphicsCard->InvalidateRegion(deviceDirty);
+			}
 		}
-		if (fOverlaysHidden)
+		if (fOverlaysHidden && fEngine->fGraphicsCard != NULL)
 			fEngine->fGraphicsCard->ShowFloatingOverlays();
 	}
 

@@ -71,6 +71,7 @@
 #include "RenderingBuffer.h"
 #include "ServerApp.h"
 #include "ServerBitmap.h"
+#include "Screen.h"
 #include "ServerPicture.h"
 #include "ServerProtocol.h"
 #include "Window.h"
@@ -2533,8 +2534,32 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 
 	// NOTE: the region is not copied, Painter keeps a pointer,
 	// that's why you need to use the clipping only for as long
-	// as you have it locked
-	drawingEngine->ConstrainClippingRegion(&fCurrentDrawingRegion);
+	// as you have it locked. A window's engine is currently bound to one
+	// output at a time, so do not let global desktop damage belonging to
+	// another output be translated into this output's framebuffer.
+	BRegion outputDrawingRegion;
+	const BRegion* drawingRegion = &fCurrentDrawingRegion;
+	const ::Screen* output = fWindow->Screen();
+	const VirtualScreen& virtualScreen = fDesktop->VirtualScreen();
+	if (output != NULL) {
+		for (int32 i = 0; i < virtualScreen.CountScreens(); i++) {
+			if (virtualScreen.ScreenAt(i) != output)
+				continue;
+
+			// The current renderer only supports output-local translation
+			// for unit-scale outputs. Keep the legacy path for scaled outputs
+			// until their drawing primitives can be transformed as well.
+			if (virtualScreen.ScreenScaleAt(i) == 1.0f
+				&& output->HWInterface() != NULL) {
+				outputDrawingRegion = fCurrentDrawingRegion;
+				outputDrawingRegion.IntersectWith(
+					virtualScreen.ScreenFrameAt(i));
+				drawingRegion = &outputDrawingRegion;
+			}
+			break;
+		}
+	}
+	drawingEngine->ConstrainClippingRegion(drawingRegion);
 
 	switch (code) {
 		case AS_STROKE_LINE:

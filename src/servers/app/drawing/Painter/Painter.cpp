@@ -207,7 +207,14 @@ Painter::Painter()
 	fSubpixelPrecise(false),
 	fValidClipping(false),
 	fAttached(false),
+	fIdentityTransform(true),
 
+	fTransform(),
+	fBaseTransform(),
+	fTransformOffsetX(0),
+	fTransformOffsetY(0),
+	fRendererScale(1.0f),
+	fScaledClippingRegion(),
 	fPenSize(1.0),
 	fClippingRegion(NULL),
 	fDrawingMode(B_OP_COPY),
@@ -353,12 +360,35 @@ Painter::SetDrawState(const DrawState* state, int32 xOffset, int32 yOffset)
 
 
 // ConstrainClipping
-void
+oid
 Painter::ConstrainClipping(const BRegion* region)
 {
-	fClippingRegion = region;
-	fBaseRenderer.set_clipping_region(const_cast<BRegion*>(region));
-	fValidClipping = region->Frame().IsValid() && fAttached;
+	if (region == NULL) {
+		fClippingRegion = NULL;
+		fBaseRenderer.set_clipping_region(NULL);
+		fValidClipping = false;
+		return;
+	}
+
+	if (fRendererScale == 1.0f) {
+		fClippingRegion = region;
+	} else {
+		// Clip in device-pixel coordinates after applying the output scale.
+		// Keep this copy owned by Painter because the caller's region is borrowed.
+		fScaledClippingRegion.MakeEmpty();
+		for (int32 i = 0; i < region->CountRects(); i++) {
+			BRect rect = region->RectAt(i);
+			rect.left = floorf(rect.left * fRendererScale);
+			rect.top = floorf(rect.top * fRendererScale);
+			rect.right = ceilf(rect.right * fRendererScale);
+			rect.bottom = ceilf(rect.bottom * fRendererScale);
+			fScaledClippingRegion.Include(rect);
+		}
+		fClippingRegion = &fScaledClippingRegion;
+	}
+
+	fBaseRenderer.set_clipping_region(const_cast<BRegion*>(fClippingRegion));
+	fValidClipping = fClippingRegion->Frame().IsValid() && fAttached;
 
 	if (fValidClipping) {
 		clipping_rect cb = fClippingRegion->FrameInt();
@@ -368,17 +398,56 @@ Painter::ConstrainClipping(const BRegion* region)
 }
 
 
-void
+oid
 Painter::SetTransform(BAffineTransform transform, int32 xOffset, int32 yOffset)
 {
-	fIdentityTransform = transform.IsIdentity();
-	if (!fIdentityTransform) {
-		fTransform = agg::trans_affine_translation(-xOffset, -yOffset);
-		fTransform *= agg::trans_affine(transform.sx, transform.shy,
-			transform.shx, transform.sy, transform.tx, transform.ty);
-		fTransform *= agg::trans_affine_translation(xOffset, yOffset);
+	fBaseTransform = transform;
+	fTransformOffsetX = xOffset;
+	fTransformOffsetY = yOffset;
+	_UpdateTransform();
+}
+
+
+void
+Painter::SetRendererScale(float scale)
+{
+	if (!(scale > 0.0f) || scale != scale)
+		scale = 1.0f;
+	if (fRendererScale == scale)
+		return;
+
+	fRendererScale = scale;
+	_UpdateTransform();
+	if (fClippingRegion != NULL)
+		ConstrainClipping(fClippingRegion);
+}
+
+
+void
+Painter::_UpdateTransform()
+{
+	fIdentityTransform = fBaseTransform.IsIdentity() && fRendererScale == 1.0f;
+	if (!fBaseTransform.IsIdentity()) {
+		fTransform = agg::trans_affine_translation(-fTransformOffsetX,
+			-fTransformOffsetY);
+		fTransform *= agg::trans_affine(fBaseTransform.sx,
+			fBaseTransform.shy, fBaseTransform.shx, fBaseTransform.sy,
+			fBaseTransform.tx, fBaseTransform.ty);
+		fTransform *= agg::trans_affine_translation(fTransformOffsetX,
+			fTransformOffsetY);
 	} else {
 		fTransform.reset();
+	}
+
+	// Apply the output transform after the view transform so all geometry,
+	// text and bitmap operations share the same logical-to-pixel mapping.
+	if (fRendererScale != 1.0f) {
+		fTransform.sx *= fRendererScale;
+		fTransform.shy *= fRendererScale;
+		fTransform.shx *= fRendererScale;
+		fTransform.sy *= fRendererScale;
+		fTransform.tx *= fRendererScale;
+		fTransform.ty *= fRendererScale;
 	}
 }
 

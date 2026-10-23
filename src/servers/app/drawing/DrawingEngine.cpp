@@ -1599,7 +1599,7 @@ DrawingEngine::SetRendererOffset(int32 offsetX, int32 offsetY)
 void
 DrawingEngine::SetRendererScale(float scale)
 {
-	if (!(scale > 0.0f) || scale != scale)
+	if (!(scale > 0.0f) || !isfinite(scale)
 		scale = 1.0f;
 	fRendererScale = scale;
 	fPainter->SetRendererScale(scale);

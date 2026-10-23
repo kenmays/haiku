@@ -13,7 +13,6 @@
 #include <Looper.h>
 #include <ObjectList.h>
 
-#include <vector>
 
 
 class BMessage;

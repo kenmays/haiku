@@ -582,16 +582,6 @@ VirtualScreen::IsRenderTargetCurrent(const OutputRenderTarget& target) const
 		&& target.pixelWidth > 0 && target.pixelHeight > 0;
 }
 
-/*REMOVE_OLD_VALIDATOR_TAIL*/
-	/*
-	return output != NULL && output->enabled
-		&& output->frame.left == target.frame.left
-		&& output->frame.top == target.frame.top
-		&& output->frame.right == target.frame.right
-		&& output->frame.bottom == target.frame.bottom
-		&& output->scale == target.scale;
-}
-*/
 
 
 status_t

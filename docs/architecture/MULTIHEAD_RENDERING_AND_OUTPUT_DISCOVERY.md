@@ -12,6 +12,13 @@ and invalid targets are skipped without invalidating surviving outputs.
 Geometry-level regression tests cover negative origins, mixed-scale pixel
 clipping, and largest-intersection output selection.
 
+The private `LinkReceiver` API now supports copying the complete selected
+message (header and payload) and installing a validated copy as a replay
+message. Replay buffers are bounded by the protocol's maximum message size and
+the header is copied before validation to avoid alignment assumptions. This
+provides a stable payload source for a future fan-out dispatcher; it is not
+currently used to execute commands on multiple engines.
+
 This does **not** yet fan out a client drawing command to multiple engines.
 The dispatcher still consumes and executes each protocol message once against
 the window's currently bound engine. Do not treat the plan as a completed

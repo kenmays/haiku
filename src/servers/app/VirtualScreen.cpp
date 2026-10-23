@@ -382,10 +382,17 @@ VirtualScreen::ScreenAt(int32 index) const
 Screen*
 VirtualScreen::ScreenByID(int32 id) const
 {
-	for (int32 i = fScreenList.CountItems(); i-- > 0;) {
-		screen_item* item = fScreenList.ItemAt(i);
+	// The legacy main-screen token is an alias for the primary output, not
+	// a wildcard. Check it before walking the list; combining it with the ID
+	// comparison below made every output match and returned the last one.
+	if (id == B_MAIN_SCREEN_ID.id) {
+		screen_item* item = fScreenList.ItemAt(0);
+		return item != NULL ? item->screen : NULL;
+	}
 
-		if (item->screen->ID() == id || id == B_MAIN_SCREEN_ID.id)
+	for (int32 i = 0; i < fScreenList.CountItems(); i++) {
+		screen_item* item = fScreenList.ItemAt(i);
+		if (item != NULL && item->screen->ID() == id)
 			return item->screen;
 	}
 

@@ -2596,8 +2596,15 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			break;
 		}
 	}
-	if (!fWindow->BindDrawingEngineOutput(originalScreen))
-		canBindAll = false;
+	bool restored = fWindow->BindDrawingEngineOutput(originalScreen);
+	if (!restored)
+		restored = fWindow->BindDrawingEngineOutput(originalScreen);
+	if (!restored) {
+		free(message);
+		debug_printf("ServerWindow %s: failed to restore drawing output after preflight\\n",
+			Title());
+		return;
+	}
 	if (!canBindAll) {
 		free(message);
 		_DispatchViewDrawingMessageSingleOutput(code, link);
@@ -2618,7 +2625,7 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 		if (replay.SetToMessage(message, messageSize) != B_OK)
 			break;
 
-		if (!fWindow->SetScreen(screen))
+		if (!fWindow->BindDrawingEngineOutput(screen))
 			continue;
 
 		_DispatchViewDrawingMessageSingleOutput(code, replay);
@@ -2626,8 +2633,15 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 	}
 
 	// Restore the engine binding without changing the window's logical output.
-	fWindow->SetScreen(originalScreen);
+	restored = fWindow->BindDrawingEngineOutput(originalScreen);
+	if (!restored)
+		restored = fWindow->BindDrawingEngineOutput(originalScreen);
 	free(message);
+	if (!restored) {
+		debug_printf("ServerWindow %s: failed to restore drawing output after fan-out\\n",
+			Title());
+		return;
+	}
 
 	if (!renderedAny)
 		_DispatchViewDrawingMessageSingleOutput(code, link);

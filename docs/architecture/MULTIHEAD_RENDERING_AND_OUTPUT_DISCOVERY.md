@@ -10,7 +10,9 @@ clips, physical-pixel damage, scale, and integer renderer offsets. Each target
 is stamped with `MultiheadScene::Generation()`, which advances on effective
 output membership, frame, scale, and enabled-state changes; no-op updates do
 not invalidate batches. A consumer must compare the target generation again
-before execution and rebuild or discard stale work. The
+before execution and rebuild or discard stale work. The existing single-output
+server dispatcher now checks this token before accepting the clip, so a stale
+output binding cannot reintroduce an unrestricted global clip. The
 `ServerWindow` drawing path uses it to constrain the currently bound output,
 and invalid targets are skipped without invalidating surviving outputs.
 Geometry-level regression tests cover negative origins, mixed-scale pixel

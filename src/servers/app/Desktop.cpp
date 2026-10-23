@@ -590,7 +590,11 @@ Desktop::Init()
 	// graphics devices. Keep the legacy direct stream for one output, and use
 	// the input server's global stream when multiple outputs are active.
 	EventStream* stream = NULL;
+	BRect firstScreenFrame = fVirtualScreen.ScreenFrameAt(0);
 	if (fVirtualScreen.CountScreens() == 1
+		&& firstScreenFrame.IsValid()
+		&& firstScreenFrame.left == 0.0f
+		&& firstScreenFrame.top == 0.0f
 		&& fVirtualScreen.HWInterface() != NULL) {
 		stream = fVirtualScreen.HWInterface()->CreateEventStream();
 	}

@@ -260,7 +260,7 @@ ScreenManager::_ScanDrivers()
 			AccelerantHWInterface* accelerant =
 				dynamic_cast<AccelerantHWInterface*>(
 					item->screen->HWInterface());
-			if (accelerant != NULL && accelerant->DevicePath()[0] == '\\0') {
+			if (accelerant != NULL && accelerant->DevicePath()[0] == '\0') {
 				RemoveScreen(item->screen.Get());
 				continue;
 			}

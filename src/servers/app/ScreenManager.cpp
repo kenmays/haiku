@@ -253,7 +253,10 @@ ScreenManager::_ScanDrivers()
 			try {
 				fFailedGraphicsDevices.push_back(i);
 			} catch (...) {
-				// The current scan still proceeds to later device indices.
+				// If we cannot remember this failed index, leave the boundary
+				// here so the next scan retries it rather than losing the device.
+				fKnownGraphicsDeviceCount = i;
+				break;
 			}
 		}
 		fKnownGraphicsDeviceCount = i + 1;

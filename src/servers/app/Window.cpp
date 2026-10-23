@@ -1921,8 +1921,8 @@ Window::_TriggerContentRedraw(BRegion& dirty, const BRegion& expose)
 			return;
 	}
 
-	// Single-output compatibility path (also used for scaled outputs until
-	// view rasterization and damage scaling are implemented).
+	// Use the legacy single-output path when an output's pixel origin cannot
+	// be represented by the renderer's integer framebuffer offset.
 	if (fDrawingEngine->LockParallelAccess()) {
 		bool copyToFrontEnabled = fDrawingEngine->CopyToFrontEnabled();
 		fDrawingEngine->SetCopyToFrontEnabled(true);
@@ -1971,15 +1971,20 @@ Window::_DrawBorder()
 				continue;
 
 			intersectsOutput = true;
-			if (virtualScreen.ScreenScaleAt(i) != 1.0f
+			float scale = virtualScreen.ScreenScaleAt(i);
+			double pixelLeft = (double)frame.left * scale;
+			double pixelTop = (double)frame.top * scale;
+			if (!(scale > 0.0f) || !isfinite(scale)
 				|| screen->HWInterface() == NULL
 				|| !frame.IsValid()
 				|| frame.left != floorf(frame.left)
 				|| frame.top != floorf(frame.top)
-				|| (double)frame.left < -2147483647.0
-				|| (double)frame.left > 2147483647.0
-				|| (double)frame.top < -2147483647.0
-				|| (double)frame.top > 2147483647.0) {
+				|| pixelLeft < -2147483647.0
+				|| pixelLeft > 2147483647.0
+				|| pixelTop < -2147483647.0
+				|| pixelTop > 2147483647.0
+				|| pixelLeft != floor(pixelLeft)
+				|| pixelTop != floor(pixelTop)) {
 				canFanOut = false;
 				break;
 			}

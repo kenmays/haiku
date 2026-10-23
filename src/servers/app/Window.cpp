@@ -674,10 +674,17 @@ Window::ReloadDecor()
 }
 
 
-bool
+void
 Window::SetScreen(const ::Screen* screen)
 {
 	fScreen = screen;
+	_SetDrawingEngineOutput(screen);
+}
+
+
+bool
+Window::BindDrawingEngineOutput(const ::Screen* screen)
+{
 	return _SetDrawingEngineOutput(screen);
 }
 

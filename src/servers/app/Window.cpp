@@ -18,6 +18,7 @@
 
 #include <new>
 #include <stdio.h>
+#include <math.h>
 
 #include <Debug.h>
 
@@ -1778,13 +1779,44 @@ Window::_TriggerContentRedraw(BRegion& dirty, const BRegion& expose)
 	_TransferToUpdateSession(&dirty);
 
 	if (expose.CountRects() > 0) {
-		// draw exposed region background right now to avoid stamping artifacts
-		if (fDrawingEngine->LockParallelAccess()) {
-			bool copyToFrontEnabled = fDrawingEngine->CopyToFrontEnabled();
-			fDrawingEngine->SetCopyToFrontEnabled(true);
-			fTopView->Draw(fDrawingEngine.Get(), &expose, &fContentRegion, true);
-			fDrawingEngine->SetCopyToFrontEnabled(copyToFrontEnabled);
-			fDrawingEngine->UnlockParallelAccess();
+		// Draw exposed content on every intersecting output. View geometry and
+		// clipping remain in global desktop coordinates; the drawing engine's
+		// renderer offset maps those coordinates to the output framebuffer.
+		const VirtualScreen& virtualScreen = fDesktop->VirtualScreen();
+		for (int32 i = 0; i < virtualScreen.CountScreens(); i++) {
+			Screen* screen = virtualScreen.ScreenAt(i);
+			if (screen == NULL || virtualScreen.ScreenScaleAt(i) != 1.0f)
+				continue;
+
+			BRect frame = virtualScreen.ScreenFrameAt(i);
+			if (!frame.IsValid()
+				|| frame.left != floorf(frame.left)
+				|| frame.top != floorf(frame.top)
+				|| (double)frame.left < -2147483648.0
+				|| (double)frame.left > 2147483647.0
+				|| (double)frame.top < -2147483648.0
+				|| (double)frame.top > 2147483647.0) {
+				continue;
+			}
+
+			BRegion screenExpose(expose);
+			BRegion outputBounds(frame);
+			screenExpose.IntersectWith(&outputBounds);
+			if (screenExpose.CountRects() == 0)
+				continue;
+
+			DrawingEngine* engine = screen->GetDrawingEngine();
+			if (engine == NULL || !engine->LockParallelAccess())
+				continue;
+
+			bool copyToFrontEnabled = engine->CopyToFrontEnabled();
+			engine->SetRendererOffset(-((int32)frame.left),
+				-((int32)frame.top));
+			engine->SetCopyToFrontEnabled(true);
+			fTopView->Draw(engine, &screenExpose, &fContentRegion, true);
+			engine->SetCopyToFrontEnabled(copyToFrontEnabled);
+			engine->SetRendererOffset(0, 0);
+			engine->UnlockParallelAccess();
 		}
 	}
 }

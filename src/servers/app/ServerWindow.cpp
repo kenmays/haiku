@@ -2601,7 +2601,7 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 		restored = fWindow->BindDrawingEngineOutput(originalScreen);
 	if (!restored) {
 		free(message);
-		debug_printf("ServerWindow %s: failed to restore drawing output after preflight\\n",
+		debug_printf("ServerWindow %s: failed to restore drawing output after preflight\n",
 			Title());
 		return;
 	}
@@ -2638,7 +2638,7 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 		restored = fWindow->BindDrawingEngineOutput(originalScreen);
 	free(message);
 	if (!restored) {
-		debug_printf("ServerWindow %s: failed to restore drawing output after fan-out\\n",
+		debug_printf("ServerWindow %s: failed to restore drawing output after fan-out\n",
 			Title());
 		return;
 	}

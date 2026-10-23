@@ -3755,6 +3755,11 @@ Desktop::_ScreenChanged(Screen* screen)
 
 		BRect frame = screen->Frame();
 		BRect oldFrame = fVirtualScreen.ScreenFrameAt(i);
+		float scale = fVirtualScreen.ScreenScaleAt(i);
+		if (scale > 0.0f && scale != 1.0f) {
+			frame.right = frame.left + frame.Width() / scale;
+			frame.bottom = frame.top + frame.Height() / scale;
+		}
 		frame.OffsetTo(oldFrame.left, oldFrame.top);
 		fVirtualScreen.SetScreenFrame(i, frame);
 		break;

@@ -431,7 +431,7 @@ AccelerantHWInterface::_OpenAccelerant(int device)
 
 
 bool
-AccelerantHWInterface::HasMultiOutputSupport() const
+AccelerantHWInterface::HasMultiOutputEnumeration() const
 {
 	return fAccGetMultiOutputCount != NULL && fAccGetMultiOutputInfo != NULL;
 }
@@ -440,7 +440,7 @@ AccelerantHWInterface::HasMultiOutputSupport() const
 uint32
 AccelerantHWInterface::MultiOutputCount() const
 {
-	if (!HasMultiOutputSupport())
+	if (!HasMultiOutputEnumeration())
 		return 1;
 
 	return fAccGetMultiOutputCount();
@@ -453,7 +453,7 @@ AccelerantHWInterface::GetMultiOutputInfo(uint32 index,
 {
 	if (info == NULL)
 		return B_BAD_VALUE;
-	if (!HasMultiOutputSupport())
+	if (!HasMultiOutputEnumeration())
 		return B_NOT_SUPPORTED;
 
 	uint32 count = fAccGetMultiOutputCount();
@@ -470,6 +470,7 @@ AccelerantHWInterface::GetMultiOutputInfo(uint32 index,
 		return status;
 
 	if (output.size < offsetof(accelerant_output_info, reserved)
+		|| output.size > sizeof(output)
 		|| output.version != B_MULTI_OUTPUT_INFO_VERSION) {
 		return B_BAD_DATA;
 	}

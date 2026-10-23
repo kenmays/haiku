@@ -29,6 +29,8 @@ class HWInterface;
 struct OutputRenderTarget {
 	int32 screenID;
 	uint64 generation;
+	int32 pixelWidth;
+	int32 pixelHeight;
 	BRect frame;
 	float scale;
 	int32 rendererOffsetX;
@@ -40,6 +42,8 @@ struct OutputRenderTarget {
 		:
 		screenID(-1),
 		generation(0),
+		pixelWidth(0),
+		pixelHeight(0),
 		frame(0, 0, 0, 0),
 		scale(1.0f),
 		rendererOffsetX(0),
@@ -53,6 +57,8 @@ struct OutputRenderTarget {
 		:
 		screenID(id),
 		generation(0),
+		pixelWidth(0),
+		pixelHeight(0),
 		frame(outputFrame),
 		scale(outputScale),
 		rendererOffsetX(offsetX),

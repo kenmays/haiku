@@ -184,28 +184,51 @@ VirtualScreen::AddScreen(Screen* screen, const ScreenConfigurations& configurati
 	}
 
 	BRect screenFrame = screen->Frame();
+	float screenScale = 1.0f;
 
-	// Restore a saved desktop position when it is still usable. Old settings
-	// can contain overlapping origin-based frames, so fall back to a stable
-	// horizontal layout if the restored frame intersects an output already
-	// added to this virtual screen.
+	// Restore saved logical geometry, not only its origin. A saved frame whose
+	// extent differs from the physical mode encodes the output's scale. Require
+	// consistent horizontal/vertical ratios so stale or malformed settings do
+	// not accidentally distort the desktop.
 	screen_configuration* configuration = configurations.BestFit(
 		screen->ID(), hasInfo ? &info : NULL);
 	bool useSavedFrame = configuration != NULL
 		&& configuration->frame.IsValid();
 	if (useSavedFrame) {
-		screenFrame.OffsetTo(configuration->frame.LeftTop());
+		const BRect& savedFrame = configuration->frame;
+		if (savedFrame.Width() > 0.0f && savedFrame.Height() > 0.0f
+			&& mode.virtual_width > 1 && mode.virtual_height > 1) {
+			float scaleX = (mode.virtual_width - 1.0f) / savedFrame.Width();
+			float scaleY = (mode.virtual_height - 1.0f) / savedFrame.Height();
+			float tolerance = std::max(0.01f,
+				std::max(fabsf(scaleX), fabsf(scaleY)) * 0.01f);
+			if (std::isfinite(scaleX) && std::isfinite(scaleY)
+				&& scaleX > 0.0f && scaleY > 0.0f
+				&& fabsf(scaleX - scaleY) <= tolerance) {
+				screenScale = (scaleX + scaleY) * 0.5f;
+				screenFrame.right = screenFrame.left
+					+ (mode.virtual_width - 1.0f) / screenScale;
+				screenFrame.bottom = screenFrame.top
+					+ (mode.virtual_height - 1.0f) / screenScale;
+			}
+		}
+
+		screenFrame.OffsetTo(savedFrame.LeftTop());
 		if (fScene.OutputWithLargestIntersection(screenFrame) >= 0)
 			useSavedFrame = false;
 	}
 
-	if (!useSavedFrame && fScene.CountOutputs() > 0) {
-		BRect bounds = fScene.Bounds();
-		screenFrame.OffsetTo(bounds.right + 1, bounds.top);
+	if (!useSavedFrame) {
+		screenScale = 1.0f;
+		screenFrame = screen->Frame();
+		if (fScene.CountOutputs() > 0) {
+			BRect bounds = fScene.Bounds();
+			screenFrame.OffsetTo(bounds.right + 1, bounds.top);
+		}
 	}
 	item->frame = screenFrame;
 
-	status = fScene.AddOutput(screen->ID(), item->frame);
+	status = fScene.AddOutput(screen->ID(), item->frame, screenScale);
 	if (status != B_OK) {
 		delete item;
 		return status;

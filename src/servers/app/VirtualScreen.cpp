@@ -494,6 +494,58 @@ VirtualScreen::ClipRegionToScreen(const Screen* screen,
 
 
 status_t
+VirtualScreen::BuildRenderTarget(const Screen* screen,
+	const BRegion& globalDamage, OutputRenderTarget& target) const
+{
+	if (screen == NULL || globalDamage.CountRects() <= 0)
+		return B_BAD_VALUE;
+
+	bool found = false;
+	for (int32 i = 0; i < fScreenList.CountItems(); i++) {
+		screen_item* item = fScreenList.ItemAt(i);
+		if (item == NULL || item->screen != screen)
+			continue;
+		found = true;
+		break;
+	}
+	if (!found || screen->HWInterface() == NULL)
+		return B_NAME_NOT_FOUND;
+
+	const DisplayOutput* output = fScene.OutputByID(screen->ID());
+	if (output == NULL || !output->enabled || !output->frame.IsValid()
+		|| !std::isfinite(output->scale) || output->scale <= 0.0f) {
+		return B_NAME_NOT_FOUND;
+	}
+
+	BRegion logicalClip(globalDamage);
+	BRegion outputBounds(output->frame);
+	logicalClip.IntersectWith(&outputBounds);
+	if (logicalClip.CountRects() <= 0)
+		return B_NAME_NOT_FOUND;
+
+	double pixelLeft = (double)output->frame.left * output->scale;
+	double pixelTop = (double)output->frame.top * output->scale;
+	if (!std::isfinite(pixelLeft) || !std::isfinite(pixelTop)
+		|| pixelLeft < -2147483647.0 || pixelLeft > 2147483647.0
+		|| pixelTop < -2147483647.0 || pixelTop > 2147483647.0
+		|| pixelLeft != floor(pixelLeft) || pixelTop != floor(pixelTop)) {
+		return B_BAD_VALUE;
+	}
+
+	BRegion pixelClip;
+	status_t status = ClipRegionToScreen(screen, logicalClip, pixelClip);
+	if (status != B_OK)
+		return status;
+	if (pixelClip.CountRects() <= 0)
+		return B_NAME_NOT_FOUND;
+
+	target = OutputRenderTarget(screen->ID(), output->frame, output->scale,
+		-(int32)pixelLeft, -(int32)pixelTop, logicalClip, pixelClip);
+	return B_OK;
+}
+
+
+status_t
 VirtualScreen::BuildRenderPlan(const BRegion& globalDamage,
 	std::vector<OutputRenderTarget>& targets) const
 {

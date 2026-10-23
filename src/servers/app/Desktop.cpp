@@ -1628,6 +1628,12 @@ Desktop::MoveWindowBy(Window* window, float x, float y, int32 workspace)
 				&& (double)frame.top <= 2147483647.0) {
 				BRegion outputBounds(frame);
 				copyRegion.IntersectWith(&outputBounds);
+
+				// Only blit source pixels whose translated destination also
+				// remains inside this output's framebuffer.
+				BRegion destinationSourceBounds(frame);
+				destinationSourceBounds.OffsetBy(-(int32)x, -(int32)y);
+				copyRegion.IntersectWith(&destinationSourceBounds);
 				canBlit = true;
 			}
 			break;

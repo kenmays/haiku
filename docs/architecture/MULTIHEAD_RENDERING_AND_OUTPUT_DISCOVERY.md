@@ -10,7 +10,9 @@ clips, physical-pixel damage, scale, and integer renderer offsets. Each target
 is stamped with `MultiheadScene::Generation()`, which advances on effective
 output membership, frame, scale, and enabled-state changes; no-op updates do
 not invalidate batches. A consumer must compare the target generation again
-before execution and rebuild or discard stale work. The existing single-output
+before execution and rebuild or discard stale work. Targets also snapshot the
+framebuffer's virtual pixel dimensions, and validation rejects a target after
+a mode-size change even when its logical frame and scale stayed the same. The existing single-output
 server dispatcher now checks this token before accepting the clip, so a stale
 output binding cannot reintroduce an unrestricted global clip. The
 `ServerWindow` drawing path uses it to constrain the currently bound output,

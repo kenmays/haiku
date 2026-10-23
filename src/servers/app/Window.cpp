@@ -1947,8 +1947,9 @@ Window::_DrawBorder()
 			const ::Screen* screen = virtualScreen.ScreenAt(i);
 			if (screen == NULL)
 				continue;
+			BRect frame = virtualScreen.ScreenFrameAt(i);
 			BRegion outputDamage(*dirtyBorderRegion);
-			BRegion outputBounds(virtualScreen.ScreenFrameAt(i));
+			BRegion outputBounds(frame);
 			outputDamage.IntersectWith(&outputBounds);
 			if (outputDamage.CountRects() == 0)
 				continue;

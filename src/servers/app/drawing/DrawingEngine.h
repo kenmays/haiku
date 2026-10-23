@@ -216,6 +216,7 @@ private:
 			bool			fCopyToFront;
 			int32			fRendererOffsetX;
 			int32			fRendererOffsetY;
+			float			fRendererScale;
 };
 
 #endif // DRAWING_ENGINE_H_

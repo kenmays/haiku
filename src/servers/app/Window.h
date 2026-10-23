@@ -109,7 +109,7 @@ public:
 
 			bool				ReloadDecor();
 
-			void				SetScreen(const ::Screen* screen);
+			bool				SetScreen(const ::Screen* screen);
 			const ::Screen*		Screen() const;
 
 			// setting and getting the "hard" clipping, you need to have

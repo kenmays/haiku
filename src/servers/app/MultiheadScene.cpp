@@ -263,6 +263,7 @@ MultiheadScene::ClipRegionToOutput(int32 id, const BRegion& globalRegion,
 	clipped.IntersectWith(&outputBounds);
 
 	BRegion converted;
+	converted.MakeEmpty();
 	const double scale = output->scale;
 	const int32 maxX = pixelWidth - 1;
 	const int32 maxY = pixelHeight - 1;

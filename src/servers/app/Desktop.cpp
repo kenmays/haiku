@@ -3826,6 +3826,17 @@ Desktop::ScreenRemoved(Screen* screen)
 
 	screenLocker.Unlock();
 
+	// A removed Screen is about to be destroyed by ScreenManager. Rebind every
+	// window that still references it, including hidden windows and windows in
+	// other workspaces, before the callback returns and releases that object.
+	// Otherwise a later redraw or mode notification can dereference a stale
+	// Screen pointer. Choose the replacement using the current scene geometry.
+	for (Window* window = fAllWindows.FirstWindow(); window != NULL;
+			window = window->NextWindow(kAllWindowList)) {
+		if (window->Screen() == screen)
+			window->SetScreen(_DetermineScreenFor(window->Frame()));
+	}
+
 	if (fVirtualScreen.CountScreens() > 0) {
 		// Rebuild clipping, background and input bounds against a live output.
 		_ScreenChanged(fVirtualScreen.ScreenAt(0));

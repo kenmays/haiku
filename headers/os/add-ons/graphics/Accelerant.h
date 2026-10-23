@@ -140,8 +140,11 @@ typedef struct {
  * Optional multi-output accelerant interface.
  *
  * Output IDs are stable for the lifetime of a device connection and must not
- * be derived from the current enumeration index. The app_server must query
- * each hook independently and treat a missing hook as unsupported; legacy
+ * be derived from the current enumeration index. The info hook receives a
+ * caller-initialized size/version record and must not write beyond size.
+ * The generation hook changes when output connectivity, modes, or capabilities
+ * change. Present damage rectangles use framebuffer-local physical pixels and
+ * inclusive right/bottom coordinates. Missing hooks mean unsupported; legacy
  * accelerants continue to expose their existing single-output interface.
  */
 #define B_MULTI_OUTPUT_INFO_VERSION 1

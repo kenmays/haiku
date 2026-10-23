@@ -202,6 +202,7 @@ public:
 			// Damage and copy invalidation are translated by the same offset.
 			void			SetRendererOffset(int32 offsetX, int32 offsetY);
 			void			SetRendererScale(float scale);
+			float			RendererScale() const { return fRendererScale; }
 
 private:
 	friend class DrawTransaction;

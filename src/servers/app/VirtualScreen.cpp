@@ -532,17 +532,18 @@ VirtualScreen::BuildRenderTarget(const Screen* screen,
 		return B_BAD_VALUE;
 	}
 
-	BRegion pixelClip;
-	status_t status = ClipRegionToScreen(screen, logicalClip, pixelClip);
-	if (status != B_OK)
-		return status;
-	if (pixelClip.CountRects() <= 0)
-		return B_NAME_NOT_FOUND;
-
 	display_mode mode;
 	screen->GetMode(mode);
 	if (mode.virtual_width == 0 || mode.virtual_height == 0)
 		return B_BAD_VALUE;
+
+	BRegion pixelClip;
+	status_t status = fScene.ClipRegionToOutput(screen->ID(), logicalClip,
+		mode.virtual_width, mode.virtual_height, pixelClip);
+	if (status != B_OK)
+		return status;
+	if (pixelClip.CountRects() <= 0)
+		return B_NAME_NOT_FOUND;
 
 	target = OutputRenderTarget(screen->ID(), output->frame, output->scale,
 		-(int32)pixelLeft, -(int32)pixelTop, logicalClip, pixelClip);
@@ -630,17 +631,15 @@ VirtualScreen::BuildRenderPlan(const BRegion& globalDamage,
 				continue;
 			}
 
-			BRegion pixelClip;
-			status_t status = ClipRegionToScreen(item->screen, logicalClip,
-				pixelClip);
-			if (status != B_OK)
-				continue;
-			if (pixelClip.CountRects() <= 0)
-				continue;
-
 			display_mode mode;
 			item->screen->GetMode(mode);
 			if (mode.virtual_width == 0 || mode.virtual_height == 0)
+				continue;
+
+			BRegion pixelClip;
+			status_t status = fScene.ClipRegionToOutput(item->screen->ID(),
+				logicalClip, mode.virtual_width, mode.virtual_height, pixelClip);
+			if (status != B_OK || pixelClip.CountRects() <= 0)
 				continue;
 
 			OutputRenderTarget target(item->screen->ID(), output->frame,

@@ -2478,8 +2478,138 @@ fDesktop->LockSingleWindow();
 	The desktop clipping must be read locked when entering this method.
 	Requires a valid fCurrentView.
 */
+// Only stateless drawing commands are replayed here. Commands that update
+// the logical pen, execute pictures/layers, or require protocol replies stay
+// on the canonical single-output path until their state semantics are split
+// from rendering.
+static bool
+is_replay_safe_drawing_command(int32 code)
+{
+	switch (code) {
+		case AS_VIEW_INVERT_RECT:
+		case AS_STROKE_RECT:
+		case AS_FILL_RECT:
+		case AS_STROKE_RECT_GRADIENT:
+		case AS_FILL_RECT_GRADIENT:
+		case AS_VIEW_DRAW_BITMAP:
+		case AS_STROKE_ARC:
+		case AS_FILL_ARC:
+		case AS_STROKE_ARC_GRADIENT:
+		case AS_FILL_ARC_GRADIENT:
+		case AS_STROKE_BEZIER:
+		case AS_FILL_BEZIER:
+		case AS_STROKE_BEZIER_GRADIENT:
+		case AS_FILL_BEZIER_GRADIENT:
+		case AS_STROKE_ELLIPSE:
+		case AS_FILL_ELLIPSE:
+		case AS_STROKE_ELLIPSE_GRADIENT:
+		case AS_FILL_ELLIPSE_GRADIENT:
+		case AS_STROKE_ROUNDRECT:
+		case AS_FILL_ROUNDRECT:
+		case AS_STROKE_ROUNDRECT_GRADIENT:
+		case AS_FILL_ROUNDRECT_GRADIENT:
+		case AS_STROKE_TRIANGLE:
+		case AS_FILL_TRIANGLE:
+		case AS_STROKE_TRIANGLE_GRADIENT:
+		case AS_FILL_TRIANGLE_GRADIENT:
+		case AS_STROKE_POLYGON:
+		case AS_FILL_POLYGON:
+		case AS_STROKE_POLYGON_GRADIENT:
+		case AS_FILL_POLYGON_GRADIENT:
+		case AS_STROKE_SHAPE:
+		case AS_FILL_SHAPE:
+		case AS_STROKE_SHAPE_GRADIENT:
+		case AS_FILL_SHAPE_GRADIENT:
+		case AS_FILL_REGION:
+		case AS_FILL_REGION_GRADIENT:
+		case AS_STROKE_LINEARRAY:
+			return true;
+		default:
+			return false;
+	}
+}
+
+
 void
 ServerWindow::_DispatchViewDrawingMessage(int32 code,
+	BPrivate::LinkReceiver& link)
+{
+	const VirtualScreen& virtualScreen = fDesktop->VirtualScreen();
+	if (!is_replay_safe_drawing_command(code) || link.NeedsReply()
+		|| fIsDirectlyAccessing || fCurrentView == NULL
+		|| fCurrentView->Picture() != NULL
+		|| virtualScreen.CountScreens() < 2) {
+		_DispatchViewDrawingMessageSingleOutput(code, link);
+		return;
+	}
+
+	_UpdateCurrentDrawingRegion();
+	if (fCurrentDrawingRegion.CountRects() <= 0) {
+		_DispatchViewDrawingMessageSingleOutput(code, link);
+		return;
+	}
+
+	std::vector<OutputRenderTarget> targets;
+	if (virtualScreen.BuildRenderPlan(fCurrentDrawingRegion, targets) != B_OK
+		|| targets.size() < 2) {
+		_DispatchViewDrawingMessageSingleOutput(code, link);
+		return;
+	}
+
+	// Do not partially fan out if any intersected output cannot be represented
+	// by the current renderer or framebuffer. The single-output path remains
+	// the compatibility fallback until every opcode has replay-safe semantics.
+	int32 intersectingScreens = 0;
+	for (int32 i = 0; i < virtualScreen.CountScreens(); i++) {
+		BRegion intersection(fCurrentDrawingRegion);
+		BRegion outputBounds(virtualScreen.ScreenFrameAt(i));
+		intersection.IntersectWith(&outputBounds);
+		if (intersection.CountRects() > 0)
+			intersectingScreens++;
+	}
+	if ((size_t)intersectingScreens != targets.size()) {
+		_DispatchViewDrawingMessageSingleOutput(code, link);
+		return;
+	}
+
+	char* message = NULL;
+	int32 messageSize = 0;
+	if (link.CopyCurrentMessage(&message, &messageSize) != B_OK) {
+		_DispatchViewDrawingMessageSingleOutput(code, link);
+		return;
+	}
+
+	const ::Screen* originalScreen = fWindow->Screen();
+	bool renderedAny = false;
+	for (size_t i = 0; i < targets.size(); i++) {
+		const OutputRenderTarget& target = targets[i];
+		if (!virtualScreen.IsRenderTargetCurrent(target))
+			break;
+
+		Screen* screen = virtualScreen.ScreenByID(target.screenID);
+		if (screen == NULL)
+			continue;
+
+		BPrivate::LinkReceiver replay(-1);
+		if (replay.SetToMessage(message, messageSize) != B_OK)
+			break;
+
+		fWindow->SetScreen(screen);
+		_DispatchViewDrawingMessageSingleOutput(code, replay);
+		renderedAny = true;
+	}
+
+	// Always restore the window's logical output binding after the batch.
+	fWindow->SetScreen(originalScreen);
+	free(message);
+
+	if (!renderedAny)
+		_DispatchViewDrawingMessageSingleOutput(code, link);
+}
+
+
+void
+ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 	BPrivate::LinkReceiver &link)
 {
 	if (!fCurrentView->IsVisible() || !fWindow->IsVisible()) {

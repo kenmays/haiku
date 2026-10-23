@@ -392,8 +392,17 @@ VirtualScreen::ClipRegionToScreen(const Screen* screen,
 	// rather than silently clipping or shifting damage by a pixel.
 	BRect frame = item->frame;
 	if (!frame.IsValid() || frame.left != floorf(frame.left)
-		|| frame.top != floorf(frame.top))
+		|| frame.top != floorf(frame.top)
+		|| (double)frame.left < -2147483648.0
+		|| (double)frame.left > 2147483647.0
+		|| (double)frame.top < -2147483648.0
+		|| (double)frame.top > 2147483647.0
+		|| (double)frame.right < -2147483648.0
+		|| (double)frame.right > 2147483647.0
+		|| (double)frame.bottom < -2147483648.0
+		|| (double)frame.bottom > 2147483647.0) {
 		return B_BAD_VALUE;
+	}
 
 	BRegion clipped(globalRegion);
 	BRegion outputBounds(frame);

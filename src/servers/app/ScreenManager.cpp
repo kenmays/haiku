@@ -195,6 +195,37 @@ ScreenManager::ReleaseScreen(Screen* screen)
 }
 
 
+status_t
+ScreenManager::RemoveScreen(Screen* screen)
+{
+	if (screen == NULL)
+		return B_BAD_VALUE;
+
+	BAutolock locker(this);
+
+	for (int32 i = 0; i < fScreenList.CountItems(); i++) {
+		screen_item* item = fScreenList.ItemAt(i);
+		if (item->screen.Get() != screen)
+			continue;
+
+		// Detach the screen from its owner before destroying its HWInterface.
+		// The owner callback must not call back into ScreenManager; VirtualScreen
+		// removal deliberately avoids ReleaseScreen() for this reason.
+		if (item->owner != NULL) {
+			ScreenOwner* owner = item->owner;
+			owner->ScreenRemoved(screen);
+			item->owner = NULL;
+		}
+
+		item = fScreenList.RemoveItem(i);
+		delete item;
+		return B_OK;
+	}
+
+	return B_ENTRY_NOT_FOUND;
+}
+
+
 void
 ScreenManager::ScreenChanged(Screen* screen)
 {

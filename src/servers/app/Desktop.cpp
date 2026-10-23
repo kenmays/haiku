@@ -3769,6 +3769,36 @@ Desktop::_ResumeDirectFrameBufferAccess()
 }
 
 
+void
+Desktop::ScreenRemoved(Screen* screen)
+{
+	// ScreenManager serializes removal. Detach scene references before it
+	// destroys the Screen and its hardware interface.
+	AutoWriteLocker windowLocker(fWindowLock);
+	AutoWriteLocker screenLocker(fScreenLock);
+
+	status_t status = fVirtualScreen.RemoveScreen(screen);
+	if (status != B_OK)
+		return;
+
+	screenLocker.Unlock();
+
+	if (fVirtualScreen.CountScreens() > 0) {
+		// Rebuild clipping, background and input bounds against a live output.
+		_ScreenChanged(fVirtualScreen.ScreenAt(0));
+		return;
+	}
+
+	// A machine can temporarily have no usable output during device teardown.
+	fVirtualScreen.UpdateFrame();
+	fScreenRegion.MakeEmpty();
+	fBackgroundRegion.MakeEmpty();
+	gInputManager->UpdateScreenBounds(BRect(0, 0, -1, -1));
+	BRegion available;
+	_RebuildClippingForAllWindows(available);
+}
+
+
 bool
 Desktop::ScreenAdded(Screen* screen)
 {

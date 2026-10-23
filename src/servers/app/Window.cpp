@@ -1858,7 +1858,14 @@ Window::_TriggerContentRedraw(BRegion& dirty, const BRegion& expose)
 
 		intersectsOutput = true;
 		if (virtualScreen.ScreenScaleAt(i) != 1.0f
-			|| screen->HWInterface() == NULL) {
+			|| screen->HWInterface() == NULL
+			|| !frame.IsValid()
+			|| frame.left != floorf(frame.left)
+			|| frame.top != floorf(frame.top)
+			|| (double)frame.left < -2147483647.0
+			|| (double)frame.left > 2147483647.0
+			|| (double)frame.top < -2147483647.0
+			|| (double)frame.top > 2147483647.0) {
 			canFanOut = false;
 			break;
 		}
@@ -1948,7 +1955,14 @@ Window::_DrawBorder()
 
 			intersectsOutput = true;
 			if (virtualScreen.ScreenScaleAt(i) != 1.0f
-				|| screen->HWInterface() == NULL) {
+				|| screen->HWInterface() == NULL
+				|| !frame.IsValid()
+				|| frame.left != floorf(frame.left)
+				|| frame.top != floorf(frame.top)
+				|| (double)frame.left < -2147483647.0
+				|| (double)frame.left > 2147483647.0
+				|| (double)frame.top < -2147483647.0
+				|| (double)frame.top > 2147483647.0) {
 				canFanOut = false;
 				break;
 			}

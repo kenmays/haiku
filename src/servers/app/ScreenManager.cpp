@@ -244,11 +244,8 @@ ScreenManager::_ScanDrivers()
 	for (int32 i = fKnownGraphicsDeviceCount; i < deviceCount; i++) {
 		HWInterface* interface = new(nothrow) AccelerantHWInterface(i);
 		if (interface == NULL) {
-			try {
-				fFailedGraphicsDevices.push_back(i);
-			} catch (...) {
-				// Allocation pressure must not make later devices undiscoverable.
-			}
+			// Leave the enumeration boundary here. The next scan will retry
+			// this index through the normal new-device loop.
 			break;
 		}
 

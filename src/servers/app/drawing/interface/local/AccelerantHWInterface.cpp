@@ -281,15 +281,12 @@ AccelerantHWInterface::_RecursiveScan(const char* directory, int deviceNumber, i
 
 /*!	Opens a graphics device for read-write access.
 
-	The \a deviceNumber is relative to the number of graphics devices that can
-	be opened. One represents the first card that can be opened (not necessarily
-	the first one listed in the directory).
+	The \a deviceNumber is a zero-based index into graphics device nodes,
+	excluding the VESA and framebuffer fallback devices. The legacy search mode
+	continues to later indices when a device cannot be opened; indexed mode
+	opens only the requested node so each Screen owns a distinct interface.
 
-	Graphics drivers must be able to be opened more than once, so we really get
-	the first working entry.
-
-	\param deviceNumber Number identifying which graphics card to open
-	       (1 for first card).
+	\param deviceNumber Zero-based graphics device index.
 
 	\return The file descriptor of the opened graphics device.
 */

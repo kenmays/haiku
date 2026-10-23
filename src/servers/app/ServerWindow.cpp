@@ -2580,6 +2580,12 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 		return;
 	}
 
+	const ::Screen* originalScreen = fWindow->Screen();
+	if (originalScreen == NULL) {
+		_DispatchViewDrawingMessageSingleOutput(code, link);
+		return;
+	}
+
 	char* message = NULL;
 	int32 messageSize = 0;
 	if (link.CopyCurrentMessage(&message, &messageSize) != B_OK) {
@@ -2610,7 +2616,6 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 		return;
 	}
 
-	const ::Screen* originalScreen = fWindow->Screen();
 	// Check that each target can be bound before drawing to any of them. This
 	// avoids the common partial-update case where one engine lock fails after
 	// earlier outputs have already been painted.

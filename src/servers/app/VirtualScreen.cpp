@@ -240,8 +240,9 @@ VirtualScreen::RemoveScreen(Screen* screen)
 		if (status != B_OK)
 			return status;
 
-		gScreenManager->ReleaseScreen(screen);
-
+		// ScreenManager owns the removal transaction and will release this
+		// screen after the owner has detached it. Calling ReleaseScreen() here
+		// would re-enter ScreenManager's lock during a hot-unplug callback.
 		item = fScreenList.RemoveItem(i);
 		delete item;
 

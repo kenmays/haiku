@@ -137,6 +137,16 @@ LinkReceiver::CopyCurrentMessage(char** _buffer, int32* _size) const
 		return B_BAD_VALUE;
 	}
 
+	// A selected message normally comes from GetNextMessage(), but validate
+	// the header again here because this API is the trust boundary for replay
+	// snapshots and must not copy a malformed or partially selected message.
+	message_header header;
+	memcpy(&header, fRecvBuffer + fRecvStart, sizeof(header));
+	if (header.size != fReplySize || header.size < (int32)sizeof(header)
+		|| header.size > (int32)kMaxBufferSize) {
+		return B_BAD_VALUE;
+	}
+
 	char* copy = (char*)malloc(fReplySize);
 	if (copy == NULL)
 		return B_NO_MEMORY;

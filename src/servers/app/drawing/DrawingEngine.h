@@ -198,6 +198,8 @@ public:
 	virtual	BRect			CopyRect(BRect rect, int32 xOffset,
 								int32 yOffset) const;
 
+			// Offsets global drawing coordinates into one output's framebuffer.
+			// Damage and copy invalidation are translated by the same offset.
 			void			SetRendererOffset(int32 offsetX, int32 offsetY);
 
 private:

@@ -362,6 +362,8 @@ private:
 			int32				fTransformOffsetX;
 			int32				fTransformOffsetY;
 			float				fRendererScale;
+			int32				fRendererOffsetX;
+			int32				fRendererOffsetY;
 			BRegion				fScaledClippingRegion;
 			float				fPenSize;
 			const BRegion*		fSourceClippingRegion;

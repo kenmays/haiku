@@ -363,6 +363,46 @@ VirtualScreen::ScreenPixelToGlobal(const Screen* screen, BPoint pixel,
 }
 
 
+status_t
+VirtualScreen::ClipRegionToScreen(const Screen* screen,
+	const BRegion& globalRegion, BRegion& screenRegion) const
+{
+	if (screen == NULL)
+		return B_BAD_VALUE;
+
+	const screen_item* item = NULL;
+	for (int32 i = 0; i < fScreenList.CountItems(); i++) {
+		screen_item* candidate = fScreenList.ItemAt(i);
+		if (candidate != NULL && candidate->screen == screen) {
+			item = candidate;
+			break;
+		}
+	}
+	if (item == NULL)
+		return B_BAD_VALUE;
+
+	const DisplayOutput* output = fScene.OutputByID(screen->ID());
+	if (output == NULL || !output->enabled)
+		return B_ENTRY_NOT_FOUND;
+	if (output->scale != 1.0f)
+		return B_NOT_SUPPORTED;
+
+	// BRegion stores integer pixel coordinates. Refuse fractional origins
+	// rather than silently clipping or shifting damage by a pixel.
+	BRect frame = item->frame;
+	if (!frame.IsValid() || frame.left != floorf(frame.left)
+		|| frame.top != floorf(frame.top))
+		return B_BAD_VALUE;
+
+	BRegion clipped(globalRegion);
+	BRegion outputBounds(frame);
+	clipped.IntersectWith(&outputBounds);
+	clipped.OffsetBy(-((int32)frame.left), -((int32)frame.top));
+	screenRegion = clipped;
+	return B_OK;
+}
+
+
 BRect
 VirtualScreen::ScreenFrameAt(int32 index) const
 {

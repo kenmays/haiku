@@ -539,9 +539,16 @@ VirtualScreen::BuildRenderTarget(const Screen* screen,
 	if (pixelClip.CountRects() <= 0)
 		return B_NAME_NOT_FOUND;
 
+	display_mode mode;
+	screen->GetMode(mode);
+	if (mode.virtual_width == 0 || mode.virtual_height == 0)
+		return B_BAD_VALUE;
+
 	target = OutputRenderTarget(screen->ID(), output->frame, output->scale,
 		-(int32)pixelLeft, -(int32)pixelTop, logicalClip, pixelClip);
 	target.generation = fScene.Generation();
+	target.pixelWidth = mode.virtual_width;
+	target.pixelHeight = mode.virtual_height;
 	return B_OK;
 }
 
@@ -559,6 +566,24 @@ VirtualScreen::IsRenderTargetCurrent(const OutputRenderTarget& target) const
 		return false;
 
 	const DisplayOutput* output = fScene.OutputByID(target.screenID);
+	if (output == NULL || !output->enabled
+		|| output->frame.left != target.frame.left
+		|| output->frame.top != target.frame.top
+		|| output->frame.right != target.frame.right
+		|| output->frame.bottom != target.frame.bottom
+		|| output->scale != target.scale) {
+		return false;
+	}
+
+	display_mode mode;
+	screen->GetMode(mode);
+	return mode.virtual_width == target.pixelWidth
+		&& mode.virtual_height == target.pixelHeight
+		&& target.pixelWidth > 0 && target.pixelHeight > 0;
+}
+
+/*REMOVE_OLD_VALIDATOR_TAIL*/
+	/*
 	return output != NULL && output->enabled
 		&& output->frame.left == target.frame.left
 		&& output->frame.top == target.frame.top
@@ -566,6 +591,7 @@ VirtualScreen::IsRenderTargetCurrent(const OutputRenderTarget& target) const
 		&& output->frame.bottom == target.frame.bottom
 		&& output->scale == target.scale;
 }
+*/
 
 
 status_t
@@ -622,10 +648,17 @@ VirtualScreen::BuildRenderPlan(const BRegion& globalDamage,
 			if (pixelClip.CountRects() <= 0)
 				continue;
 
+			display_mode mode;
+			item->screen->GetMode(mode);
+			if (mode.virtual_width == 0 || mode.virtual_height == 0)
+				continue;
+
 			OutputRenderTarget target(item->screen->ID(), output->frame,
 				output->scale, -(int32)pixelLeft, -(int32)pixelTop,
 				logicalClip, pixelClip);
 			target.generation = fScene.Generation();
+			target.pixelWidth = mode.virtual_width;
+			target.pixelHeight = mode.virtual_height;
 			targets.push_back(target);
 		}
 	} catch (...) {

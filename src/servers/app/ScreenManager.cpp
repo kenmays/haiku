@@ -210,22 +210,27 @@ ScreenManager::ScreenChanged(Screen* screen)
 void
 ScreenManager::_ScanDrivers()
 {
-	HWInterface* interface = NULL;
-
-	// Eventually we will loop through drivers until
-	// one can't initialize in order to support multiple monitors.
-	// For now, we'll just load one and be done with it.
-
-	// ToDo: to make monitoring the driver directory useful, we need more
-	//	power and data here, and should do the scanning on our own
-
 #ifndef HAIKU_TARGET_PLATFORM_LIBBE_TEST
-	bool initDrivers = true;
-	while (initDrivers) {
-		interface = new AccelerantHWInterface();
+	// Enumerate graphics devices independently. The legacy accelerant
+	// constructor searches forward for the first usable device; using it for
+	// every entry would make several Screen objects alias one framebuffer.
+	int32 deviceCount = AccelerantHWInterface::CountGraphicsDevices();
+	for (int32 i = 0; i < deviceCount; i++) {
+		HWInterface* interface = new(nothrow) AccelerantHWInterface(i);
+		if (interface == NULL)
+			break;
 
+		// A failed device must not prevent later device nodes from being tried.
+		// _AddHWInterface takes ownership on success and failure.
 		_AddHWInterface(interface);
-		initDrivers = false;
+	}
+
+	// Preserve VESA/framebuffer fallback when no enumerated device initializes,
+	// including safe-video mode where accelerant enumeration is disabled.
+	if (fScreenList.CountItems() == 0) {
+		HWInterface* interface = new(nothrow) AccelerantHWInterface();
+		if (interface != NULL)
+			_AddHWInterface(interface);
 	}
 #endif
 }

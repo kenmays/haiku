@@ -33,7 +33,7 @@ public:
 			static	status_t		GetGraphicsDevicePath(int32 deviceNumber,
 										BString& path);
 			const char*			DevicePath() const { return fDevicePath.String(); }
-			bool				HasMultiOutputSupport() const;
+			bool				HasMultiOutputEnumeration() const;
 			uint32				MultiOutputCount() const;
 			status_t			GetMultiOutputInfo(uint32 index,
 									accelerant_output_info* info) const;

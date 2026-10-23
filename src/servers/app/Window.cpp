@@ -718,7 +718,9 @@ Window::SetScreen(const ::Screen* screen)
 	// the selected hardware interface and translate global coordinates into
 	// that framebuffer's local coordinate space.
 	fDrawingEngine->SetHWInterface(interface);
-	if (fDrawingEngine->LockExclusiveAccess()) {
+	if (interface == NULL) {
+		fDrawingEngine->SetRendererOffset(0, 0);
+	} else if (fDrawingEngine->LockExclusiveAccess()) {
 		fDrawingEngine->SetRendererOffset(useOutput ? offsetX : 0,
 			useOutput ? offsetY : 0);
 		fDrawingEngine->UnlockExclusiveAccess();

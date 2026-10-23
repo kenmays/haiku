@@ -51,6 +51,7 @@ class ScreenManager : public BLooper {
 							ScreenList& list);
 		void			ReleaseScreens(ScreenList& list);
 		void			ReleaseScreen(Screen* screen);
+		status_t		RemoveScreen(Screen* screen);
 
 		void			ScreenChanged(Screen* screen);
 

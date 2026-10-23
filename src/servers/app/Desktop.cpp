@@ -1536,6 +1536,10 @@ Desktop::MoveWindowBy(Window* window, float x, float y, int32 workspace)
 		return;
 	}
 
+	// Remember the source output before moving. A cross-output move cannot
+	// safely blit between unrelated framebuffers; it must be repainted.
+	const Screen* previousScreen = window->Screen();
+
 	// the dirty region starts with the visible area of the window being moved
 	BRegion newDirtyRegion(window->VisibleRegion());
 
@@ -1562,15 +1566,22 @@ Desktop::MoveWindowBy(Window* window, float x, float y, int32 workspace)
 	// moved into the dirty region (for now)
 	newDirtyRegion.Include(&window->VisibleRegion());
 
-	// NOTE: Having all windows locked should prevent any
-	// problems with locking the drawing engine here.
-	if (GetDrawingEngine()->LockParallelAccess()) {
-		GetDrawingEngine()->CopyRegion(&copyRegion, (int32)x, (int32)y);
-		GetDrawingEngine()->UnlockParallelAccess();
+	// A same-output move can use the window's output-bound drawing engine.
+	// Cross-output moves must repaint both old and new areas instead of
+	// copying coordinates from one framebuffer into another.
+	bool copied = false;
+	if (previousScreen != NULL && window->Screen() == previousScreen) {
+		DrawingEngine* engine = window->GetDrawingEngine();
+		if (engine != NULL && engine->LockParallelAccess()) {
+			engine->CopyRegion(&copyRegion, (int32)x, (int32)y);
+			engine->UnlockParallelAccess();
+			copied = true;
+		}
 	}
+	if (!copied)
+		copyRegion.MakeEmpty();
 
-	// in the dirty region, exclude the parts that we
-	// could move by blitting
+	// Exclude only pixels that were actually moved by blitting.
 	copyRegion.OffsetBy((int32)x, (int32)y);
 	newDirtyRegion.Exclude(&copyRegion);
 

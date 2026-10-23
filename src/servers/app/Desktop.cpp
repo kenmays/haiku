@@ -3769,6 +3769,26 @@ Desktop::_ResumeDirectFrameBufferAccess()
 }
 
 
+bool
+Desktop::ScreenAdded(Screen* screen)
+{
+	// Hotplug callbacks arrive on the screen-manager thread. Serialize the
+	// virtual-screen update with normal window and screen configuration work.
+	AutoWriteLocker windowLocker(fWindowLock);
+	AutoWriteLocker screenLocker(fScreenLock);
+
+	status_t status = fVirtualScreen.AddScreen(screen,
+		fWorkspaces[fCurrentWorkspace].StoredScreenConfiguration(),
+		fWorkspaces[fCurrentWorkspace].CurrentScreenConfiguration());
+	if (status != B_OK)
+		return false;
+
+	screenLocker.Unlock();
+	_ScreenChanged(screen);
+	return true;
+}
+
+
 void
 Desktop::ScreenChanged(Screen* screen)
 {

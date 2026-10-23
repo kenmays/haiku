@@ -274,7 +274,16 @@ MultiheadScene::ClipRegionToOutput(int32 id, const BRegion& globalRegion,
 		double right = std::ceil(((double)rect.right - frame.left) * scale);
 		double bottom = std::ceil(((double)rect.bottom - frame.top) * scale);
 
-		// Round damage outwards, then clamp to the actual pixel dimensions.
+		// Discard damage that lies wholly outside the framebuffer before
+		// clamping. Clamping first would collapse an out-of-bounds rectangle
+		// onto the last row or column and spuriously dirty edge pixels.
+		if (right < 0.0 || bottom < 0.0 || left > (double)maxX
+			|| top > (double)maxY) {
+			continue;
+		}
+
+		// Round damage outwards, then clamp the intersecting portion to the
+		// actual pixel dimensions.
 		left = std::max(0.0, std::min((double)maxX, left));
 		top = std::max(0.0, std::min((double)maxY, top));
 		right = std::max(0.0, std::min((double)maxX, right));

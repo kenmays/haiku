@@ -595,58 +595,20 @@ VirtualScreen::BuildRenderPlan(const BRegion& globalDamage,
 	try {
 		for (int32 i = 0; i < fScreenList.CountItems(); i++) {
 			screen_item* item = fScreenList.ItemAt(i);
-			if (item == NULL || item->screen == NULL
-				|| item->screen->HWInterface() == NULL) {
+			if (item == NULL || item->screen == NULL)
+				continue;
+
+			OutputRenderTarget target;
+			status_t status = BuildRenderTarget(item->screen, globalDamage,
+				target);
+			if (status == B_NAME_NOT_FOUND)
+				continue;
+			if (status != B_OK) {
+				// A malformed target must not be used, but one output with an
+				// unsupported mapping must not prevent other outputs rendering.
 				continue;
 			}
 
-			const DisplayOutput* output
-				= fScene.OutputByID(item->screen->ID());
-			if (output == NULL || !output->enabled
-				|| !std::isfinite(output->scale) || output->scale <= 0.0f
-				|| !output->frame.IsValid()) {
-				continue;
-			}
-
-			BRegion logicalClip(globalDamage);
-			BRegion outputBounds(output->frame);
-			logicalClip.IntersectWith(&outputBounds);
-			if (logicalClip.CountRects() <= 0)
-				continue;
-
-			// DrawingEngine's renderer offset is applied after scale. Reject
-			// origins that cannot be represented exactly as integer pixels;
-			// silently rounding here would make adjacent outputs disagree at
-			// their shared logical boundary.
-			double pixelLeft = (double)output->frame.left * output->scale;
-			double pixelTop = (double)output->frame.top * output->scale;
-			if (!std::isfinite(pixelLeft) || !std::isfinite(pixelTop)
-				|| pixelLeft < -2147483647.0 || pixelLeft > 2147483647.0
-				|| pixelTop < -2147483647.0 || pixelTop > 2147483647.0
-				|| pixelLeft != floor(pixelLeft)
-				|| pixelTop != floor(pixelTop)) {
-				// This output cannot be represented by the current renderer
-				// transform. Keep other outputs renderable.
-				continue;
-			}
-
-			display_mode mode;
-			item->screen->GetMode(mode);
-			if (mode.virtual_width == 0 || mode.virtual_height == 0)
-				continue;
-
-			BRegion pixelClip;
-			status_t status = fScene.ClipRegionToOutput(item->screen->ID(),
-				logicalClip, mode.virtual_width, mode.virtual_height, pixelClip);
-			if (status != B_OK || pixelClip.CountRects() <= 0)
-				continue;
-
-			OutputRenderTarget target(item->screen->ID(), output->frame,
-				output->scale, -(int32)pixelLeft, -(int32)pixelTop,
-				logicalClip, pixelClip);
-			target.generation = fScene.Generation();
-			target.pixelWidth = mode.virtual_width;
-			target.pixelHeight = mode.virtual_height;
 			targets.push_back(target);
 		}
 	} catch (...) {
@@ -656,7 +618,6 @@ VirtualScreen::BuildRenderPlan(const BRegion& globalDamage,
 
 	return B_OK;
 }
-
 
 BRect
 VirtualScreen::ScreenFrameAt(int32 index) const

@@ -66,6 +66,10 @@ enum {
 	B_GET_MULTI_OUTPUT_FRAME_BUFFER_CONFIG,
 	B_GET_MULTI_OUTPUT_EDID_INFO,
 	B_GET_MULTI_OUTPUT_GENERATION,
+	B_PRESENT_MULTI_OUTPUT,
+	B_SET_MULTI_OUTPUT_CURSOR_SHAPE,
+	B_MOVE_MULTI_OUTPUT_CURSOR,
+	B_SHOW_MULTI_OUTPUT_CURSOR,
 
 	/* cursor managment */
 	B_MOVE_CURSOR = 0x200,				/* optional */
@@ -385,6 +389,14 @@ typedef status_t (*get_multi_output_frame_buffer_config)(uint64 outputID,
 typedef status_t (*get_multi_output_edid_info)(uint64 outputID, void* info,
 	uint32 size, uint32* _version);
 typedef status_t (*get_multi_output_generation)(uint64* generation);
+typedef status_t (*present_multi_output)(uint64 outputID,
+	const fill_rect_params* damageRects, uint32 count);
+typedef status_t (*set_multi_output_cursor_shape)(uint64 outputID,
+	uint16 width, uint16 height, uint16 hotX, uint16 hotY,
+	const uint8* andMask, const uint8* xorMask);
+typedef status_t (*move_multi_output_cursor)(uint64 outputID, uint16 x,
+	uint16 y);
+typedef status_t (*show_multi_output_cursor)(uint64 outputID, bool isVisible);
 
 typedef sem_id (*accelerant_retrace_semaphore)(void);
 

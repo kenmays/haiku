@@ -17,6 +17,7 @@
 #include "AccelerantHWInterface.h"
 
 #include <new>
+#include <stddef.h>
 
 #include <dirent.h>
 #include <edid.h>
@@ -119,6 +120,9 @@ AccelerantHWInterface::AccelerantHWInterface(int32 deviceNumber,
 	// optional accelerant hooks
 	fAccGetTimingConstraints(NULL),
 	fAccProposeDisplayMode(NULL),
+	fAccGetMultiOutputCount(NULL),
+	fAccGetMultiOutputInfo(NULL),
+	fAccGetMultiOutputGeneration(NULL),
 	fAccSetCursorShape(NULL),
 	fAccSetCursorBitmap(NULL),
 	fAccMoveCursor(NULL),
@@ -426,6 +430,69 @@ AccelerantHWInterface::_OpenAccelerant(int device)
 }
 
 
+bool
+AccelerantHWInterface::HasMultiOutputSupport() const
+{
+	return fAccGetMultiOutputCount != NULL && fAccGetMultiOutputInfo != NULL;
+}
+
+
+uint32
+AccelerantHWInterface::MultiOutputCount() const
+{
+	if (!HasMultiOutputSupport())
+		return 1;
+
+	return fAccGetMultiOutputCount();
+}
+
+
+status_t
+AccelerantHWInterface::GetMultiOutputInfo(uint32 index,
+	accelerant_output_info* info) const
+{
+	if (info == NULL)
+		return B_BAD_VALUE;
+	if (!HasMultiOutputSupport())
+		return B_NOT_SUPPORTED;
+
+	uint32 count = fAccGetMultiOutputCount();
+	if (index >= count)
+		return B_BAD_INDEX;
+
+	accelerant_output_info output;
+	memset(&output, 0, sizeof(output));
+	output.size = sizeof(output);
+	output.version = B_MULTI_OUTPUT_INFO_VERSION;
+
+	status_t status = fAccGetMultiOutputInfo(index, &output);
+	if (status != B_OK)
+		return status;
+
+	if (output.size < offsetof(accelerant_output_info, reserved)
+		|| output.version != B_MULTI_OUTPUT_INFO_VERSION) {
+		return B_BAD_DATA;
+	}
+	if (output.connection_state > B_MULTI_OUTPUT_CONNECTION_DISCONNECTED)
+		return B_BAD_DATA;
+
+	*info = output;
+	return B_OK;
+}
+
+
+status_t
+AccelerantHWInterface::GetMultiOutputGeneration(uint64* generation) const
+{
+	if (generation == NULL)
+		return B_BAD_VALUE;
+	if (fAccGetMultiOutputGeneration == NULL)
+		return B_NOT_SUPPORTED;
+
+	return fAccGetMultiOutputGeneration(generation);
+}
+
+
 status_t
 AccelerantHWInterface::_SetupDefaultHooks()
 {
@@ -457,6 +524,14 @@ AccelerantHWInterface::_SetupDefaultHooks()
 	fAccGetMonitorInfo
 		= (get_monitor_info)fAccelerantHook(B_GET_MONITOR_INFO, NULL);
 	fAccGetEDIDInfo = (get_edid_info)fAccelerantHook(B_GET_EDID_INFO, NULL);
+
+	// Optional multi-output capability. Old accelerants return NULL for these.
+	fAccGetMultiOutputCount = (get_multi_output_count)fAccelerantHook(
+		B_GET_MULTI_OUTPUT_COUNT, NULL);
+	fAccGetMultiOutputInfo = (get_multi_output_info)fAccelerantHook(
+		B_GET_MULTI_OUTPUT_INFO, NULL);
+	fAccGetMultiOutputGeneration = (get_multi_output_generation)fAccelerantHook(
+		B_GET_MULTI_OUTPUT_GENERATION, NULL);
 
 	// cursor
 	fAccSetCursorShape

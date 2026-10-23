@@ -31,6 +31,7 @@
 #include <syslog.h>
 #include <new>
 #include <math.h>
+#include <stdlib.h>
 
 #include <AppDefs.h>
 #include <Autolock.h>
@@ -2594,7 +2595,9 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 		if (replay.SetToMessage(message, messageSize) != B_OK)
 			break;
 
-		fWindow->SetScreen(screen);
+		if (!fWindow->SetScreen(screen))
+			continue;
+
 		_DispatchViewDrawingMessageSingleOutput(code, replay);
 		renderedAny = true;
 	}

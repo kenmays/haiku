@@ -1852,9 +1852,9 @@ Window::_TriggerContentRedraw(BRegion& dirty, const BRegion& expose)
 	bool canFanOut = virtualScreen.CountScreens() > 1;
 	bool intersectsOutput = false;
 
-	// Preflight the entire expose region. If any intersected output needs a
-	// scaled renderer or lacks a framebuffer, retain the legacy single-output
-	// path instead of partially painting a multi-output window.
+	// Preflight the entire expose region. If any intersected output lacks a
+	// supported scale/origin mapping, retain the legacy path rather than
+	// partially painting a multi-output window.
 	for (int32 i = 0; i < virtualScreen.CountScreens(); i++) {
 		const ::Screen* screen = virtualScreen.ScreenAt(i);
 		if (screen == NULL)

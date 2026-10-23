@@ -131,6 +131,26 @@ main()
 	assert(scene.SetOutputEnabled(10, true) == B_OK);
 	assert(scene.OutputAtPoint(BPoint(-100, 20)) == 10);
 
+	// Damage may intersect logical output geometry while mapping entirely
+	// beyond a smaller framebuffer. Such damage must not collapse onto the
+	// framebuffer's last pixel during clamping.
+	assert(scene.AddOutput(30, BRect(0, 0, 100, 100), 2.0f) == B_OK);
+	BRegion outsideFramebuffer;
+	outsideFramebuffer.Include(BRect(80, 80, 90, 90));
+	assert(scene.ClipRegionToOutput(30, outsideFramebuffer, 100, 100,
+		pixelDamage) == B_OK);
+	assert(pixelDamage.CountRects() == 0);
+
+	// Partially visible scaled damage is clipped to the physical edge.
+	BRegion partialFramebuffer;
+	partialFramebuffer.Include(BRect(40, 40, 60, 60));
+	assert(scene.ClipRegionToOutput(30, partialFramebuffer, 100, 100,
+		pixelDamage) == B_OK);
+	clippedFrame = pixelDamage.Frame();
+	assert(clippedFrame.left == 80 && clippedFrame.top == 80
+		&& clippedFrame.right == 99 && clippedFrame.bottom == 99);
+	assert(scene.RemoveOutput(30) == B_OK);
+
 	assert(scene.RemoveOutput(10) == B_OK);
 	assert(scene.RemoveOutput(10) == B_ENTRY_NOT_FOUND);
 	assert(scene.OutputByID(20) != NULL);

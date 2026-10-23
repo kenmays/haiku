@@ -224,18 +224,17 @@ ScreenManager::_ScanDrivers()
 	// objects for the same framebuffer.
 	for (int32 i = fKnownGraphicsDeviceCount; i < deviceCount; i++) {
 		HWInterface* interface = new(nothrow) AccelerantHWInterface(i);
-		if (interface == NULL)
+		if (interface == NULL) {
+			// Keep the boundary at this index so a later directory notification
+			// retries it instead of permanently skipping this and later devices.
 			break;
+		}
 
 		// A failed device must not prevent later device nodes from being tried.
 		// _AddHWInterface takes ownership on success and failure.
 		_AddHWInterface(interface);
+		fKnownGraphicsDeviceCount = i + 1;
 	}
-
-	// Remember the enumeration boundary even if one device failed to initialize:
-	// a later node notification should probe only genuinely new indices.
-	if (deviceCount > fKnownGraphicsDeviceCount)
-		fKnownGraphicsDeviceCount = deviceCount;
 
 	// Preserve VESA/framebuffer fallback when no enumerated device initializes,
 	// including safe-video mode where accelerant enumeration is disabled.
@@ -320,15 +319,12 @@ ScreenManager::MessageReceived(BMessage* message)
 			int32 opcode;
 			if (message->FindInt32("opcode", &opcode) == B_OK
 				&& opcode == B_ENTRY_CREATED) {
-				// /dev/graphics is monitored so newly attached graphics devices
-				// can be discovered without restarting app_server. This handles
-				// additions only: removing an active Screen requires coordinated
-				// owner notification and framebuffer teardown, not just dropping
-				// its HWInterface here.
-				if (AccelerantHWInterface::CountGraphicsDevices()
-					> fKnownGraphicsDeviceCount) {
-					_ScanDrivers();
-				}
+				// Retry the scan on every directory addition. Usually the known
+				// boundary makes this a no-op; if interface allocation failed
+				// earlier, it lets us retry the first unprocessed device index.
+				// Removing an active Screen still requires coordinated owner
+				// notification and framebuffer teardown.
+				_ScanDrivers();
 			}
 		}
 #endif

@@ -677,12 +677,16 @@ Window::ReloadDecor()
 void
 Window::SetScreen(const ::Screen* screen)
 {
-	// TODO this assert fails in Desktop::ShowWindow
-	//ASSERT_MULTI_WRITE_LOCKED(fDesktop->ScreenLocker());
 	fScreen = screen;
+	_SetDrawingEngineOutput(screen);
+}
 
+
+bool
+Window::_SetDrawingEngineOutput(const ::Screen* screen)
+{
 	if (fDrawingEngine.IsSet() == false || fDesktop == NULL)
-		return;
+		return false;
 
 	const VirtualScreen& virtualScreen = fDesktop->VirtualScreen();
 	HWInterface* interface = fDesktop->HWInterface();
@@ -703,7 +707,8 @@ Window::SetScreen(const ::Screen* screen)
 				&& (double)frame.left >= -2147483647.0
 				&& (double)frame.left <= 2147483647.0
 				&& (double)frame.top >= -2147483647.0
-				&& (double)frame.top <= 2147483647.0) {
+				&& (double)frame.top <= 2147483647.0
+				&& screen->HWInterface() != NULL) {
 				interface = screen->HWInterface();
 				offsetX = -((int32)frame.left);
 				offsetY = -((int32)frame.top);
@@ -713,10 +718,9 @@ Window::SetScreen(const ::Screen* screen)
 		}
 	}
 
-	// Keep the single-output fallback for outputs whose scaled renderer is not
-	// implemented yet. For unit-scale outputs, bind this window's engine to
-	// the selected hardware interface and translate global coordinates into
-	// that framebuffer's local coordinate space.
+	// The renderer is shared by this window's redraw operations. Rebinding is
+	// performed only between draw transactions, never while it is locked for
+	// parallel painting.
 	fDrawingEngine->SetHWInterface(interface);
 	if (interface == NULL) {
 		fDrawingEngine->SetRendererOffset(0, 0);
@@ -725,6 +729,8 @@ Window::SetScreen(const ::Screen* screen)
 			useOutput ? offsetY : 0);
 		fDrawingEngine->UnlockExclusiveAccess();
 	}
+
+	return useOutput;
 }
 
 

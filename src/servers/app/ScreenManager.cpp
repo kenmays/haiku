@@ -270,8 +270,34 @@ ScreenManager::_AddHWInterface(HWInterface* interface)
 				new(nothrow) ScreenChangeListener(*this, item->screen.Get()));
 			if (item->listener.IsSet()
 				&& interface->AddListener(item->listener.Get())) {
-				if (fScreenList.AddItem(item))
+				if (fScreenList.AddItem(item)) {
+					// Offer a newly discovered screen to each existing owner once.
+					// The owner reports whether it incorporated the output.
+					int32 addedIndex = fScreenList.CountItems() - 1;
+					for (int32 i = 0; i < addedIndex; i++) {
+						screen_item* existing = fScreenList.ItemAt(i);
+						ScreenOwner* owner = existing->owner;
+						if (owner == NULL)
+							continue;
+
+						bool alreadyTried = false;
+						for (int32 j = 0; j < i; j++) {
+							screen_item* previous = fScreenList.ItemAt(j);
+							if (previous->owner == owner) {
+								alreadyTried = true;
+								break;
+							}
+						}
+						if (alreadyTried)
+							continue;
+
+						if (owner->ScreenAdded(item->screen.Get())) {
+							item->owner = owner;
+							break;
+						}
+					}
 					return item;
+				}
 
 				interface->RemoveListener(item->listener.Get());
 			}

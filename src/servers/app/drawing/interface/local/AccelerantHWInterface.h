@@ -27,6 +27,8 @@ public:
 								AccelerantHWInterface(int32 deviceNumber = -1);
 	virtual						~AccelerantHWInterface();
 
+			static	int32			CountGraphicsDevices();
+
 	virtual	status_t			Initialize();
 	virtual	status_t			Shutdown();
 

@@ -1825,21 +1825,83 @@ Window::_TriggerContentRedraw(BRegion& dirty, const BRegion& expose)
 	if (!IsVisible() || dirty.CountRects() == 0 || (fFlags & kWindowScreenFlag) != 0)
 		return;
 
-	// put this into the pending dirty region
-	// to eventually trigger a client redraw
+	// The update region is global desktop geometry and must be transferred
+	// only once even when the backing pixels need to be painted on several
+	// output framebuffers.
 	_TransferToUpdateSession(&dirty);
 
-	if (expose.CountRects() > 0) {
-		// Each Window owns its drawing engine. SetScreen() binds that engine to
-		// the selected output and configures its renderer offset, avoiding
-		// shared mutable renderer state on Screen's drawing engine.
-		if (fDrawingEngine->LockParallelAccess()) {
-			bool copyToFrontEnabled = fDrawingEngine->CopyToFrontEnabled();
-			fDrawingEngine->SetCopyToFrontEnabled(true);
-			fTopView->Draw(fDrawingEngine.Get(), &expose, &fContentRegion, true);
-			fDrawingEngine->SetCopyToFrontEnabled(copyToFrontEnabled);
-			fDrawingEngine->UnlockParallelAccess();
+	if (expose.CountRects() == 0)
+		return;
+
+	const VirtualScreen& virtualScreen = fDesktop->VirtualScreen();
+	bool canFanOut = virtualScreen.CountScreens() > 1;
+	bool intersectsOutput = false;
+
+	// Preflight the entire expose region. If any intersected output needs a
+	// scaled renderer or lacks a framebuffer, retain the legacy single-output
+	// path instead of partially painting a multi-output window.
+	for (int32 i = 0; i < virtualScreen.CountScreens(); i++) {
+		const ::Screen* screen = virtualScreen.ScreenAt(i);
+		if (screen == NULL)
+			continue;
+
+		BRect frame = virtualScreen.ScreenFrameAt(i);
+		BRegion outputRegion(expose);
+		BRegion outputBounds(frame);
+		outputRegion.IntersectWith(&outputBounds);
+		if (outputRegion.CountRects() == 0)
+			continue;
+
+		intersectsOutput = true;
+		if (virtualScreen.ScreenScaleAt(i) != 1.0f
+			|| screen->HWInterface() == NULL) {
+			canFanOut = false;
+			break;
 		}
+	}
+
+	if (canFanOut && intersectsOutput) {
+		bool drewOutput = false;
+		for (int32 i = 0; i < virtualScreen.CountScreens(); i++) {
+			const ::Screen* screen = virtualScreen.ScreenAt(i);
+			if (screen == NULL)
+				continue;
+
+			BRect frame = virtualScreen.ScreenFrameAt(i);
+			BRegion outputExpose(expose);
+			BRegion outputBounds(frame);
+			outputExpose.IntersectWith(&outputBounds);
+			if (outputExpose.CountRects() == 0)
+				continue;
+
+			if (!_SetDrawingEngineOutput(screen))
+				continue;
+
+			if (fDrawingEngine->LockParallelAccess()) {
+				bool copyToFrontEnabled = fDrawingEngine->CopyToFrontEnabled();
+				fDrawingEngine->SetCopyToFrontEnabled(true);
+				fTopView->Draw(fDrawingEngine.Get(), &outputExpose,
+					&fContentRegion, true);
+				fDrawingEngine->SetCopyToFrontEnabled(copyToFrontEnabled);
+				fDrawingEngine->UnlockParallelAccess();
+				drewOutput = true;
+			}
+		}
+
+		// Restore the window's assigned output after the per-output draw pass.
+		_SetDrawingEngineOutput(fScreen);
+		if (drewOutput)
+			return;
+	}
+
+	// Single-output compatibility path (also used for scaled outputs until
+	// view rasterization and damage scaling are implemented).
+	if (fDrawingEngine->LockParallelAccess()) {
+		bool copyToFrontEnabled = fDrawingEngine->CopyToFrontEnabled();
+		fDrawingEngine->SetCopyToFrontEnabled(true);
+		fTopView->Draw(fDrawingEngine.Get(), &expose, &fContentRegion, true);
+		fDrawingEngine->SetCopyToFrontEnabled(copyToFrontEnabled);
+		fDrawingEngine->UnlockParallelAccess();
 	}
 }
 

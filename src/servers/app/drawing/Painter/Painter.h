@@ -366,7 +366,8 @@ private:
 			int32				fRendererOffsetY;
 			BRegion				fScaledClippingRegion;
 			float				fPenSize;
-			const BRegion*		fSourceClippingRegion;
+			BRegion				fSourceClippingRegion;
+			bool				fHasSourceClippingRegion;
 			const BRegion*		fClippingRegion;
 			drawing_mode		fDrawingMode;
 			source_alpha		fAlphaSrcMode;

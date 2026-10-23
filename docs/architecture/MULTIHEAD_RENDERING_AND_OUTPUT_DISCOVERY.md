@@ -28,14 +28,23 @@ the header is copied before validation to avoid alignment assumptions. This
 provides a stable payload source for a future fan-out dispatcher; it is not
 currently used to execute commands on multiple engines.
 
-This does **not** yet fan out a client drawing command to multiple engines.
-The dispatcher still consumes and executes each protocol message once against
-the window's currently bound engine. Do not treat the plan as a completed
-render dispatcher. The remaining work is to parse each message once into a
-replay-safe immutable command representation, execute it on every planned
-target, and preserve canonical state/reply/layer/picture semantics. The plan's
-pixel clip is currently metadata for that execution stage; the existing engine
-continues to consume its logical clip.
+The dispatcher now has an initial, deliberately restricted fan-out path for
+stateless primitive commands: rectangles, gradients, bitmaps, arcs, beziers,
+ellipses, rounded rectangles, triangles, polygons, shapes, regions, and line
+arrays. It snapshots the selected protocol message once, installs a fresh
+receiver for each intersecting output, rebinds the window's drawing engine
+between transactions, validates the target generation, and restores the
+original output binding afterward. Commands that mutate the logical pen,
+require replies, execute pictures/layers, or otherwise lack proven replay-safe
+semantics remain on the legacy single-output path. If the target plan cannot
+cover every intersected output, the batch is not partially fanned out.
+
+This is **not yet complete client drawing fan-out**. Remaining work includes
+all stateful command semantics, reply-producing operations, layer/picture
+playback, copy-region and overlay behavior, robust per-output retry/damage
+recovery, and end-to-end tests. The plan's pixel clip remains metadata for
+execution; the existing engine consumes its logical clip and applies its own
+output transform.
 
 
 ## 1. Client drawing fan-out
@@ -82,7 +91,7 @@ The target selection is based on conservative command bounds, not just the windo
 
 A. Introduce a reusable per-output dispatch plan containing stable output IDs, global clip/damage, pixel clip, and transform metadata. Unit-test plan generation independently of hardware.
 
-B. Route simple primitives and bitmap draws through the plan using independent output contexts. Do not advertise full spanning-window support until text, gradients, shapes, clipping, alpha modes, copy operations, and bitmap paths are covered.
+B. The first restricted replay path now routes stateless primitives and bitmap draws sequentially through the plan. Extend it only after stateful commands have immutable snapshots and tests; do not advertise full spanning-window support until text, gradients, shapes, clipping, alpha modes, copy operations, and bitmap paths are covered.
 
 C. Make state-setting commands canonical-only and ensure render execution uses a snapshot. Add a regression test where a state-setting message precedes a spanning draw and verify each output receives identical state.
 

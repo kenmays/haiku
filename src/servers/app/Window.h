@@ -29,6 +29,7 @@
 
 
 class Window;
+class Screen;
 
 
 typedef	BObjectList<Window>	StackWindows;
@@ -328,6 +329,7 @@ protected:
 			// different types of drawing
 			void				_TriggerContentRedraw(BRegion& dirty,
 									const BRegion& expose = BRegion());
+			bool				_SetDrawingEngineOutput(const ::Screen* screen);
 			void				_DrawBorder();
 
 			// handling update sessions

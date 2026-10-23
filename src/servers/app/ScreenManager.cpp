@@ -252,6 +252,22 @@ ScreenManager::_ScanDrivers()
 	if (deviceCount < 0)
 		deviceCount = 0;
 
+	// If a real graphics node has appeared after the fallback backend was
+	// selected, detach the fallback first so it cannot remain a phantom output.
+	if (deviceCount > 0) {
+		for (int32 i = 0; i < fScreenList.CountItems();) {
+			screen_item* item = fScreenList.ItemAt(i);
+			AccelerantHWInterface* accelerant =
+				dynamic_cast<AccelerantHWInterface*>(
+					item->screen->HWInterface());
+			if (accelerant != NULL && accelerant->DevicePath()[0] == '\\0') {
+				RemoveScreen(item->screen.Get());
+				continue;
+			}
+			i++;
+		}
+	}
+
 	for (int32 i = 0; i < deviceCount; i++) {
 		BString devicePath;
 		if (AccelerantHWInterface::GetGraphicsDevicePath(i, devicePath) != B_OK)

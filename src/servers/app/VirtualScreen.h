@@ -35,7 +35,7 @@ struct OutputRenderTarget {
 	BRegion globalClip;
 	BRegion pixelClip;
 
- 	OutputRenderTarget()
+	OutputRenderTarget()
 		:
 		screenID(-1),
 		frame(0, 0, 0, 0),

@@ -724,11 +724,15 @@ Window::_SetDrawingEngineOutput(const ::Screen* screen)
 	fDrawingEngine->SetHWInterface(interface);
 	if (interface == NULL) {
 		fDrawingEngine->SetRendererOffset(0, 0);
-	} else if (fDrawingEngine->LockExclusiveAccess()) {
-		fDrawingEngine->SetRendererOffset(useOutput ? offsetX : 0,
-			useOutput ? offsetY : 0);
-		fDrawingEngine->UnlockExclusiveAccess();
+		return false;
 	}
+
+	if (!fDrawingEngine->LockExclusiveAccess())
+		return false;
+
+	fDrawingEngine->SetRendererOffset(useOutput ? offsetX : 0,
+		useOutput ? offsetY : 0);
+	fDrawingEngine->UnlockExclusiveAccess();
 
 	return useOutput;
 }

@@ -626,9 +626,10 @@ Desktop::Init()
 
 	BRect initialScreenFrame = fVirtualScreen.ScreenFrameAt(0);
 	if (initialScreenFrame.IsValid()) {
-		UpdateCursorPosition(BPoint(
+		fLastMousePosition.Set(
 			(initialScreenFrame.left + initialScreenFrame.right) / 2,
-			(initialScreenFrame.top + initialScreenFrame.bottom) / 2));
+			(initialScreenFrame.top + initialScreenFrame.bottom) / 2);
+		UpdateCursorPosition(fLastMousePosition);
 	}
 
 	return B_OK;

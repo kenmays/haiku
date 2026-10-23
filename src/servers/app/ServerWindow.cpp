@@ -2546,8 +2546,10 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 		OutputRenderTarget renderTarget;
 		status_t targetStatus = fDesktop->VirtualScreen().BuildRenderTarget(
 			output, fCurrentDrawingRegion, renderTarget);
-		if (targetStatus == B_OK)
+		if (targetStatus == B_OK
+			&& fDesktop->VirtualScreen().IsRenderTargetCurrent(renderTarget)) {
 			outputDrawingRegion = renderTarget.globalClip;
+		}
 	}
 	// An absent, invalid, or concurrently detached output leaves an empty
 	// clip. Never fall back to the global region for a stale binding. Build

@@ -68,6 +68,7 @@ ScreenChangeListener::ScreenChanged(HWInterface* interface)
 ScreenManager::ScreenManager()
 	:
 	BLooper("screen manager"),
+	fKnownGraphicsDeviceCount(0),
 	fScreenList(4)
 {
 #ifdef HAIKU_TARGET_PLATFORM_LIBBE_TEST
@@ -215,7 +216,13 @@ ScreenManager::_ScanDrivers()
 	// constructor searches forward for the first usable device; using it for
 	// every entry would make several Screen objects alias one framebuffer.
 	int32 deviceCount = AccelerantHWInterface::CountGraphicsDevices();
-	for (int32 i = 0; i < deviceCount; i++) {
+	if (deviceCount < 0)
+		deviceCount = 0;
+
+	// Only probe newly discovered device indices. Reopening every known
+	// accelerant on each directory notification would create duplicate Screen
+	// objects for the same framebuffer.
+	for (int32 i = fKnownGraphicsDeviceCount; i < deviceCount; i++) {
 		HWInterface* interface = new(nothrow) AccelerantHWInterface(i);
 		if (interface == NULL)
 			break;
@@ -224,6 +231,11 @@ ScreenManager::_ScanDrivers()
 		// _AddHWInterface takes ownership on success and failure.
 		_AddHWInterface(interface);
 	}
+
+	// Remember the enumeration boundary even if one device failed to initialize:
+	// a later node notification should probe only genuinely new indices.
+	if (deviceCount > fKnownGraphicsDeviceCount)
+		fKnownGraphicsDeviceCount = deviceCount;
 
 	// Preserve VESA/framebuffer fallback when no enumerated device initializes,
 	// including safe-video mode where accelerant enumeration is disabled.
@@ -277,7 +289,23 @@ ScreenManager::MessageReceived(BMessage* message)
 {
 	switch (message->what) {
 		case B_NODE_MONITOR:
-			// TODO: handle notification
+#ifndef HAIKU_TARGET_PLATFORM_LIBBE_TEST
+		{
+			int32 opcode;
+			if (message->FindInt32("opcode", &opcode) == B_OK
+				&& opcode == B_ENTRY_CREATED) {
+				// /dev/graphics is monitored so newly attached graphics devices
+				// can be discovered without restarting app_server. This handles
+				// additions only: removing an active Screen requires coordinated
+				// owner notification and framebuffer teardown, not just dropping
+				// its HWInterface here.
+				if (AccelerantHWInterface::CountGraphicsDevices()
+					> fKnownGraphicsDeviceCount) {
+					_ScanDrivers();
+				}
+			}
+		}
+#endif
 			break;
 
 		default:

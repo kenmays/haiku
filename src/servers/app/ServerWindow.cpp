@@ -2684,7 +2684,9 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			debug_printf("ServerWindow %s: failed to restore drawing output after exception\n",
 				Title());
 		}
-		throw;
+		debug_printf("ServerWindow %s: aborted multi-output drawing batch\n",
+			Title());
+		return;
 	}
 	// Restore the engine binding without changing the window's logical output.
 	restored = fWindow->BindDrawingEngineOutput(originalScreen);

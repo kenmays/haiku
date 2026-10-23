@@ -214,6 +214,8 @@ Painter::Painter()
 	fTransformOffsetX(0),
 	fTransformOffsetY(0),
 	fRendererScale(1.0f),
+	fRendererOffsetX(0),
+	fRendererOffsetY(0),
 	fScaledClippingRegion(),
 	fPenSize(1.0),
 	fSourceClippingRegion(NULL),
@@ -372,18 +374,25 @@ Painter::ConstrainClipping(const BRegion* region)
 		return;
 	}
 
-	if (fRendererScale == 1.0f) {
+	if (fRendererScale == 1.0f
+		&& fRendererOffsetX == 0 && fRendererOffsetY == 0) {
 		fClippingRegion = region;
 	} else {
-		// Clip in device-pixel coordinates after applying the output scale.
-		// Keep this copy owned by Painter because the caller's region is borrowed.
+		// Clip in framebuffer-local pixel coordinates. Geometry is first
+		// scaled from global logical desktop coordinates and then translated
+		// by the renderer's output-local offset. Keeping this region owned by
+		// Painter is required because the caller's region is borrowed.
 		fScaledClippingRegion.MakeEmpty();
 		for (int32 i = 0; i < region->CountRects(); i++) {
 			BRect rect = region->RectAt(i);
-			rect.left = floorf(rect.left * fRendererScale);
-			rect.top = floorf(rect.top * fRendererScale);
-			rect.right = ceilf(rect.right * fRendererScale);
-			rect.bottom = ceilf(rect.bottom * fRendererScale);
+			rect.left = floorf(rect.left * fRendererScale)
+				+ fRendererOffsetX;
+			rect.top = floorf(rect.top * fRendererScale)
+				+ fRendererOffsetY;
+			rect.right = ceilf(rect.right * fRendererScale)
+				+ fRendererOffsetX;
+			rect.bottom = ceilf(rect.bottom * fRendererScale)
+				+ fRendererOffsetY;
 			fScaledClippingRegion.Include(rect);
 		}
 		fClippingRegion = &fScaledClippingRegion;
@@ -1710,6 +1719,8 @@ Painter::InvertRect(const BRect& r) const
 void
 Painter::SetRendererOffset(int32 offsetX, int32 offsetY)
 {
+	fRendererOffsetX = offsetX;
+	fRendererOffsetY = offsetY;
 	fBaseRenderer.set_offset(offsetX, offsetY);
 }
 

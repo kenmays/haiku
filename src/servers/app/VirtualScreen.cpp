@@ -601,12 +601,14 @@ VirtualScreen::BuildRenderPlan(const BRegion& globalDamage,
 			OutputRenderTarget target;
 			status_t status = BuildRenderTarget(item->screen, globalDamage,
 				target);
-			if (status == B_NAME_NOT_FOUND)
+			if (status == B_NAME_NOT_FOUND || status == B_BAD_VALUE)
 				continue;
 			if (status != B_OK) {
-				// A malformed target must not be used, but one output with an
-				// unsupported mapping must not prevent other outputs rendering.
-				continue;
+				// Do not return a seemingly complete plan after an allocation or
+				// backend failure. Callers can choose a safe fallback, but must
+				// never execute a partially constructed plan unknowingly.
+				targets.clear();
+				return status;
 			}
 
 			targets.push_back(target);

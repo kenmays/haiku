@@ -15,6 +15,7 @@
 
 #include <AutoDeleter.h>
 #include <image.h>
+#include <String.h>
 #include <video_overlay.h>
 
 
@@ -24,10 +25,14 @@ class RenderingBuffer;
 
 class AccelerantHWInterface : public HWInterface {
 public:
-								AccelerantHWInterface(int32 deviceNumber = -1);
+								AccelerantHWInterface(int32 deviceNumber = -1,
+									const char* devicePath = NULL);
 	virtual						~AccelerantHWInterface();
 
 			static	int32			CountGraphicsDevices();
+			static	status_t		GetGraphicsDevicePath(int32 deviceNumber,
+										BString& path);
+			const char*			DevicePath() const { return fDevicePath.String(); }
 
 	virtual	status_t			Initialize();
 	virtual	status_t			Shutdown();

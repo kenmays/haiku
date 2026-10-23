@@ -109,7 +109,10 @@ public:
 
 			bool				ReloadDecor();
 
-			bool				SetScreen(const ::Screen* screen);
+			void				SetScreen(const ::Screen* screen);
+			// Temporarily bind the shared engine between drawing transactions
+			// without changing the window's logical screen assignment.
+			bool				BindDrawingEngineOutput(const ::Screen* screen);
 			const ::Screen*		Screen() const;
 
 			// setting and getting the "hard" clipping, you need to have

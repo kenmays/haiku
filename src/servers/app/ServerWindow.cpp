@@ -2540,25 +2540,19 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 	// path bounded to its output while providing one shared target-selection
 	// implementation for the multi-output dispatcher.
 	BRegion outputDrawingRegion;
-	const BRegion* drawingRegion = &fCurrentDrawingRegion;
+	const BRegion* drawingRegion = &outputDrawingRegion;
 	const ::Screen* output = fWindow->Screen();
-	const VirtualScreen& virtualScreen = fDesktop->VirtualScreen();
 	if (output != NULL) {
-		drawingRegion = &outputDrawingRegion;
-		std::vector<OutputRenderTarget> renderTargets;
-		status_t planStatus = virtualScreen.BuildRenderPlan(
-			fCurrentDrawingRegion, renderTargets);
-		if (planStatus == B_OK) {
-			for (size_t i = 0; i < renderTargets.size(); i++) {
-				if (renderTargets[i].screenID != output->ID())
-					continue;
-				outputDrawingRegion = renderTargets[i].globalClip;
-				break;
-			}
-		}
-		// An absent, invalid, or concurrently detached output leaves an empty
-		// clip. Never fall back to the global region for a stale binding.
+		OutputRenderTarget renderTarget;
+		status_t targetStatus = fDesktop->VirtualScreen().BuildRenderTarget(
+			output, fCurrentDrawingRegion, renderTarget);
+		if (targetStatus == B_OK)
+			outputDrawingRegion = renderTarget.globalClip;
 	}
+	// An absent, invalid, or concurrently detached output leaves an empty
+	// clip. Never fall back to the global region for a stale binding. Build
+	// only the current target here; allocating/copying every output's regions
+	// for each primitive is needlessly expensive.
 	drawingEngine->ConstrainClippingRegion(drawingRegion);
 
 	switch (code) {

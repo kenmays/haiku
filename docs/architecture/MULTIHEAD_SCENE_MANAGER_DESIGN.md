@@ -9,6 +9,7 @@ Implemented on the working branch:
 - Saved output-position restoration with overlap fallback and persistence of the selected geometry.
 - Output-local damage clipping with scale-aware outward rounding, and per-output background fills using each output's drawing engine.
 - Per-window drawing engines can bind to unit-scale outputs; renderer offsets translate global drawing coordinates and damage/copy invalidation into framebuffer-local coordinates. Expose redraws and decorations are fanned out to intersected unit-scale outputs, while cross-output moves fall back to repaint instead of blitting between framebuffers. Client-issued drawing command streams are still bound to one selected output, so this is not yet correct full spanning-window rendering.
+- Drawing-engine transaction, region-copy, and bitmap-read paths now tolerate a missing hardware interface instead of dereferencing a detached output; this is failure hardening, not output hotplug recovery.
 - Enumeration of distinct graphics device nodes into separate accelerant interfaces, while retaining the legacy VESA/framebuffer fallback.
 - Hardware cursor shape/position routing to the output under the global pointer, plus use of the input server's global event stream when multiple outputs are active.
 - Geometry tests for scene transforms, selection, invalid input, and output lifecycle.

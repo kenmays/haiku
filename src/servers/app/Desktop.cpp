@@ -3807,6 +3807,8 @@ Desktop::_ScreenChanged(Screen* screen)
 		if (window->Screen() == screen)
 			window->ServerWindow()->ScreenChanged(&update);
 	}
+
+	UpdateCursorPosition(fLastMousePosition);
 }
 
 

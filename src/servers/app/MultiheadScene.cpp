@@ -5,6 +5,8 @@
 
 #include "MultiheadScene.h"
 
+#include <Region.h>
+
 #include <algorithm>
 #include <cmath>
 
@@ -230,6 +232,62 @@ MultiheadScene::OutputPixelToGlobal(int32 id, BPoint pixel,
 	return B_OK;
 }
 
+
+status_t
+MultiheadScene::ClipRegionToOutput(int32 id, const BRegion& globalRegion,
+	int32 pixelWidth, int32 pixelHeight, BRegion& outputRegion) const
+{
+	outputRegion.MakeEmpty();
+	if (pixelWidth <= 0 || pixelHeight <= 0)
+		return B_BAD_VALUE;
+
+	const DisplayOutput* output = OutputByID(id);
+	if (output == NULL || !output->enabled)
+		return B_ENTRY_NOT_FOUND;
+
+	const BRect& frame = output->frame;
+	if (!_IsValidFrame(frame)
+		|| (double)frame.left < -2147483648.0
+		|| (double)frame.left > 2147483647.0
+		|| (double)frame.top < -2147483648.0
+		|| (double)frame.top > 2147483647.0
+		|| (double)frame.right < -2147483648.0
+		|| (double)frame.right > 2147483647.0
+		|| (double)frame.bottom < -2147483648.0
+		|| (double)frame.bottom > 2147483647.0) {
+		return B_BAD_VALUE;
+	}
+
+	BRegion clipped(globalRegion);
+	BRegion outputBounds(frame);
+	clipped.IntersectWith(&outputBounds);
+
+	BRegion converted;
+	const double scale = output->scale;
+	const int32 maxX = pixelWidth - 1;
+	const int32 maxY = pixelHeight - 1;
+	for (int32 i = 0; i < clipped.CountRects(); i++) {
+		BRect rect = clipped.RectAtInt(i);
+		double left = std::floor(((double)rect.left - frame.left) * scale);
+		double top = std::floor(((double)rect.top - frame.top) * scale);
+		double right = std::ceil(((double)rect.right - frame.left) * scale);
+		double bottom = std::ceil(((double)rect.bottom - frame.top) * scale);
+
+		// Round damage outwards, then clamp to the actual pixel dimensions.
+		left = std::max(0.0, std::min((double)maxX, left));
+		top = std::max(0.0, std::min((double)maxY, top));
+		right = std::max(0.0, std::min((double)maxX, right));
+		bottom = std::max(0.0, std::min((double)maxY, bottom));
+
+		if (left <= right && top <= bottom) {
+			converted.Include(BRect((float)left, (float)top,
+				(float)right, (float)bottom));
+		}
+	}
+
+	outputRegion = converted;
+	return B_OK;
+}
 
 void
 MultiheadScene::OutputsIntersecting(const BRect& frame,

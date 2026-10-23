@@ -65,7 +65,8 @@ class ScreenManager : public BLooper {
 		void			_ScanDrivers();
 		screen_item*	_AddHWInterface(HWInterface* interface);
 
-		BObjectList<screen_item, true>	fScreenList;
+		int32				fKnownGraphicsDeviceCount;
+			BObjectList<screen_item, true>	fScreenList;
 };
 
 extern ScreenManager *gScreenManager;

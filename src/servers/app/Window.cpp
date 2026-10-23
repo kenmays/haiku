@@ -1835,9 +1835,9 @@ Window::_TriggerContentRedraw(BRegion& dirty, const BRegion& expose)
 			if (!frame.IsValid()
 				|| frame.left != floorf(frame.left)
 				|| frame.top != floorf(frame.top)
-				|| (double)frame.left < -2147483648.0
+				|| (double)frame.left < -2147483647.0
 				|| (double)frame.left > 2147483647.0
-				|| (double)frame.top < -2147483648.0
+				|| (double)frame.top < -2147483647.0
 				|| (double)frame.top > 2147483647.0) {
 				continue;
 			}

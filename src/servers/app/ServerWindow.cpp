@@ -2547,21 +2547,23 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			if (virtualScreen.ScreenAt(i) != output)
 				continue;
 
-			// The current renderer only supports output-local translation
-			// for unit-scale outputs. Keep the legacy path for scaled outputs
-			// until their drawing primitives can be transformed as well.
+			// Keep clipping eligibility in sync with Window's output binding.
+			// The Painter applies the same output scale to geometry and clipping;
+			// only origins that map to an exact integer pixel are supported.
 			BRect outputFrame = virtualScreen.ScreenFrameAt(i);
-			// Keep this eligibility test in sync with Window's renderer
-			// binding: otherwise clipping could be applied for an output
-			// whose engine actually fell back to the desktop interface.
-			if (virtualScreen.ScreenScaleAt(i) == 1.0f
+			float scale = virtualScreen.ScreenScaleAt(i);
+			double pixelLeft = (double)outputFrame.left * scale;
+			double pixelTop = (double)outputFrame.top * scale;
+			if (scale > 0.0f && isfinite(scale)
 				&& outputFrame.IsValid()
 				&& outputFrame.left == floorf(outputFrame.left)
 				&& outputFrame.top == floorf(outputFrame.top)
-				&& (double)outputFrame.left >= -2147483647.0
-				&& (double)outputFrame.left <= 2147483647.0
-				&& (double)outputFrame.top >= -2147483647.0
-				&& (double)outputFrame.top <= 2147483647.0
+				&& pixelLeft >= -2147483647.0
+				&& pixelLeft <= 2147483647.0
+				&& pixelTop >= -2147483647.0
+				&& pixelTop <= 2147483647.0
+				&& pixelLeft == floor(pixelLeft)
+				&& pixelTop == floor(pixelTop)
 				&& output->HWInterface() != NULL) {
 				outputDrawingRegion = fCurrentDrawingRegion;
 				BRegion outputBounds(outputFrame);

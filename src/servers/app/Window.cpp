@@ -692,6 +692,7 @@ Window::_SetDrawingEngineOutput(const ::Screen* screen)
 	HWInterface* interface = fDesktop->HWInterface();
 	int32 offsetX = 0;
 	int32 offsetY = 0;
+	float outputScale = 1.0f;
 	bool useOutput = false;
 
 	if (screen != NULL) {
@@ -700,18 +701,26 @@ Window::_SetDrawingEngineOutput(const ::Screen* screen)
 				continue;
 
 			BRect frame = virtualScreen.ScreenFrameAt(i);
-			if (virtualScreen.ScreenScaleAt(i) == 1.0f
-				&& frame.IsValid()
+			float scale = virtualScreen.ScreenScaleAt(i);
+			double pixelLeft = (double)frame.left * scale;
+			double pixelTop = (double)frame.top * scale;
+			// The renderer currently stores its final framebuffer translation
+			// as integer pixels. Only bind an output when its scaled origin is
+			// representable exactly; otherwise use the safe legacy backend.
+			if (scale > 0.0f && isfinite(scale) && frame.IsValid()
 				&& frame.left == floorf(frame.left)
 				&& frame.top == floorf(frame.top)
-				&& (double)frame.left >= -2147483647.0
-				&& (double)frame.left <= 2147483647.0
-				&& (double)frame.top >= -2147483647.0
-				&& (double)frame.top <= 2147483647.0
+				&& pixelLeft >= -2147483647.0
+				&& pixelLeft <= 2147483647.0
+				&& pixelTop >= -2147483647.0
+				&& pixelTop <= 2147483647.0
+				&& pixelLeft == floor(pixelLeft)
+				&& pixelTop == floor(pixelTop)
 				&& screen->HWInterface() != NULL) {
 				interface = screen->HWInterface();
-				offsetX = -((int32)frame.left);
-				offsetY = -((int32)frame.top);
+				offsetX = -(int32)pixelLeft;
+				offsetY = -(int32)pixelTop;
+				outputScale = scale;
 				useOutput = true;
 			}
 			break;
@@ -724,6 +733,7 @@ Window::_SetDrawingEngineOutput(const ::Screen* screen)
 	fDrawingEngine->SetHWInterface(interface);
 	if (interface == NULL) {
 		fDrawingEngine->SetRendererOffset(0, 0);
+		fDrawingEngine->SetRendererScale(1.0f);
 		return false;
 	}
 
@@ -732,6 +742,7 @@ Window::_SetDrawingEngineOutput(const ::Screen* screen)
 
 	fDrawingEngine->SetRendererOffset(useOutput ? offsetX : 0,
 		useOutput ? offsetY : 0);
+	fDrawingEngine->SetRendererScale(useOutput ? outputScale : 1.0f);
 	fDrawingEngine->UnlockExclusiveAccess();
 
 	return useOutput;

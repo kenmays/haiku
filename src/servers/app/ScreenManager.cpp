@@ -219,20 +219,46 @@ ScreenManager::_ScanDrivers()
 	if (deviceCount < 0)
 		deviceCount = 0;
 
-	// Only probe newly discovered device indices. Reopening every known
-	// accelerant on each directory notification would create duplicate Screen
-	// objects for the same framebuffer.
+	// Retry previously failed indices first. A device node can appear before
+	// its accelerant is ready, so treating one failed initialization as
+	// permanently processed would lose that output until app_server restarts.
+	for (size_t i = 0; i < fFailedGraphicsDevices.size();) {
+		int32 deviceIndex = fFailedGraphicsDevices[i];
+		HWInterface* interface = new(nothrow) AccelerantHWInterface(deviceIndex);
+		if (interface == NULL) {
+			// Keep it queued for the next node-monitor notification.
+			++i;
+			continue;
+		}
+
+		if (_AddHWInterface(interface) != NULL) {
+			fFailedGraphicsDevices.erase(fFailedGraphicsDevices.begin() + i);
+		} else {
+			// _AddHWInterface consumes the interface on both success and failure.
+			++i;
+		}
+	}
+
+	// Probe every newly enumerated index once. Remember failures separately so
+	// one temporarily unavailable device does not block later outputs.
 	for (int32 i = fKnownGraphicsDeviceCount; i < deviceCount; i++) {
 		HWInterface* interface = new(nothrow) AccelerantHWInterface(i);
 		if (interface == NULL) {
-			// Keep the boundary at this index so a later directory notification
-			// retries it instead of permanently skipping this and later devices.
+			try {
+				fFailedGraphicsDevices.push_back(i);
+			} catch (...) {
+				// Allocation pressure must not make later devices undiscoverable.
+			}
 			break;
 		}
 
-		// A failed device must not prevent later device nodes from being tried.
-		// _AddHWInterface takes ownership on success and failure.
-		_AddHWInterface(interface);
+		if (_AddHWInterface(interface) == NULL) {
+			try {
+				fFailedGraphicsDevices.push_back(i);
+			} catch (...) {
+				// The current scan still proceeds to later device indices.
+			}
+		}
 		fKnownGraphicsDeviceCount = i + 1;
 	}
 

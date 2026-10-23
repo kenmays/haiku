@@ -584,7 +584,6 @@ VirtualScreen::IsRenderTargetCurrent(const OutputRenderTarget& target) const
 }
 
 
-
 status_t
 VirtualScreen::BuildRenderPlan(const BRegion& globalDamage,
 	std::vector<OutputRenderTarget>& targets) const

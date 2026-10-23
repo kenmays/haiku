@@ -32,9 +32,10 @@ The dispatcher now has an initial, deliberately restricted fan-out path for
 stateless primitive commands: rectangles, gradients, bitmaps, arcs, beziers,
 ellipses, rounded rectangles, triangles, polygons, shapes, regions, and line
 arrays. It snapshots the selected protocol message once, installs a fresh
-receiver for each intersecting output, rebinds the window's drawing engine
-between transactions, validates the target generation, and restores the
-original output binding afterward. Commands that mutate the logical pen,
+receiver for each intersecting output, temporarily binds the shared drawing engine between transactions without
+changing the window's logical screen assignment, validates the target
+generation, preflights all output bindings, and restores the original engine
+binding afterward. Commands that mutate the logical pen,
 require replies, execute pictures/layers, or otherwise lack proven replay-safe
 semantics remain on the legacy single-output path. If the target plan cannot
 cover every intersected output, the batch is not partially fanned out.

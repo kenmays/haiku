@@ -231,7 +231,7 @@ DrawingEngine::~DrawingEngine()
 bool
 DrawingEngine::LockParallelAccess()
 {
-	return fGraphicsCard->LockParallelAccess();
+	return fGraphicsCard != NULL && fGraphicsCard->LockParallelAccess();
 }
 
 
@@ -239,7 +239,8 @@ DrawingEngine::LockParallelAccess()
 bool
 DrawingEngine::IsParallelAccessLocked() const
 {
-	return fGraphicsCard->IsParallelAccessLocked();
+	return fGraphicsCard != NULL
+		&& fGraphicsCard->IsParallelAccessLocked();
 }
 #endif
 
@@ -247,28 +248,31 @@ DrawingEngine::IsParallelAccessLocked() const
 void
 DrawingEngine::UnlockParallelAccess()
 {
-	fGraphicsCard->UnlockParallelAccess();
+	if (fGraphicsCard != NULL)
+		fGraphicsCard->UnlockParallelAccess();
 }
 
 
 bool
 DrawingEngine::LockExclusiveAccess()
 {
-	return fGraphicsCard->LockExclusiveAccess();
+	return fGraphicsCard != NULL && fGraphicsCard->LockExclusiveAccess();
 }
 
 
 bool
 DrawingEngine::IsExclusiveAccessLocked() const
 {
-	return fGraphicsCard->IsExclusiveAccessLocked();
+	return fGraphicsCard != NULL
+		&& fGraphicsCard->IsExclusiveAccessLocked();
 }
 
 
 void
 DrawingEngine::UnlockExclusiveAccess()
 {
-	fGraphicsCard->UnlockExclusiveAccess();
+	if (fGraphicsCard != NULL)
+		fGraphicsCard->UnlockExclusiveAccess();
 }
 
 

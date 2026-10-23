@@ -63,6 +63,7 @@ class ScreenManager : public BLooper {
 		struct screen_item {
 			ObjectDeleter<Screen>	screen;
 			ScreenOwner*			owner;
+			bool				removing;
 			ObjectDeleter<HWInterfaceListener>
 									listener;
 		};

@@ -170,7 +170,6 @@ VirtualScreen::AddScreen(Screen* screen, const ScreenConfigurations& configurati
 
 	monitor_info info;
 	bool hasInfo = screen->GetMonitorInfo(info) == B_OK;
-	currentConfigurations.Set(screen->ID(), hasInfo ? &info : NULL, screen->Frame(), mode);
 
 	// Keep the first screen as the deterministic legacy rendering backend.
 	// The current Desktop and Window paths still expose a single DrawingEngine;
@@ -183,7 +182,22 @@ VirtualScreen::AddScreen(Screen* screen, const ScreenConfigurations& configurati
 	}
 
 	BRect screenFrame = screen->Frame();
-	if (fScene.CountOutputs() > 0) {
+
+	// Restore a saved desktop position when it is still usable. Old settings
+	// can contain overlapping origin-based frames, so fall back to a stable
+	// horizontal layout if the restored frame intersects an output already
+	// added to this virtual screen.
+	screen_configuration* configuration = configurations.BestFit(
+		screen->ID(), hasInfo ? &info : NULL);
+	bool useSavedFrame = configuration != NULL
+		&& configuration->frame.IsValid();
+	if (useSavedFrame) {
+		screenFrame.OffsetTo(configuration->frame.LeftTop());
+		if (fScene.OutputWithLargestIntersection(screenFrame) >= 0)
+			useSavedFrame = false;
+	}
+
+	if (!useSavedFrame && fScene.CountOutputs() > 0) {
 		BRect bounds = fScene.Bounds();
 		screenFrame.OffsetTo(bounds.right + 1, bounds.top);
 	}
@@ -200,6 +214,12 @@ VirtualScreen::AddScreen(Screen* screen, const ScreenConfigurations& configurati
 		delete item;
 		return B_NO_MEMORY;
 	}
+
+	// Save the actual geometry selected above, not Screen::Frame()'s
+	// origin-based framebuffer bounds. This makes the desktop layout survive
+	// the next app_server configuration cycle.
+	currentConfigurations.Set(screen->ID(), hasInfo ? &info : NULL,
+		item->frame, mode);
 
 	UpdateFrame();
 	return B_OK;

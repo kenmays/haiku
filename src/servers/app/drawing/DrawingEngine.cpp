@@ -1435,6 +1435,9 @@ DrawingEngine::ReadBitmap(ServerBitmap* bitmap, bool drawCursor, BRect bounds)
 {
 	ASSERT_EXCLUSIVE_LOCKED();
 
+	if (fGraphicsCard == NULL || bitmap == NULL)
+		return B_ERROR;
+
 	RenderingBuffer* buffer = fGraphicsCard->FrontBuffer();
 	if (buffer == NULL)
 		return B_ERROR;

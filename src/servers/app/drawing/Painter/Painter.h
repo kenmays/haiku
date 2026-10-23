@@ -364,6 +364,7 @@ private:
 			float				fRendererScale;
 			BRegion				fScaledClippingRegion;
 			float				fPenSize;
+			const BRegion*		fSourceClippingRegion;
 			const BRegion*		fClippingRegion;
 			drawing_mode		fDrawingMode;
 			source_alpha		fAlphaSrcMode;

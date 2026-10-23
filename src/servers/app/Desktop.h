@@ -150,7 +150,7 @@ public:
 									// this function
 
 	// ScreenOwner implementation
-	virtual	void				ScreenRemoved(Screen* screen) {}
+	virtual	void				ScreenRemoved(Screen* screen);
 	virtual	bool				ScreenAdded(Screen* screen);
 	virtual	void				ScreenChanged(Screen* screen);
 	virtual	bool				ReleaseScreen(Screen* screen) { return false; }

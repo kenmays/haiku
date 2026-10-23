@@ -2663,6 +2663,8 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 		}
 
 	} catch (...) {
+		BRegion dirty(fCurrentDrawingRegion);
+		fWindow->MarkContentDirtyAsync(dirty);
 		bool recovered = fWindow->BindDrawingEngineOutput(originalScreen);
 		if (!recovered)
 			recovered = fWindow->BindDrawingEngineOutput(originalScreen);

@@ -443,8 +443,7 @@ VirtualScreen::ClipRegionToScreen(const Screen* screen,
 	// origins are supported by rounding damage outwards after transforming
 	// each clipped rectangle into framebuffer coordinates.
 	BRect frame = item->frame;
-	if (!frame.IsValid() || frame.left != floorf(frame.left)
-		|| frame.top != floorf(frame.top)
+	if (!frame.IsValid()
 		|| (double)frame.left < -2147483648.0
 		|| (double)frame.left > 2147483647.0
 		|| (double)frame.top < -2147483648.0

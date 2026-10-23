@@ -6,11 +6,16 @@ Status: implementation contract for the next multihead stage. This document does
 
 The current branch now has a pointer-free `OutputRenderTarget` record and
 `VirtualScreen::BuildRenderPlan()`. The plan calculates per-output logical
-clips, physical-pixel damage, scale, and integer renderer offsets. The
+clips, physical-pixel damage, scale, and integer renderer offsets. Each target
+is stamped with `MultiheadScene::Generation()`, which advances on effective
+output membership, frame, scale, and enabled-state changes; no-op updates do
+not invalidate batches. A consumer must compare the target generation again
+before execution and rebuild or discard stale work. The
 `ServerWindow` drawing path uses it to constrain the currently bound output,
 and invalid targets are skipped without invalidating surviving outputs.
 Geometry-level regression tests cover negative origins, mixed-scale pixel
-clipping, and largest-intersection output selection.
+clipping, largest-intersection output selection, and generation invalidation
+for output changes versus no-op updates.
 
 The private `LinkReceiver` API now supports copying the complete selected
 message (header and payload) and installing a validated copy as a replay

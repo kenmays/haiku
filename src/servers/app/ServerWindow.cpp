@@ -2520,7 +2520,17 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 		return;
 	}
 
-	drawingEngine->LockParallelAccess();
+	if (!drawingEngine->LockParallelAccess()) {
+		// An output can disappear or become unavailable between redraws. Do
+		// not touch Painter's borrowed clipping region unless its engine lock
+		// was actually acquired.
+		if (link.NeedsReply()) {
+			fLink.StartMessage(B_ERROR);
+			fLink.Flush();
+		}
+		return;
+	}
+
 	// NOTE: the region is not copied, Painter keeps a pointer,
 	// that's why you need to use the clipping only for as long
 	// as you have it locked

@@ -2543,6 +2543,10 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 	const ::Screen* output = fWindow->Screen();
 	const VirtualScreen& virtualScreen = fDesktop->VirtualScreen();
 	if (output != NULL) {
+		// A bound output that is no longer present in the virtual scene must
+		// not fall back to the unbounded global drawing region. This can happen
+		// while hot-unplug is detaching the window from a removed screen.
+		drawingRegion = &outputDrawingRegion;
 		for (int32 i = 0; i < virtualScreen.CountScreens(); i++) {
 			if (virtualScreen.ScreenAt(i) != output)
 				continue;
@@ -2568,7 +2572,6 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 				outputDrawingRegion = fCurrentDrawingRegion;
 				BRegion outputBounds(outputFrame);
 				outputDrawingRegion.IntersectWith(&outputBounds);
-				drawingRegion = &outputDrawingRegion;
 			}
 			break;
 		}

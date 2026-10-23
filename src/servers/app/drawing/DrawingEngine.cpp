@@ -573,6 +573,9 @@ void
 DrawingEngine::CopyRegion(/*const*/ BRegion* region, int32 xOffset,
 	int32 yOffset)
 {
+	if (fGraphicsCard == NULL || region == NULL)
+		return;
+
 	// NOTE: region is already clipped in global desktop coordinates.
 	ASSERT_PARALLEL_LOCKED();
 

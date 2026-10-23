@@ -2479,10 +2479,10 @@ fDesktop->LockSingleWindow();
 	The desktop clipping must be read locked when entering this method.
 	Requires a valid fCurrentView.
 */
-// Only stateless drawing commands are replayed here. Commands that update
-// the logical pen, execute pictures/layers, or require protocol replies stay
-// on the canonical single-output path until their state semantics are split
-// from rendering.
+// Only commands with replay-safe payloads are listed here. Line commands
+// commit their logical pen update on the first successful output; text whose
+// pen metrics depend on renderer results, pictures/layers, and reply-producing
+// commands stay on the canonical single-output path.
 static bool
 is_replay_safe_drawing_command(int32 code)
 {

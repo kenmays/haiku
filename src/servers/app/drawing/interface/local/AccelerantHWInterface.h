@@ -24,7 +24,7 @@ class RenderingBuffer;
 
 class AccelerantHWInterface : public HWInterface {
 public:
-								AccelerantHWInterface();
+								AccelerantHWInterface(int32 deviceNumber = -1);
 	virtual						~AccelerantHWInterface();
 
 	virtual	status_t			Initialize();
@@ -93,7 +93,7 @@ protected:
 
 private:
 			int					_OpenGraphicsDevice(int deviceNumber);
-			bool				_RecursiveScan(const char* directory, int deviceNumber,
+			static bool		_RecursiveScan(const char* directory, int deviceNumber,
 									int& count, char* _path);
 			status_t			_OpenAccelerant(int device);
 			status_t			_SetupDefaultHooks();
@@ -112,6 +112,7 @@ private:
 			void				_SetGrayscalePalette();
 
 private:
+			int32				fDeviceNumber;
 			int					fCardFD;
 			image_id			fAccelerantImage;
 			GetAccelerantHook	fAccelerantHook;

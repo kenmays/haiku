@@ -541,6 +541,7 @@ VirtualScreen::BuildRenderTarget(const Screen* screen,
 
 	target = OutputRenderTarget(screen->ID(), output->frame, output->scale,
 		-(int32)pixelLeft, -(int32)pixelTop, logicalClip, pixelClip);
+	target.generation = fScene.Generation();
 	return B_OK;
 }
 
@@ -599,9 +600,11 @@ VirtualScreen::BuildRenderPlan(const BRegion& globalDamage,
 			if (pixelClip.CountRects() <= 0)
 				continue;
 
-			targets.push_back(OutputRenderTarget(item->screen->ID(),
-				output->frame, output->scale, -(int32)pixelLeft,
-				-(int32)pixelTop, logicalClip, pixelClip));
+			OutputRenderTarget target(item->screen->ID(), output->frame,
+				output->scale, -(int32)pixelLeft, -(int32)pixelTop,
+				logicalClip, pixelClip);
+			target.generation = fScene.Generation();
+			targets.push_back(target);
 		}
 	} catch (...) {
 		targets.clear();

@@ -218,7 +218,8 @@ Painter::Painter()
 	fRendererOffsetY(0),
 	fScaledClippingRegion(),
 	fPenSize(1.0),
-	fSourceClippingRegion(NULL),
+	fSourceClippingRegion(),
+	fHasSourceClippingRegion(false),
 	fClippingRegion(NULL),
 	fDrawingMode(B_OP_COPY),
 	fAlphaSrcMode(B_PIXEL_ALPHA),
@@ -366,25 +367,29 @@ Painter::SetDrawState(const DrawState* state, int32 xOffset, int32 yOffset)
 void
 Painter::ConstrainClipping(const BRegion* region)
 {
-	fSourceClippingRegion = region;
 	if (region == NULL) {
+		fHasSourceClippingRegion = false;
+		fSourceClippingRegion.MakeEmpty();
 		fClippingRegion = NULL;
 		fBaseRenderer.set_clipping_region(NULL);
 		fValidClipping = false;
 		return;
 	}
 
+	// Keep a stable copy: output fan-out changes scale/offset between draw
+	// transactions, after the dispatcher's temporary region may have expired.
+	fSourceClippingRegion = *region;
+	fHasSourceClippingRegion = true;
+	const BRegion* source = &fSourceClippingRegion;
+
 	if (fRendererScale == 1.0f
 		&& fRendererOffsetX == 0 && fRendererOffsetY == 0) {
-		fClippingRegion = region;
+		fClippingRegion = source;
 	} else {
-		// Clip in framebuffer-local pixel coordinates. Geometry is first
-		// scaled from global logical desktop coordinates and then translated
-		// by the renderer's output-local offset. Keeping this region owned by
-		// Painter is required because the caller's region is borrowed.
+		// Convert global logical desktop clipping to framebuffer-local pixels.
 		fScaledClippingRegion.MakeEmpty();
-		for (int32 i = 0; i < region->CountRects(); i++) {
-			BRect rect = region->RectAt(i);
+		for (int32 i = 0; i < source->CountRects(); i++) {
+			BRect rect = source->RectAt(i);
 			rect.left = floorf(rect.left * fRendererScale)
 				+ fRendererOffsetX;
 			rect.top = floorf(rect.top * fRendererScale)
@@ -429,10 +434,8 @@ Painter::SetRendererScale(float scale)
 
 	fRendererScale = scale;
 	_UpdateTransform();
-	if (fSourceClippingRegion != NULL) {
-		const BRegion* source = fSourceClippingRegion;
-		ConstrainClipping(source);
-	}
+	if (fHasSourceClippingRegion)
+		ConstrainClipping(&fSourceClippingRegion);
 }
 
 
@@ -1719,9 +1722,17 @@ Painter::InvertRect(const BRect& r) const
 void
 Painter::SetRendererOffset(int32 offsetX, int32 offsetY)
 {
+	if (fRendererOffsetX == offsetX && fRendererOffsetY == offsetY)
+		return;
+
 	fRendererOffsetX = offsetX;
 	fRendererOffsetY = offsetY;
 	fBaseRenderer.set_offset(offsetX, offsetY);
+
+	// The clipping source is owned by Painter, so it remains valid while an
+	// output is rebound between draw transactions.
+	if (fHasSourceClippingRegion)
+		ConstrainClipping(&fSourceClippingRegion);
 }
 
 

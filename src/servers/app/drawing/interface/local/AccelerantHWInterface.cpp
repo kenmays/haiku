@@ -96,10 +96,12 @@ use_fail_safe_video_mode()
 //	#pragma mark - AccelerantHWInterface
 
 
-AccelerantHWInterface::AccelerantHWInterface(int32 deviceNumber)
+AccelerantHWInterface::AccelerantHWInterface(int32 deviceNumber,
+	const char* devicePath)
 	:
 	HWInterface(),
 	fDeviceNumber(deviceNumber),
+	fDevicePath(devicePath != NULL ? devicePath : ""),
 	fCardFD(-1),
 	fAccelerantImage(-1),
 	fAccelerantHook(NULL),
@@ -190,6 +192,20 @@ AccelerantHWInterface::Initialize()
 		return B_NO_MEMORY;
 
 	if (ret >= B_OK) {
+		if (fDevicePath.Length() > 0) {
+			fCardFD = open(fDevicePath.String(), B_READ_WRITE);
+			if (fCardFD < 0)
+				return B_ENTRY_NOT_FOUND;
+
+			status_t status = _OpenAccelerant(fCardFD);
+			if (status != B_OK) {
+				close(fCardFD);
+				fCardFD = -1;
+				return status;
+			}
+			return B_OK;
+		}
+
 		if (fDeviceNumber >= 0) {
 			// ScreenManager creates one interface per enumerated device. Do not
 			// silently open the next device here, or multiple Screen objects can
@@ -240,6 +256,21 @@ AccelerantHWInterface::CountGraphicsDevices()
 		deviceCount++;
 	}
 	return deviceCount;
+}
+
+status_t
+AccelerantHWInterface::GetGraphicsDevicePath(int32 deviceNumber, BString& path)
+{
+	if (deviceNumber < 0)
+		return B_BAD_VALUE;
+
+	int32 count = 0;
+	char devicePath[PATH_MAX];
+	if (!_RecursiveScan("/dev/graphics/", deviceNumber, count, devicePath))
+		return B_ENTRY_NOT_FOUND;
+
+	path = devicePath;
+	return B_OK;
 }
 
 
@@ -297,8 +328,11 @@ AccelerantHWInterface::_OpenGraphicsDevice(int deviceNumber)
 	int count = 0;
 	if (!use_fail_safe_video_mode()) {
 		char path[PATH_MAX];
-		if (_RecursiveScan("/dev/graphics/", deviceNumber, count, path))
+		if (_RecursiveScan("/dev/graphics/", deviceNumber, count, path)) {
 			device = open(path, B_READ_WRITE);
+			if (device >= 0)
+				fDevicePath = path;
+		}
 	}
 
 	// Open VESA or Framebuffer driver if we were not able to get a better one.

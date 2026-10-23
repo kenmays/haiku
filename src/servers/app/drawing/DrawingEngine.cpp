@@ -1556,6 +1556,13 @@ DrawingEngine::SetRendererOffset(int32 offsetX, int32 offsetY)
 
 
 void
+DrawingEngine::SetRendererScale(float scale)
+{
+	fPainter->SetRendererScale(scale);
+}
+
+
+void
 DrawingEngine::_CopyRect(uint8* src, uint32 width, uint32 height,
 	uint32 bytesPerRow, int32 xOffset, int32 yOffset) const
 {

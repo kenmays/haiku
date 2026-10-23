@@ -546,6 +546,28 @@ VirtualScreen::BuildRenderTarget(const Screen* screen,
 }
 
 
+bool
+VirtualScreen::IsRenderTargetCurrent(const OutputRenderTarget& target) const
+{
+	if (target.screenID < 0 || target.generation == 0
+		|| target.generation != fScene.Generation()) {
+		return false;
+	}
+
+	Screen* screen = ScreenByID(target.screenID);
+	if (screen == NULL || screen->HWInterface() == NULL)
+		return false;
+
+	const DisplayOutput* output = fScene.OutputByID(target.screenID);
+	return output != NULL && output->enabled
+		&& output->frame.left == target.frame.left
+		&& output->frame.top == target.frame.top
+		&& output->frame.right == target.frame.right
+		&& output->frame.bottom == target.frame.bottom
+		&& output->scale == target.scale;
+}
+
+
 status_t
 VirtualScreen::BuildRenderPlan(const BRegion& globalDamage,
 	std::vector<OutputRenderTarget>& targets) const

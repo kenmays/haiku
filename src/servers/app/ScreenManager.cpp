@@ -372,7 +372,7 @@ ScreenManager::MessageReceived(BMessage* message)
 								item->screen->HWInterface());
 						const char* path = accelerant != NULL
 							? accelerant->DevicePath() : NULL;
-						if (path != NULL && path[0] != '\\0'
+						if (path != NULL && path[0] != '\0'
 							&& access(path, F_OK) != 0) {
 							RemoveScreen(item->screen.Get());
 							continue;

@@ -2637,18 +2637,25 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 	}
 
 	bool renderedAny = false;
+	bool allTargetsRendered = true;
 	try {
 		for (size_t i = 0; i < targets.size(); i++) {
 			const OutputRenderTarget& target = targets[i];
-			if (!virtualScreen.IsRenderTargetCurrent(target))
+			if (!virtualScreen.IsRenderTargetCurrent(target)) {
+				allTargetsRendered = false;
 				break;
+			}
 
 			Screen* screen = virtualScreen.ScreenByID(target.screenID);
-			if (screen == NULL)
+			if (screen == NULL) {
+				allTargetsRendered = false;
 				continue;
+			}
 
-			if (!fWindow->BindDrawingEngineOutput(screen))
+			if (!fWindow->BindDrawingEngineOutput(screen)) {
+				allTargetsRendered = false;
 				continue;
+			}
 
 			_DispatchViewDrawingMessageSingleOutput(code, *replayReceivers[i],
 				!renderedAny);
@@ -2672,6 +2679,15 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 	if (!restored) {
 		debug_printf("ServerWindow %s: failed to restore drawing output after fan-out\n",
 			Title());
+		return;
+	}
+
+	if (!allTargetsRendered) {
+		// A partially rendered command cannot safely be replayed on completed
+		// outputs (invert/alpha operations are destination-dependent). Request
+		// a normal client redraw instead of applying the command twice.
+		BRegion dirty(fCurrentDrawingRegion);
+		fWindow->MarkContentDirtyAsync(dirty);
 		return;
 	}
 

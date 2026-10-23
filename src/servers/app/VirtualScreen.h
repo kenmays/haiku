@@ -15,11 +15,40 @@
 
 #include <Message.h>
 #include <Region.h>
+#include <vector>
 
 
 class Desktop;
 class DrawingEngine;
 class HWInterface;
+
+
+// A pointer-free snapshot of one output's contribution to a drawing command.
+// IDs must be resolved to live Screen objects only while holding the relevant
+// app_server ownership/locking discipline.
+struct OutputRenderTarget {
+	int32 screenID;
+	BRect frame;
+	float scale;
+	int32 rendererOffsetX;
+	int32 rendererOffsetY;
+	BRegion globalClip;
+	BRegion pixelClip;
+
+	OutputRenderTarget(int32 id, const BRect& outputFrame, float outputScale,
+		int32 offsetX, int32 offsetY, const BRegion& logicalClip,
+		const BRegion& physicalClip)
+		:
+		screenID(id),
+		frame(outputFrame),
+		scale(outputScale),
+		rendererOffsetX(offsetX),
+		rendererOffsetY(offsetY),
+		globalClip(logicalClip),
+		pixelClip(physicalClip)
+	{
+	}
+};
 
 
 class VirtualScreen {
@@ -69,6 +98,12 @@ public:
 			status_t			ClipRegionToScreen(const Screen* screen,
 									const BRegion& globalRegion,
 									BRegion& screenRegion) const;
+
+			// Build a pointer-free plan for a logical damage region. Each target
+			// contains damage clipped to one output in both logical and pixel
+			// coordinates. Hardware targets must be resolved later by screenID.
+			status_t			BuildRenderPlan(const BRegion& globalDamage,
+									std::vector<OutputRenderTarget>& targets) const;
 			BRect				ScreenFrameAt(int32 index) const;
 			int32				CountScreens() const;
 

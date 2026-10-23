@@ -29,7 +29,7 @@ class ScreenOwner {
 	public:
 		virtual ~ScreenOwner() {};
 		virtual void	ScreenRemoved(Screen* screen) = 0;
-		virtual void	ScreenAdded(Screen* screen) = 0;
+		virtual bool	ScreenAdded(Screen* screen) { return false; }
 		virtual void	ScreenChanged(Screen* screen) = 0;
 
 		virtual bool	ReleaseScreen(Screen* screen) = 0;

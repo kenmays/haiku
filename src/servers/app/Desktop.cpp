@@ -587,8 +587,9 @@ Desktop::Init()
 #endif
 
 	// A per-device event stream cannot aggregate input across several
-	// graphics devices. Keep the legacy direct stream for one output, and use
-	// the input server's global stream when multiple outputs are active.
+	// graphics devices, and its coordinates are origin-relative. Keep it only
+	// for a single output at (0, 0); otherwise use the input server's global
+	// stream so pointer coordinates match the logical desktop.
 	EventStream* stream = NULL;
 	BRect firstScreenFrame = fVirtualScreen.ScreenFrameAt(0);
 	if (fVirtualScreen.CountScreens() == 1

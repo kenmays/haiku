@@ -534,17 +534,16 @@ VirtualScreen::BuildRenderPlan(const BRegion& globalDamage,
 				|| pixelTop < -2147483647.0 || pixelTop > 2147483647.0
 				|| pixelLeft != floor(pixelLeft)
 				|| pixelTop != floor(pixelTop)) {
-				targets.clear();
-				return B_BAD_VALUE;
+				// This output cannot be represented by the current renderer
+				// transform. Keep other outputs renderable.
+				continue;
 			}
 
 			BRegion pixelClip;
 			status_t status = ClipRegionToScreen(item->screen, logicalClip,
 				pixelClip);
-			if (status != B_OK) {
-				targets.clear();
-				return status;
-			}
+			if (status != B_OK)
+				continue;
 			if (pixelClip.CountRects() <= 0)
 				continue;
 

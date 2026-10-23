@@ -324,6 +324,9 @@ DrawingEngine::SetCopyToFrontEnabled(bool enable)
 void
 DrawingEngine::CopyToFront(/*const*/ BRegion& region)
 {
+	if (fGraphicsCard == NULL)
+		return;
+
 	BRegion deviceRegion(region);
 	deviceRegion.OffsetBy(fRendererOffsetX, fRendererOffsetY);
 	BRegion framebufferBounds(fPainter->Bounds());

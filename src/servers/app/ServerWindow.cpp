@@ -2591,12 +2591,12 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			break;
 		}
 		Screen* screen = virtualScreen.ScreenByID(targets[i].screenID);
-		if (screen == NULL || !fWindow->SetScreen(screen)) {
+		if (screen == NULL || !fWindow->BindDrawingEngineOutput(screen)) {
 			canBindAll = false;
 			break;
 		}
 	}
-	if (!fWindow->SetScreen(originalScreen))
+	if (!fWindow->BindDrawingEngineOutput(originalScreen))
 		canBindAll = false;
 	if (!canBindAll) {
 		free(message);
@@ -2625,7 +2625,7 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 		renderedAny = true;
 	}
 
-	// Always restore the window's logical output binding after the batch.
+	// Restore the engine binding without changing the window's logical output.
 	fWindow->SetScreen(originalScreen);
 	free(message);
 

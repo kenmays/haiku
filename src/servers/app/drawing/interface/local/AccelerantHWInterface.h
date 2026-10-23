@@ -33,6 +33,11 @@ public:
 			static	status_t		GetGraphicsDevicePath(int32 deviceNumber,
 										BString& path);
 			const char*			DevicePath() const { return fDevicePath.String(); }
+			bool				HasMultiOutputSupport() const;
+			uint32				MultiOutputCount() const;
+			status_t			GetMultiOutputInfo(uint32 index,
+									accelerant_output_info* info) const;
+			status_t			GetMultiOutputGeneration(uint64* generation) const;
 
 	virtual	status_t			Initialize();
 	virtual	status_t			Shutdown();
@@ -139,6 +144,9 @@ private:
 			propose_display_mode	fAccProposeDisplayMode;
 			get_preferred_display_mode fAccGetPreferredDisplayMode;
 			get_monitor_info		fAccGetMonitorInfo;
+			get_multi_output_count	fAccGetMultiOutputCount;
+			get_multi_output_info	fAccGetMultiOutputInfo;
+			get_multi_output_generation	fAccGetMultiOutputGeneration;
 			get_edid_info			fAccGetEDIDInfo;
 			set_cursor_shape		fAccSetCursorShape;
 			set_cursor_bitmap		fAccSetCursorBitmap;

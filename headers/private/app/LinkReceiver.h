@@ -36,6 +36,14 @@ class LinkReceiver {
 		bool NeedsReply() const;
 		int32 Code() const;
 
+		// Copy the complete currently selected message, including its header.
+		// The caller owns the returned malloc-allocated buffer.
+		status_t CopyCurrentMessage(char** _buffer, int32* _size) const;
+
+		// Install a previously copied complete message as the current message.
+		// Intended for deterministic replay; does not read from a port.
+		status_t SetToMessage(const void* buffer, int32 size);
+
 		virtual status_t Read(void* data, ssize_t size);
 		status_t ReadString(char** _string, size_t* _length = NULL);
 		status_t ReadString(BString& string, size_t* _length = NULL);

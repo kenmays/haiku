@@ -427,7 +427,7 @@ Painter::SetTransform(BAffineTransform transform, int32 xOffset, int32 yOffset)
 void
 Painter::SetRendererScale(float scale)
 {
-	if (!(scale > 0.0f) || !isfinite(scale)
+	if (!(scale > 0.0f) || !isfinite(scale))
 		scale = 1.0f;
 	if (fRendererScale == scale)
 		return;

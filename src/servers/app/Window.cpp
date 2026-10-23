@@ -1927,25 +1927,70 @@ Window::_DrawBorder()
 	dirtyBorderRegion->IntersectWith(&fDirtyRegion);
 
 	DrawingEngine* engine = decorator->GetDrawingEngine();
-	if (dirtyBorderRegion->CountRects() > 0 && engine->LockParallelAccess()) {
-		engine->ConstrainClippingRegion(dirtyBorderRegion);
-		bool copyToFrontEnabled = engine->CopyToFrontEnabled();
-		engine->SetCopyToFrontEnabled(false);
+	if (dirtyBorderRegion->CountRects() > 0 && engine != NULL) {
+		const VirtualScreen& virtualScreen = fDesktop->VirtualScreen();
+		bool canFanOut = virtualScreen.CountScreens() > 1;
+		bool intersectsOutput = false;
 
-		decorator->Draw(dirtyBorderRegion->Frame());
+		for (int32 i = 0; i < virtualScreen.CountScreens(); i++) {
+			const ::Screen* screen = virtualScreen.ScreenAt(i);
+			if (screen == NULL)
+				continue;
+			BRegion outputDamage(*dirtyBorderRegion);
+			BRegion outputBounds(virtualScreen.ScreenFrameAt(i));
+			outputDamage.IntersectWith(&outputBounds);
+			if (outputDamage.CountRects() == 0)
+				continue;
 
-		engine->SetCopyToFrontEnabled(copyToFrontEnabled);
-		engine->CopyToFront(*dirtyBorderRegion);
+			intersectsOutput = true;
+			if (virtualScreen.ScreenScaleAt(i) != 1.0f
+				|| screen->HWInterface() == NULL) {
+				canFanOut = false;
+				break;
+			}
+		}
 
-// TODO: remove this once the DrawState stuff is handled
-// more cleanly. The reason why this is needed is that
-// when the decorator draws strings, a draw state is set
-// on the Painter object, and this is were it might get
-// out of sync with what the ServerWindow things is the
-// current DrawState set on the Painter
-fWindow->ResyncDrawState();
+		bool drewOutput = false;
+		if (canFanOut && intersectsOutput) {
+			for (int32 i = 0; i < virtualScreen.CountScreens(); i++) {
+				const ::Screen* screen = virtualScreen.ScreenAt(i);
+				if (screen == NULL)
+					continue;
 
-		engine->UnlockParallelAccess();
+				BRegion outputDamage(*dirtyBorderRegion);
+				BRegion outputBounds(virtualScreen.ScreenFrameAt(i));
+				outputDamage.IntersectWith(&outputBounds);
+				if (outputDamage.CountRects() == 0
+					|| !_SetDrawingEngineOutput(screen)) {
+					continue;
+				}
+
+				if (!engine->LockParallelAccess())
+					continue;
+				engine->ConstrainClippingRegion(&outputDamage);
+				bool copyToFrontEnabled = engine->CopyToFrontEnabled();
+				engine->SetCopyToFrontEnabled(false);
+				decorator->Draw(outputDamage.Frame());
+				engine->SetCopyToFrontEnabled(copyToFrontEnabled);
+				engine->CopyToFront(outputDamage);
+				fWindow->ResyncDrawState();
+				engine->UnlockParallelAccess();
+				drewOutput = true;
+			}
+
+			_SetDrawingEngineOutput(fScreen);
+		}
+
+		if (!drewOutput && engine->LockParallelAccess()) {
+			engine->ConstrainClippingRegion(dirtyBorderRegion);
+			bool copyToFrontEnabled = engine->CopyToFrontEnabled();
+			engine->SetCopyToFrontEnabled(false);
+			decorator->Draw(dirtyBorderRegion->Frame());
+			engine->SetCopyToFrontEnabled(copyToFrontEnabled);
+			engine->CopyToFront(*dirtyBorderRegion);
+			fWindow->ResyncDrawState();
+			engine->UnlockParallelAccess();
+		}
 	}
 	fRegionPool.Recycle(dirtyBorderRegion);
 }

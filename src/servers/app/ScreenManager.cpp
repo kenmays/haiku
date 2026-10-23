@@ -135,7 +135,8 @@ ScreenManager::AcquireScreens(ScreenOwner* owner, int32* wishList,
 	for (int32 i = 0; i < fScreenList.CountItems(); i++) {
 		screen_item* item = fScreenList.ItemAt(i);
 
-		if (item->owner == NULL && list.AddItem(item->screen.Get())) {
+		if (!item->removing && item->owner == NULL
+			&& list.AddItem(item->screen.Get())) {
 			item->owner = owner;
 			added++;
 		}
@@ -175,7 +176,7 @@ ScreenManager::ReleaseScreens(ScreenList& list)
 		for (int32 j = 0; j < list.CountItems(); j++) {
 			Screen* screen = list.ItemAt(j);
 
-			if (item->screen.Get() == screen)
+			if (item->screen.Get() == screen && !item->removing)
 				item->owner = NULL;
 		}
 	}
@@ -192,7 +193,7 @@ ScreenManager::ReleaseScreen(Screen* screen)
 
 	for (int32 i = 0; i < fScreenList.CountItems(); i++) {
 		screen_item* item = fScreenList.ItemAt(i);
-		if (item->screen.Get() == screen) {
+		if (item->screen.Get() == screen && !item->removing) {
 			item->owner = NULL;
 			return;
 		}
@@ -206,27 +207,53 @@ ScreenManager::RemoveScreen(Screen* screen)
 	if (screen == NULL)
 		return B_BAD_VALUE;
 
-	BAutolock locker(this);
+	ScreenOwner* owner = NULL;
+	{
+		// Reserve the entry under the manager lock, then release that lock
+		// before entering Desktop. Desktop operations may acquire the manager
+		// while holding window/screen locks, so calling the owner under this
+		// lock would invert the normal lock order and deadlock hot-unplug.
+		BAutolock locker(this);
+		for (int32 i = 0; i < fScreenList.CountItems(); i++) {
+			screen_item* item = fScreenList.ItemAt(i);
+			if (item->screen.Get() != screen)
+				continue;
+			if (item->removing)
+				return B_BUSY;
 
+			item->removing = true;
+			owner = item->owner;
+			item->owner = NULL;
+			break;
+		}
+	}
+	if (owner == NULL) {
+		// The entry may still exist with no owner (for example during startup);
+		// it is still removed below. Distinguish that from an unknown screen.
+		bool found = false;
+		BAutolock locker(this);
+		for (int32 i = 0; i < fScreenList.CountItems(); i++) {
+			screen_item* item = fScreenList.ItemAt(i);
+			if (item->screen.Get() == screen && item->removing) {
+				found = true;
+				break;
+			}
+		}
+		if (!found)
+			return B_ENTRY_NOT_FOUND;
+	}
+	if (owner != NULL)
+		owner->ScreenRemoved(screen);
+
+	BAutolock locker(this);
 	for (int32 i = 0; i < fScreenList.CountItems(); i++) {
 		screen_item* item = fScreenList.ItemAt(i);
-		if (item->screen.Get() != screen)
-			continue;
-
-		// Detach the screen from its owner before destroying its HWInterface.
-		// The owner callback must not call back into ScreenManager; VirtualScreen
-		// removal deliberately avoids ReleaseScreen() for this reason.
-		if (item->owner != NULL) {
-			ScreenOwner* owner = item->owner;
-			owner->ScreenRemoved(screen);
-			item->owner = NULL;
+		if (item->screen.Get() == screen && item->removing) {
+			item = fScreenList.RemoveItem(i);
+			delete item;
+			return B_OK;
 		}
-
-		item = fScreenList.RemoveItem(i);
-		delete item;
-		return B_OK;
 	}
-
 	return B_ENTRY_NOT_FOUND;
 }
 
@@ -238,7 +265,8 @@ ScreenManager::ScreenChanged(Screen* screen)
 
 	for (int32 i = 0; i < fScreenList.CountItems(); i++) {
 		screen_item* item = fScreenList.ItemAt(i);
-		if (item->screen.Get() == screen && item->owner != NULL)
+		if (item->screen.Get() == screen && !item->removing
+			&& item->owner != NULL)
 			item->owner->ScreenChanged(screen);
 	}
 }
@@ -347,6 +375,7 @@ ScreenManager::_AddHWInterface(HWInterface* interface)
 		if (item != NULL) {
 			item->screen.SetTo(screen.Detach());
 			item->owner = NULL;
+			item->removing = false;
 			item->listener.SetTo(
 				new(nothrow) ScreenChangeListener(*this, item->screen.Get()));
 			if (item->listener.IsSet()
@@ -358,7 +387,7 @@ ScreenManager::_AddHWInterface(HWInterface* interface)
 					for (int32 i = 0; i < addedIndex; i++) {
 						screen_item* existing = fScreenList.ItemAt(i);
 						ScreenOwner* owner = existing->owner;
-						if (owner == NULL)
+						if (owner == NULL || existing->removing)
 							continue;
 
 						bool alreadyTried = false;

@@ -307,7 +307,7 @@ AccelerantHWInterface::_OpenGraphicsDevice(int deviceNumber)
 	// Open VESA or Framebuffer driver if we were not able to get a better one.
 	if (device == -1 && count < deviceNumber && fDeviceNumber < 0) {
 		device = open("/dev/graphics/vesa", B_READ_WRITE);
-		if (device > 0) {
+		if (device >= 0) {
 			// store the device, so that we can access the planar blitter
 			fVGADevice = device;
 		} else {

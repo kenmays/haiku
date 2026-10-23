@@ -120,6 +120,8 @@ public:
 			status_t			BuildRenderTarget(const Screen* screen,
 									const BRegion& globalDamage,
 									OutputRenderTarget& target) const;
+	bool				IsRenderTargetCurrent(
+									const OutputRenderTarget& target) const;
 			BRect				ScreenFrameAt(int32 index) const;
 			int32				CountScreens() const;
 

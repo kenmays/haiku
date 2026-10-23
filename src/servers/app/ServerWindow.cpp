@@ -76,6 +76,7 @@
 #include "ServerPicture.h"
 #include "ServerProtocol.h"
 #include "Window.h"
+#include "VirtualScreen.h"
 #include "WorkspacesView.h"
 
 

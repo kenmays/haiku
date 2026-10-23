@@ -13,6 +13,8 @@
 #include <Looper.h>
 #include <ObjectList.h>
 
+#include <vector>
+
 
 class BMessage;
 
@@ -66,6 +68,7 @@ class ScreenManager : public BLooper {
 		screen_item*	_AddHWInterface(HWInterface* interface);
 
 		int32				fKnownGraphicsDeviceCount;
+			std::vector<int32>		fFailedGraphicsDevices;
 			BObjectList<screen_item, true>	fScreenList;
 };
 

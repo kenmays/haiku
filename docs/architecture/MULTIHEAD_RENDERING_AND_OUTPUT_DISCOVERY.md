@@ -29,15 +29,15 @@ provides a stable payload source for a future fan-out dispatcher; it is not
 currently used to execute commands on multiple engines.
 
 The dispatcher now has an initial, deliberately restricted fan-out path for
-stateless primitive commands: rectangles, gradients, bitmaps, arcs, beziers,
-ellipses, rounded rectangles, triangles, polygons, shapes, regions, and line
-arrays. It snapshots the selected protocol message once, installs a fresh
+stateless primitive commands: lines (with the logical pen update committed only on the first successful
+output), rectangles, gradients, bitmaps, arcs, beziers, ellipses, rounded
+rectangles, triangles, polygons, shapes, regions, and line arrays. It snapshots the selected protocol message once, installs a fresh
 receiver for each intersecting output, temporarily binds the shared drawing engine between transactions without
 changing the window's logical screen assignment, validates the target
 generation, preflights all output bindings, and restores the original engine
-binding afterward. Commands that mutate the logical pen,
-require replies, execute pictures/layers, or otherwise lack proven replay-safe
-semantics remain on the legacy single-output path. If the target plan cannot
+binding afterward. Text commands whose returned pen metrics depend on renderer output, commands
+that require replies, execute pictures/layers, or otherwise lack proven
+replay-safe semantics remain on the legacy single-output path. If the target plan cannot
 cover every intersected output, the batch is not partially fanned out.
 
 This is **not yet complete client drawing fan-out**. Remaining work includes

@@ -13,6 +13,7 @@
 #include "Desktop.h"
 
 #include <new>
+#include <math.h>
 
 
 VirtualScreen::VirtualScreen()

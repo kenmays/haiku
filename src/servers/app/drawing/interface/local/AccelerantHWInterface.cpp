@@ -263,6 +263,8 @@ AccelerantHWInterface::GetGraphicsDevicePath(int32 deviceNumber, BString& path)
 {
 	if (deviceNumber < 0)
 		return B_BAD_VALUE;
+	if (use_fail_safe_video_mode())
+		return B_ENTRY_NOT_FOUND;
 
 	int32 count = 0;
 	char devicePath[PATH_MAX];

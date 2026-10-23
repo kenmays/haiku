@@ -12,6 +12,8 @@
 #include <Rect.h>
 #include <SupportDefs.h>
 
+class BRegion;
+
 #include <vector>
 
 
@@ -68,6 +70,9 @@ public:
 							BPoint& pixel) const;
 	status_t			OutputPixelToGlobal(int32 id, BPoint pixel,
 							BPoint& global) const;
+	status_t			ClipRegionToOutput(int32 id, const BRegion& globalRegion,
+							int32 pixelWidth, int32 pixelHeight,
+							BRegion& outputRegion) const;
 
 	/*
 	 * Append IDs of enabled outputs intersecting frame to outputIDs.

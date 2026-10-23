@@ -599,9 +599,15 @@ Desktop::Init()
 	fEventDispatcher.SetMouseFilter(new MouseFilter(this));
 	fEventDispatcher.SetKeyboardFilter(new KeyboardFilter(this));
 
-	// draw the background
-
-	fScreenRegion = fVirtualScreen.Frame();
+	// Build the drawable desktop region from individual outputs. The bounds
+	// rectangle may include gaps between monitors and must not be used as a
+	// substitute for the union of output frames.
+	fScreenRegion.MakeEmpty();
+	for (int32 i = 0; i < fVirtualScreen.CountScreens(); i++) {
+		BRect frame = fVirtualScreen.ScreenFrameAt(i);
+		if (frame.IsValid())
+			fScreenRegion.Include(frame);
+	}
 
 	BRegion stillAvailableOnScreen;
 	_RebuildClippingForAllWindows(stillAvailableOnScreen);
@@ -3658,6 +3664,19 @@ Desktop::_ScreenChanged(Screen* screen)
 	// A mode change invalidates the full logical desktop, not just the
 	// changed output. Build the region from individual output frames so gaps
 	// between monitors are not treated as drawable screen space.
+	// Refresh the changed output's logical size from its newly active mode,
+	// while preserving its configured desktop origin.
+	for (int32 i = 0; i < fVirtualScreen.CountScreens(); i++) {
+		if (fVirtualScreen.ScreenAt(i) != screen)
+			continue;
+
+		BRect frame = screen->Frame();
+		BRect oldFrame = fVirtualScreen.ScreenFrameAt(i);
+		frame.OffsetTo(oldFrame.left, oldFrame.top);
+		fVirtualScreen.SetScreenFrame(i, frame);
+		break;
+	}
+
 	fVirtualScreen.UpdateFrame();
 	fScreenRegion.MakeEmpty();
 	BRect changedScreenFrame;

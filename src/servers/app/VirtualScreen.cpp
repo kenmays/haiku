@@ -493,6 +493,74 @@ VirtualScreen::ClipRegionToScreen(const Screen* screen,
 }
 
 
+status_t
+VirtualScreen::BuildRenderPlan(const BRegion& globalDamage,
+	std::vector<OutputRenderTarget>& targets) const
+{
+	targets.clear();
+	if (globalDamage.CountRects() <= 0)
+		return B_OK;
+
+	try {
+		for (int32 i = 0; i < fScreenList.CountItems(); i++) {
+			screen_item* item = fScreenList.ItemAt(i);
+			if (item == NULL || item->screen == NULL
+				|| item->screen->HWInterface() == NULL) {
+				continue;
+			}
+
+			const DisplayOutput* output
+				= fScene.OutputByID(item->screen->ID());
+			if (output == NULL || !output->enabled
+				|| !std::isfinite(output->scale) || output->scale <= 0.0f
+				|| !output->frame.IsValid()) {
+				continue;
+			}
+
+			BRegion logicalClip(globalDamage);
+			BRegion outputBounds(output->frame);
+			logicalClip.IntersectWith(&outputBounds);
+			if (logicalClip.CountRects() <= 0)
+				continue;
+
+			// DrawingEngine's renderer offset is applied after scale. Reject
+			// origins that cannot be represented exactly as integer pixels;
+			// silently rounding here would make adjacent outputs disagree at
+			// their shared logical boundary.
+			double pixelLeft = (double)output->frame.left * output->scale;
+			double pixelTop = (double)output->frame.top * output->scale;
+			if (!std::isfinite(pixelLeft) || !std::isfinite(pixelTop)
+				|| pixelLeft < -2147483647.0 || pixelLeft > 2147483647.0
+				|| pixelTop < -2147483647.0 || pixelTop > 2147483647.0
+				|| pixelLeft != floor(pixelLeft)
+				|| pixelTop != floor(pixelTop)) {
+				targets.clear();
+				return B_BAD_VALUE;
+			}
+
+			BRegion pixelClip;
+			status_t status = ClipRegionToScreen(item->screen, logicalClip,
+				pixelClip);
+			if (status != B_OK) {
+				targets.clear();
+				return status;
+			}
+			if (pixelClip.CountRects() <= 0)
+				continue;
+
+			targets.push_back(OutputRenderTarget(item->screen->ID(),
+				output->frame, output->scale, -(int32)pixelLeft,
+				-(int32)pixelTop, logicalClip, pixelClip));
+		}
+	} catch (...) {
+		targets.clear();
+		return B_NO_MEMORY;
+	}
+
+	return B_OK;
+}
+
+
 BRect
 VirtualScreen::ScreenFrameAt(int32 index) const
 {

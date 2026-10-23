@@ -110,6 +110,8 @@ A /dev/graphics node identifies a graphics device/accelerant instance. It does n
 
 Add a versioned, optional multi-output capability surface while preserving existing accelerant hooks as the fallback. Capability detection must be explicit and size/version guarded. A driver that does not advertise the capability remains a single-output device.
 
+The public `Accelerant.h` now defines the optional hook IDs and versioned `accelerant_output_info` record for output count/info, per-output mode lists and mode setting, framebuffer configuration, EDID, output-generation polling, presentation damage, and cursor operations. This is an ABI contract only at this stage: `AccelerantHWInterface` does not yet consume these hooks, and no driver has been converted to advertise them. Legacy accelerants remain unchanged and must continue through the existing single-output path.
+
 The capability should support:
 - querying the number of output records and retrieving records by index;
 - stable per-device output identity distinct from the transient enumeration index;

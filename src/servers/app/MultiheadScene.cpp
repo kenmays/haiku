@@ -12,7 +12,18 @@
 
 
 MultiheadScene::MultiheadScene()
+	:
+	fGeneration(1)
 {
+}
+
+
+void
+MultiheadScene::_AdvanceGeneration()
+{
+	// Keep zero reserved for an uninitialized/stale token if the counter wraps.
+	if (++fGeneration == 0)
+		fGeneration = 1;
 }
 
 
@@ -59,6 +70,7 @@ MultiheadScene::AddOutput(int32 id, const BRect& frame, float scale)
 		return B_NO_MEMORY;
 	}
 
+	_AdvanceGeneration();
 	return B_OK;
 }
 
@@ -71,6 +83,7 @@ MultiheadScene::RemoveOutput(int32 id)
 		return B_ENTRY_NOT_FOUND;
 
 	fOutputs.erase(fOutputs.begin() + index);
+	_AdvanceGeneration();
 	return B_OK;
 }
 
@@ -85,7 +98,13 @@ MultiheadScene::SetOutputFrame(int32 id, const BRect& frame)
 	if (index < 0)
 		return B_ENTRY_NOT_FOUND;
 
-	fOutputs[index].frame = frame;
+	if (fOutputs[index].frame.left != frame.left
+		|| fOutputs[index].frame.top != frame.top
+		|| fOutputs[index].frame.right != frame.right
+		|| fOutputs[index].frame.bottom != frame.bottom) {
+		fOutputs[index].frame = frame;
+		_AdvanceGeneration();
+	}
 	return B_OK;
 }
 
@@ -100,7 +119,10 @@ MultiheadScene::SetOutputScale(int32 id, float scale)
 	if (index < 0)
 		return B_ENTRY_NOT_FOUND;
 
-	fOutputs[index].scale = scale;
+	if (fOutputs[index].scale != scale) {
+		fOutputs[index].scale = scale;
+		_AdvanceGeneration();
+	}
 	return B_OK;
 }
 
@@ -112,7 +134,10 @@ MultiheadScene::SetOutputEnabled(int32 id, bool enabled)
 	if (index < 0)
 		return B_ENTRY_NOT_FOUND;
 
-	fOutputs[index].enabled = enabled;
+	if (fOutputs[index].enabled != enabled) {
+		fOutputs[index].enabled = enabled;
+		_AdvanceGeneration();
+	}
 	return B_OK;
 }
 

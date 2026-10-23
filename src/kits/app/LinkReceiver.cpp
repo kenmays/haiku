@@ -151,11 +151,14 @@ LinkReceiver::CopyCurrentMessage(char** _buffer, int32* _size) const
 status_t
 LinkReceiver::SetToMessage(const void* buffer, int32 size)
 {
-	if (buffer == NULL || size < (int32)sizeof(message_header))
+	if (buffer == NULL || size < (int32)sizeof(message_header)
+		|| size > (int32)kMaxBufferSize) {
 		return B_BAD_VALUE;
+	}
 
-	const message_header* header = (const message_header*)buffer;
-	if (header->size != size)
+	message_header header;
+	memcpy(&header, buffer, sizeof(header));
+	if (header.size != size)
 		return B_BAD_VALUE;
 
 	char* copy = (char*)malloc(size);

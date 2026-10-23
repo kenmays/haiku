@@ -28,6 +28,7 @@ class HWInterface;
 // app_server ownership/locking discipline.
 struct OutputRenderTarget {
 	int32 screenID;
+	uint64 generation;
 	BRect frame;
 	float scale;
 	int32 rendererOffsetX;
@@ -38,6 +39,7 @@ struct OutputRenderTarget {
 	OutputRenderTarget()
 		:
 		screenID(-1),
+		generation(0),
 		frame(0, 0, 0, 0),
 		scale(1.0f),
 		rendererOffsetX(0),
@@ -50,6 +52,7 @@ struct OutputRenderTarget {
 		const BRegion& physicalClip)
 		:
 		screenID(id),
+		generation(0),
 		frame(outputFrame),
 		scale(outputScale),
 		rendererOffsetX(offsetX),

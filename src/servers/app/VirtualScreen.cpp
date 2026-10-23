@@ -14,6 +14,7 @@
 
 #include <new>
 #include <math.h>
+#include <algorithm>
 
 
 VirtualScreen::VirtualScreen()
@@ -295,7 +296,39 @@ VirtualScreen::SetScreenScale(int32 index, float scale)
 	if (item == NULL)
 		return B_BAD_INDEX;
 
-	return fScene.SetOutputScale(item->screen->ID(), scale);
+	const DisplayOutput* output = fScene.OutputByID(item->screen->ID());
+	if (output == NULL)
+		return B_ENTRY_NOT_FOUND;
+
+	float previousScale = output->scale;
+	BRect previousFrame = item->frame;
+
+	status_t status = fScene.SetOutputScale(item->screen->ID(), scale);
+	if (status != B_OK)
+		return status;
+
+	// A scale factor changes the logical size, not the framebuffer mode.
+	// Keep the output origin fixed and derive the logical extent from the
+	// active pixel dimensions.
+	display_mode mode;
+	item->screen->GetMode(mode);
+	if (mode.virtual_width == 0 || mode.virtual_height == 0) {
+		fScene.SetOutputScale(item->screen->ID(), previousScale);
+		return B_BAD_VALUE;
+	}
+
+	BRect frame = previousFrame;
+	frame.right = frame.left + (mode.virtual_width - 1) / scale;
+	frame.bottom = frame.top + (mode.virtual_height - 1) / scale;
+	status = fScene.SetOutputFrame(item->screen->ID(), frame);
+	if (status != B_OK) {
+		fScene.SetOutputScale(item->screen->ID(), previousScale);
+		return status;
+	}
+
+	item->frame = frame;
+	UpdateFrame();
+	return B_OK;
 }
 
 
@@ -405,11 +438,10 @@ VirtualScreen::ClipRegionToScreen(const Screen* screen,
 	const DisplayOutput* output = fScene.OutputByID(screen->ID());
 	if (output == NULL || !output->enabled)
 		return B_ENTRY_NOT_FOUND;
-	if (output->scale != 1.0f)
-		return B_NOT_SUPPORTED;
 
-	// BRegion stores integer pixel coordinates. Refuse fractional origins
-	// rather than silently clipping or shifting damage by a pixel.
+	// BRegion stores integer pixel coordinates. Fractional logical output
+	// origins are supported by rounding damage outwards after transforming
+	// each clipped rectangle into framebuffer coordinates.
 	BRect frame = item->frame;
 	if (!frame.IsValid() || frame.left != floorf(frame.left)
 		|| frame.top != floorf(frame.top)
@@ -424,11 +456,38 @@ VirtualScreen::ClipRegionToScreen(const Screen* screen,
 		return B_BAD_VALUE;
 	}
 
+	display_mode mode;
+	screen->GetMode(mode);
+	if (mode.virtual_width == 0 || mode.virtual_height == 0)
+		return B_BAD_VALUE;
+
 	BRegion clipped(globalRegion);
 	BRegion outputBounds(frame);
 	clipped.IntersectWith(&outputBounds);
-	clipped.OffsetBy(-((int32)frame.left), -((int32)frame.top));
-	screenRegion = clipped;
+
+	screenRegion.MakeEmpty();
+	const double scale = output->scale;
+	const int32 maxX = (int32)mode.virtual_width - 1;
+	const int32 maxY = (int32)mode.virtual_height - 1;
+	for (int32 i = 0; i < clipped.CountRects(); i++) {
+		BRect rect = clipped.RectAtInt(i);
+		double left = floor(((double)rect.left - frame.left) * scale);
+		double top = floor(((double)rect.top - frame.top) * scale);
+		double right = ceil(((double)rect.right - frame.left) * scale);
+		double bottom = ceil(((double)rect.bottom - frame.top) * scale);
+
+		// Clipping above should keep these values inside the framebuffer.
+		// Clamp defensively before converting to int32.
+		left = std::max(0.0, std::min((double)maxX, left));
+		top = std::max(0.0, std::min((double)maxY, top));
+		right = std::max(0.0, std::min((double)maxX, right));
+		bottom = std::max(0.0, std::min((double)maxY, bottom));
+
+		if (left <= right && top <= bottom)
+			screenRegion.Include(BRect((float)left, (float)top,
+				(float)right, (float)bottom));
+	}
+
 	return B_OK;
 }
 

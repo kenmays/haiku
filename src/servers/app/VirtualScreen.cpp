@@ -321,8 +321,8 @@ VirtualScreen::SetScreenScale(int32 index, float scale)
 	frame.right = frame.left + (mode.virtual_width - 1) / scale;
 	frame.bottom = frame.top + (mode.virtual_height - 1) / scale;
 	if (!frame.IsValid()
-		|| !isfinite(frame.left) || !isfinite(frame.top)
-		|| !isfinite(frame.right) || !isfinite(frame.bottom)
+		|| !std::isfinite(frame.left) || !std::isfinite(frame.top)
+		|| !std::isfinite(frame.right) || !std::isfinite(frame.bottom)
 		|| (double)frame.left < -2147483648.0
 		|| (double)frame.left > 2147483647.0
 		|| (double)frame.top < -2147483648.0

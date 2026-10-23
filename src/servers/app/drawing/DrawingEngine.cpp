@@ -98,6 +98,28 @@ class AutoFloatingOverlaysHider {
 
 };
 
+static void
+transform_region_to_framebuffer(const BRegion& source, BRegion& destination,
+	float scale, int32 offsetX, int32 offsetY, const BRect& framebufferBounds)
+{
+	destination.MakeEmpty();
+	if (!(scale > 0.0f) || !isfinite(scale))
+		scale = 1.0f;
+
+	for (int32 i = 0; i < source.CountRects(); i++) {
+		BRect rect = source.RectAt(i);
+		rect.left = floorf(rect.left * scale) + offsetX;
+		rect.top = floorf(rect.top * scale) + offsetY;
+		rect.right = ceilf(rect.right * scale) + offsetX;
+		rect.bottom = ceilf(rect.bottom * scale) + offsetY;
+		destination.Include(rect);
+	}
+
+	BRegion bounds(framebufferBounds);
+	destination.IntersectWith(&bounds);
+}
+
+
 class DrawTransaction {
 public:
 	DrawTransaction(DrawingEngine *engine, const BRect &bounds)
@@ -109,11 +131,11 @@ public:
 		fDirty.IntersectWith(fEngine->fPainter->ClippingRegion());
 		if (fDirty.CountRects() == 0)
 			return;
-		BRegion deviceDirty(fDirty);
-		deviceDirty.OffsetBy(fEngine->fRendererOffsetX,
-			fEngine->fRendererOffsetY);
-		BRegion framebufferBounds(fEngine->fPainter->Bounds());
-		deviceDirty.IntersectWith(&framebufferBounds);
+
+		BRegion deviceDirty;
+		transform_region_to_framebuffer(fDirty, deviceDirty,
+			fEngine->fRendererScale, fEngine->fRendererOffsetX,
+			fEngine->fRendererOffsetY, fEngine->fPainter->Bounds());
 		if (fEngine->fGraphicsCard != NULL
 			&& deviceDirty.CountRects() > 0) {
 			fOverlaysHidden
@@ -130,11 +152,11 @@ public:
 		fDirty = *fEngine->fPainter->ClippingRegion();
 		if (fDirty.CountRects() == 0)
 			return;
-		BRegion deviceDirty(fDirty);
-		deviceDirty.OffsetBy(fEngine->fRendererOffsetX,
-			fEngine->fRendererOffsetY);
-		BRegion framebufferBounds(fEngine->fPainter->Bounds());
-		deviceDirty.IntersectWith(&framebufferBounds);
+
+		BRegion deviceDirty;
+		transform_region_to_framebuffer(fDirty, deviceDirty,
+			fEngine->fRendererScale, fEngine->fRendererOffsetX,
+			fEngine->fRendererOffsetY, fEngine->fPainter->Bounds());
 		if (fEngine->fGraphicsCard != NULL
 			&& deviceDirty.CountRects() > 0) {
 			fOverlaysHidden
@@ -152,11 +174,11 @@ public:
 		fDirty = region;
 		if (fDirty.CountRects() == 0)
 			return;
-		BRegion deviceDirty(fDirty);
-		deviceDirty.OffsetBy(fEngine->fRendererOffsetX,
-			fEngine->fRendererOffsetY);
-		BRegion framebufferBounds(fEngine->fPainter->Bounds());
-		deviceDirty.IntersectWith(&framebufferBounds);
+
+		BRegion deviceDirty;
+		transform_region_to_framebuffer(fDirty, deviceDirty,
+			fEngine->fRendererScale, fEngine->fRendererOffsetX,
+			fEngine->fRendererOffsetY, fEngine->fPainter->Bounds());
 		if (fEngine->fGraphicsCard != NULL
 			&& deviceDirty.CountRects() > 0) {
 			fOverlaysHidden
@@ -168,11 +190,11 @@ public:
 	~DrawTransaction()
 	{
 		if (fEngine->fCopyToFront) {
-			BRegion deviceDirty(fDirty);
-			deviceDirty.OffsetBy(fEngine->fRendererOffsetX,
-				fEngine->fRendererOffsetY);
-			BRegion framebufferBounds(fEngine->fPainter->Bounds());
-			deviceDirty.IntersectWith(&framebufferBounds);
+
+		BRegion deviceDirty;
+		transform_region_to_framebuffer(fDirty, deviceDirty,
+			fEngine->fRendererScale, fEngine->fRendererOffsetX,
+			fEngine->fRendererOffsetY, fEngine->fPainter->Bounds());
 			if (fEngine->fGraphicsCard != NULL
 				&& deviceDirty.CountRects() > 0) {
 				fEngine->fGraphicsCard->InvalidateRegion(deviceDirty);
@@ -334,10 +356,9 @@ DrawingEngine::CopyToFront(/*const*/ BRegion& region)
 	if (fGraphicsCard == NULL)
 		return;
 
-	BRegion deviceRegion(region);
-	deviceRegion.OffsetBy(fRendererOffsetX, fRendererOffsetY);
-	BRegion framebufferBounds(fPainter->Bounds());
-	deviceRegion.IntersectWith(&framebufferBounds);
+	BRegion deviceRegion;
+	transform_region_to_framebuffer(region, deviceRegion, fRendererScale,
+		fRendererOffsetX, fRendererOffsetY, fPainter->Bounds());
 	if (deviceRegion.CountRects() > 0)
 		fGraphicsCard->InvalidateRegion(deviceRegion);
 }

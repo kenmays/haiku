@@ -67,8 +67,8 @@ class ScreenManager : public BLooper {
 		void			_ScanDrivers();
 		screen_item*	_AddHWInterface(HWInterface* interface);
 
+		int32				fNextScreenID;
 		int32				fKnownGraphicsDeviceCount;
-			std::vector<int32>		fFailedGraphicsDevices;
 			BObjectList<screen_item, true>	fScreenList;
 };
 

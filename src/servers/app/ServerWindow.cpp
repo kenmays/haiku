@@ -30,6 +30,7 @@
 
 #include <syslog.h>
 #include <new>
+#include <math.h>
 
 #include <AppDefs.h>
 #include <Autolock.h>
@@ -2549,10 +2550,21 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			// The current renderer only supports output-local translation
 			// for unit-scale outputs. Keep the legacy path for scaled outputs
 			// until their drawing primitives can be transformed as well.
+			BRect outputFrame = virtualScreen.ScreenFrameAt(i);
+			// Keep this eligibility test in sync with Window's renderer
+			// binding: otherwise clipping could be applied for an output
+			// whose engine actually fell back to the desktop interface.
 			if (virtualScreen.ScreenScaleAt(i) == 1.0f
+				&& outputFrame.IsValid()
+				&& outputFrame.left == floorf(outputFrame.left)
+				&& outputFrame.top == floorf(outputFrame.top)
+				&& (double)outputFrame.left >= -2147483647.0
+				&& (double)outputFrame.left <= 2147483647.0
+				&& (double)outputFrame.top >= -2147483647.0
+				&& (double)outputFrame.top <= 2147483647.0
 				&& output->HWInterface() != NULL) {
 				outputDrawingRegion = fCurrentDrawingRegion;
-				BRegion outputBounds(virtualScreen.ScreenFrameAt(i));
+				BRegion outputBounds(outputFrame);
 				outputDrawingRegion.IntersectWith(&outputBounds);
 				drawingRegion = &outputDrawingRegion;
 			}

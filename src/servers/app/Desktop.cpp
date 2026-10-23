@@ -3569,11 +3569,30 @@ Desktop::_SetBackground(BRegion& background)
 	dirtyBackground.IntersectWith(&background);
 	fBackgroundRegion = background;
 	if (dirtyBackground.Frame().IsValid()) {
-		if (GetDrawingEngine()->LockParallelAccess()) {
-			GetDrawingEngine()->FillRegion(dirtyBackground,
-				fWorkspaces[fCurrentWorkspace].Color());
+		const rgb_color color = fWorkspaces[fCurrentWorkspace].Color();
 
-			GetDrawingEngine()->UnlockParallelAccess();
+		// Background damage is in global desktop coordinates, while each
+		// DrawingEngine renders into its own output-local framebuffer.
+		// Clip and translate independently so gaps between outputs are never
+		// treated as drawable pixels and one output cannot receive another's
+		// damage coordinates.
+		for (int32 i = 0; i < fVirtualScreen.CountScreens(); i++) {
+			Screen* screen = fVirtualScreen.ScreenAt(i);
+			if (screen == NULL)
+				continue;
+
+			BRegion screenDirty;
+			if (fVirtualScreen.ClipRegionToScreen(screen, dirtyBackground,
+					screenDirty) != B_OK || screenDirty.CountRects() == 0) {
+				continue;
+			}
+
+			DrawingEngine* engine = screen->GetDrawingEngine();
+			if (engine == NULL || !engine->LockParallelAccess())
+				continue;
+
+			engine->FillRegion(screenDirty, color);
+			engine->UnlockParallelAccess();
 		}
 	}
 }

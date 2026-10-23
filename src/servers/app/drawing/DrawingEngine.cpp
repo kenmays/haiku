@@ -108,8 +108,12 @@ public:
 		fDirty.IntersectWith(fEngine->fPainter->ClippingRegion());
 		if (fDirty.CountRects() == 0)
 			return;
+		BRegion deviceDirty(fDirty);
+		deviceDirty.OffsetBy(fEngine->fRendererOffsetX,
+			fEngine->fRendererOffsetY);
 		fOverlaysHidden
-			= fEngine->fGraphicsCard->HideFloatingOverlays(fDirty.Frame());
+			= fEngine->fGraphicsCard->HideFloatingOverlays(
+				deviceDirty.Frame());
 	}
 
 	DrawTransaction(DrawingEngine *engine)
@@ -120,8 +124,12 @@ public:
 		fDirty = *fEngine->fPainter->ClippingRegion();
 		if (fDirty.CountRects() == 0)
 			return;
+		BRegion deviceDirty(fDirty);
+		deviceDirty.OffsetBy(fEngine->fRendererOffsetX,
+			fEngine->fRendererOffsetY);
 		fOverlaysHidden
-			= fEngine->fGraphicsCard->HideFloatingOverlays(fDirty.Frame());
+			= fEngine->fGraphicsCard->HideFloatingOverlays(
+				deviceDirty.Frame());
 	}
 
 	DrawTransaction(DrawingEngine *engine, const BRegion &region)
@@ -133,14 +141,22 @@ public:
 		fDirty = region;
 		if (fDirty.CountRects() == 0)
 			return;
+		BRegion deviceDirty(fDirty);
+		deviceDirty.OffsetBy(fEngine->fRendererOffsetX,
+			fEngine->fRendererOffsetY);
 		fOverlaysHidden
-			= fEngine->fGraphicsCard->HideFloatingOverlays(fDirty.Frame());
+			= fEngine->fGraphicsCard->HideFloatingOverlays(
+				deviceDirty.Frame());
 	}
 
 	~DrawTransaction()
 	{
-		if (fEngine->fCopyToFront)
-			fEngine->fGraphicsCard->InvalidateRegion(fDirty);
+		if (fEngine->fCopyToFront) {
+			BRegion deviceDirty(fDirty);
+			deviceDirty.OffsetBy(fEngine->fRendererOffsetX,
+				fEngine->fRendererOffsetY);
+			fEngine->fGraphicsCard->InvalidateRegion(deviceDirty);
+		}
 		if (fOverlaysHidden)
 			fEngine->fGraphicsCard->ShowFloatingOverlays();
 	}
@@ -180,7 +196,9 @@ DrawingEngine::DrawingEngine(HWInterface* interface)
 	:
 	fPainter(new Painter()),
 	fGraphicsCard(NULL),
-	fCopyToFront(true)
+	fCopyToFront(true),
+	fRendererOffsetX(0),
+	fRendererOffsetY(0)
 {
 	SetHWInterface(interface);
 }
@@ -287,7 +305,14 @@ DrawingEngine::SetCopyToFrontEnabled(bool enable)
 void
 DrawingEngine::CopyToFront(/*const*/ BRegion& region)
 {
-	fGraphicsCard->InvalidateRegion(region);
+	if (fRendererOffsetX == 0 && fRendererOffsetY == 0) {
+		fGraphicsCard->InvalidateRegion(region);
+		return;
+	}
+
+	BRegion deviceRegion(region);
+	deviceRegion.OffsetBy(fRendererOffsetX, fRendererOffsetY);
+	fGraphicsCard->InvalidateRegion(deviceRegion);
 }
 
 
@@ -876,6 +901,7 @@ DrawingEngine::FillRegion(BRegion& r, const rgb_color& color)
 
 	// NOTE: region expected to be already clipped correctly!!
 	BRect frame = r.Frame();
+	frame.OffsetBy(fRendererOffsetX, fRendererOffsetY);
 	if (!fPainter->Bounds().Contains(frame)) {
 		// NOTE: I am not quite sure yet how this can happen, but apparently it
 		// can (see bug #634).
@@ -1478,6 +1504,8 @@ DrawingEngine::CopyRect(BRect src, int32 xOffset, int32 yOffset) const
 void
 DrawingEngine::SetRendererOffset(int32 offsetX, int32 offsetY)
 {
+	fRendererOffsetX = offsetX;
+	fRendererOffsetY = offsetY;
 	fPainter->SetRendererOffset(offsetX, offsetY);
 }
 

@@ -96,9 +96,10 @@ use_fail_safe_video_mode()
 //	#pragma mark - AccelerantHWInterface
 
 
-AccelerantHWInterface::AccelerantHWInterface()
+AccelerantHWInterface::AccelerantHWInterface(int32 deviceNumber)
 	:
 	HWInterface(),
+	fDeviceNumber(deviceNumber),
 	fCardFD(-1),
 	fAccelerantImage(-1),
 	fAccelerantHook(NULL),
@@ -189,6 +190,23 @@ AccelerantHWInterface::Initialize()
 		return B_NO_MEMORY;
 
 	if (ret >= B_OK) {
+		if (fDeviceNumber >= 0) {
+			// ScreenManager creates one interface per enumerated device. Do not
+			// silently open the next device here, or multiple Screen objects can
+			// end up owning the same framebuffer.
+			fCardFD = _OpenGraphicsDevice(fDeviceNumber);
+			if (fCardFD < 0)
+				return fCardFD;
+
+			status_t status = _OpenAccelerant(fCardFD);
+			if (status != B_OK) {
+				close(fCardFD);
+				fCardFD = -1;
+				return status;
+			}
+			return B_OK;
+		}
+
 		for (int32 i = 0; fCardFD != B_ENTRY_NOT_FOUND; i++) {
 			fCardFD = _OpenGraphicsDevice(i);
 			if (fCardFD < 0) {
@@ -206,6 +224,22 @@ AccelerantHWInterface::Initialize()
 		return fCardFD >= 0 ? B_OK : fCardFD;
 	}
 	return ret;
+}
+
+
+/*! Returns the number of enumerated graphics device nodes. */
+int32
+AccelerantHWInterface::CountGraphicsDevices()
+{
+	int32 deviceCount = 0;
+	char path[PATH_MAX];
+	while (true) {
+		int32 count = 0;
+		if (!_RecursiveScan("/dev/graphics/", deviceCount, count, path))
+			break;
+		deviceCount++;
+	}
+	return deviceCount;
 }
 
 
@@ -271,7 +305,7 @@ AccelerantHWInterface::_OpenGraphicsDevice(int deviceNumber)
 	}
 
 	// Open VESA or Framebuffer driver if we were not able to get a better one.
-	if (device == -1 && count < deviceNumber) {
+	if (device == -1 && count < deviceNumber && fDeviceNumber < 0) {
 		device = open("/dev/graphics/vesa", B_READ_WRITE);
 		if (device > 0) {
 			// store the device, so that we can access the planar blitter

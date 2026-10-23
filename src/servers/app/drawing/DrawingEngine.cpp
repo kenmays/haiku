@@ -1488,6 +1488,9 @@ DrawingEngine::CopyRect(BRect src, int32 xOffset, int32 yOffset) const
 	BRect dst;
 	RenderingBuffer* buffer = fGraphicsCard->DrawingBuffer();
 	if (buffer) {
+		// The caller uses global desktop coordinates; the backing buffer does
+		// not include the output's desktop origin.
+		src.OffsetBy(fRendererOffsetX, fRendererOffsetY);
 		BRect clip(0, 0, buffer->Width() - 1, buffer->Height() - 1);
 
 		dst = src;
@@ -1517,6 +1520,9 @@ DrawingEngine::CopyRect(BRect src, int32 xOffset, int32 yOffset) const
 			// offset dest again, because it is return value
 			dst.OffsetBy(xOffset, yOffset);
 		}
+
+		// Return the destination in global desktop coordinates.
+		dst.OffsetBy(-fRendererOffsetX, -fRendererOffsetY);
 	}
 	return dst;
 }

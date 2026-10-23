@@ -16,6 +16,7 @@
 #include <stdio.h>
 
 #include <algorithm>
+#include <math.h>
 #include <stack>
 
 #include "DrawState.h"

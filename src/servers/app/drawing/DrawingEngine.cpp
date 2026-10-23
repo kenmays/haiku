@@ -218,7 +218,8 @@ DrawingEngine::DrawingEngine(HWInterface* interface)
 	fGraphicsCard(NULL),
 	fCopyToFront(true),
 	fRendererOffsetX(0),
-	fRendererOffsetY(0)
+	fRendererOffsetY(0),
+	fRendererScale(1.0f)
 {
 	SetHWInterface(interface);
 }
@@ -582,7 +583,21 @@ DrawingEngine::CopyRegion(/*const*/ BRegion* region, int32 xOffset,
 	// CopyRect operates on framebuffer coordinates. Translate a private copy
 	// so scroll/copy operations also work when this engine is bound to an
 	// output whose origin is not (0, 0).
-	BRegion localRegion(*region);
+	BRegion localRegion;
+	if (fRendererScale == 1.0f) {
+		localRegion = *region;
+	} else {
+		for (int32 i = 0; i < region->CountRects(); i++) {
+			BRect rect = region->RectAt(i);
+			rect.left = floorf(rect.left * fRendererScale);
+			rect.top = floorf(rect.top * fRendererScale);
+			rect.right = ceilf(rect.right * fRendererScale);
+			rect.bottom = ceilf(rect.bottom * fRendererScale);
+			localRegion.Include(rect);
+		}
+		xOffset = (int32)lroundf(xOffset * fRendererScale);
+		yOffset = (int32)lroundf(yOffset * fRendererScale);
+	}
 	localRegion.OffsetBy(fRendererOffsetX, fRendererOffsetY);
 
 	BRegion framebufferBounds(fPainter->Bounds());
@@ -1558,6 +1573,9 @@ DrawingEngine::SetRendererOffset(int32 offsetX, int32 offsetY)
 void
 DrawingEngine::SetRendererScale(float scale)
 {
+	if (!(scale > 0.0f) || scale != scale)
+		scale = 1.0f;
+	fRendererScale = scale;
 	fPainter->SetRendererScale(scale);
 }
 

@@ -7,6 +7,7 @@
 
 #include <Region.h>
 
+#include <cmath>
 #include <limits>
 
 #include <TestSuiteAddon.h>
@@ -195,6 +196,31 @@ public:
 			tinyScaleScene.OutputPixelToGlobal(20,
 				BPoint(std::numeric_limits<float>::max(), 1.0f), global));
 		CPPUNIT_ASSERT(global == BPoint(31, 37));
+
+		// Finite float inputs can overflow during an intermediate float
+		// subtraction/division even when the final transformed coordinate fits.
+		const float maxFloat = std::numeric_limits<float>::max();
+		MultiheadScene wideRangeScene;
+		CPPUNIT_ASSERT_EQUAL((status_t)B_OK,
+			wideRangeScene.AddOutput(30,
+				BRect(-maxFloat, 0, -maxFloat, 0), 1.0e-38f));
+		BPoint widePixel;
+		CPPUNIT_ASSERT_EQUAL((status_t)B_OK,
+			wideRangeScene.GlobalToOutputPixel(30,
+				BPoint(maxFloat, 0), widePixel));
+		CPPUNIT_ASSERT(std::isfinite(widePixel.x));
+		CPPUNIT_ASSERT(widePixel.x > 6.0f && widePixel.x < 7.0f);
+
+		MultiheadScene inverseRangeScene;
+		CPPUNIT_ASSERT_EQUAL((status_t)B_OK,
+			inverseRangeScene.AddOutput(40,
+				BRect(-maxFloat, 0, -maxFloat, 0), 0.5f));
+		BPoint wideGlobal;
+		CPPUNIT_ASSERT_EQUAL((status_t)B_OK,
+			inverseRangeScene.OutputPixelToGlobal(40,
+				BPoint(maxFloat, 0), wideGlobal));
+		CPPUNIT_ASSERT(std::isfinite(wideGlobal.x));
+		CPPUNIT_ASSERT(wideGlobal.x > 3.0e38f);
 	}
 
 	void NegativeOriginMapsToLocalPixels()

@@ -513,6 +513,8 @@ VirtualScreen::BuildRenderTarget(const Screen* screen,
 
 	const DisplayOutput* output = fScene.OutputByID(screen->ID());
 	if (output == NULL || !output->enabled || !output->frame.IsValid()
+		|| output->frame.left != floor(output->frame.left)
+		|| output->frame.top != floor(output->frame.top)
 		|| !std::isfinite(output->scale) || output->scale <= 0.0f) {
 		return B_NAME_NOT_FOUND;
 	}

@@ -526,8 +526,9 @@ AccelerantHWInterface::HasMultiOutputEnumeration() const
 
 
 uint32
-AccelerantHWInterface::MultiOutputCount() const
+AccelerantHWInterface::MultiOutputCount()
 {
+	AutoReadLocker _(this);
 	if (!HasMultiOutputEnumeration())
 		return 1;
 
@@ -540,8 +541,9 @@ AccelerantHWInterface::MultiOutputCount() const
 
 status_t
 AccelerantHWInterface::GetMultiOutputInfo(uint32 index,
-	accelerant_output_info* info) const
+	accelerant_output_info* info)
 {
+	AutoReadLocker _(this);
 	if (info == NULL)
 		return B_BAD_VALUE;
 	if (!HasMultiOutputEnumeration())
@@ -602,8 +604,9 @@ AccelerantHWInterface::GetMultiOutputInfo(uint32 index,
 
 
 status_t
-AccelerantHWInterface::GetMultiOutputGeneration(uint64* generation) const
+AccelerantHWInterface::GetMultiOutputGeneration(uint64* generation)
 {
+	AutoReadLocker _(this);
 	if (generation == NULL)
 		return B_BAD_VALUE;
 	if (fAccGetMultiOutputGeneration == NULL)

@@ -175,6 +175,7 @@ AccelerantHWInterface::AccelerantHWInterface(int32 deviceNumber,
 
 	fInitialModeSwitch(true),
 	fHasDisplayMode(false),
+	fHasObservedOutputMode(false),
 
 	fRetraceSemaphore(-1),
 
@@ -602,7 +603,18 @@ AccelerantHWInterface::CheckOutputModeChanged(bool* changed)
 	if (status != B_OK)
 		return status;
 
-	*changed = !(currentMode == fDisplayMode);
+	if (currentMode == fDisplayMode) {
+		fHasObservedOutputMode = false;
+		return B_OK;
+	}
+	if (fHasObservedOutputMode
+		&& currentMode == fLastObservedOutputMode) {
+		return B_OK;
+	}
+
+	fLastObservedOutputMode = currentMode;
+	fHasObservedOutputMode = true;
+	*changed = true;
 	return B_OK;
 }
 
@@ -1090,6 +1102,7 @@ AccelerantHWInterface::SetMode(const display_mode& mode)
 	// Mark the cached mode valid only after the framebuffer and backbuffer
 	// have both been rebuilt successfully.
 	fHasDisplayMode = true;
+	fHasObservedOutputMode = false;
 
 	// notify all listeners about the mode change
 	_NotifyFrameBufferChanged();

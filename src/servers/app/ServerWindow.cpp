@@ -2925,7 +2925,7 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 		case AS_STROKE_RECT_GRADIENT:
 		{
 			BRect rect;
-			link.Read<BRect>(&rect);
+			if (link.Read<BRect>(&rect) != B_OK) { commandProcessed = false; break; }
 			BGradient* gradient;
 			if (link.ReadGradient(&gradient) != B_OK) {
 				commandProcessed = false;
@@ -2948,7 +2948,7 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 		case AS_FILL_RECT_GRADIENT:
 		{
 			BRect rect;
-			link.Read<BRect>(&rect);
+			if (link.Read<BRect>(&rect) != B_OK) { commandProcessed = false; break; }
 			BGradient* gradient;
 			if (link.ReadGradient(&gradient) != B_OK) {
 				commandProcessed = false;
@@ -3013,9 +3013,7 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			float angle, span;
 			BRect r;
 
-			link.Read<BRect>(&r);
-			link.Read<float>(&angle);
-			if (link.Read<float>(&span) != B_OK) {
+			if (link.Read<BRect>(&r) != B_OK || link.Read<float>(&angle) != B_OK || link.Read<float>(&span) != B_OK) {
 				commandProcessed = false;
 				break;
 			}
@@ -3032,9 +3030,7 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 
 			float angle, span;
 			BRect r;
-			link.Read<BRect>(&r);
-			link.Read<float>(&angle);
-			link.Read<float>(&span);
+			if (link.Read<BRect>(&r) != B_OK || link.Read<float>(&angle) != B_OK || link.Read<float>(&span) != B_OK) { commandProcessed = false; break; }
 			BGradient* gradient;
 			if (link.ReadGradient(&gradient) != B_OK) {
 				commandProcessed = false;
@@ -3057,13 +3053,11 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			const SimpleTransform transform =
 				fCurrentView->PenToScreenTransform();
 			BPoint pts[4];
-			status_t status;
 			for (int32 i = 0; i < 4; i++) {
-				status = link.Read<BPoint>(&(pts[i]));
+				if (link.Read<BPoint>(&(pts[i])) != B_OK) { commandProcessed = false; break; }
 				transform.Apply(&pts[i]);
 			}
-			if (status != B_OK)
-				break;
+			if (!commandProcessed) break;
 
 			drawingEngine->DrawBezier(pts, code == AS_FILL_BEZIER);
 			break;
@@ -3078,9 +3072,10 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 				fCurrentView->PenToScreenTransform();
 			BPoint pts[4];
 			for (int32 i = 0; i < 4; i++) {
-				link.Read<BPoint>(&(pts[i]));
+				if (link.Read<BPoint>(&(pts[i])) != B_OK) { commandProcessed = false; break; }
 				transform.Apply(&pts[i]);
 			}
+			if (!commandProcessed) break;
 			BGradient* gradient;
 			if (link.ReadGradient(&gradient) != B_OK) {
 				commandProcessed = false;
@@ -3137,9 +3132,7 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			BRect rect;
 			float xRadius;
 			float yRadius;
-			link.Read<BRect>(&rect);
-			link.Read<float>(&xRadius);
-			if (link.Read<float>(&yRadius) != B_OK) {
+			if (link.Read<BRect>(&rect) != B_OK || link.Read<float>(&xRadius) != B_OK || link.Read<float>(&yRadius) != B_OK) {
 				commandProcessed = false;
 				break;
 			}
@@ -3158,9 +3151,7 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 
 			BRect rect;
 			float xrad,yrad;
-			link.Read<BRect>(&rect);
-			link.Read<float>(&xrad);
-			link.Read<float>(&yrad);
+			if (link.Read<BRect>(&rect) != B_OK || link.Read<float>(&xrad) != B_OK || link.Read<float>(&yrad) != B_OK) { commandProcessed = false; break; }
 			BGradient* gradient;
 			if (link.ReadGradient(&gradient) != B_OK) {
 				commandProcessed = false;
@@ -3187,9 +3178,10 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			BRect rect;
 
 			for (int32 i = 0; i < 3; i++) {
-				link.Read<BPoint>(&(pts[i]));
+				if (link.Read<BPoint>(&(pts[i])) != B_OK) { commandProcessed = false; break; }
 				transform.Apply(&pts[i]);
 			}
+			if (!commandProcessed) break;
 
 			if (link.Read<BRect>(&rect) != B_OK) {
 				commandProcessed = false;
@@ -3211,10 +3203,11 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			BPoint pts[3];
 			BRect rect;
 			for (int32 i = 0; i < 3; i++) {
-				link.Read<BPoint>(&(pts[i]));
+				if (link.Read<BPoint>(&(pts[i])) != B_OK) { commandProcessed = false; break; }
 				transform.Apply(&pts[i]);
 			}
-			link.Read<BRect>(&rect);
+			if (!commandProcessed) break;
+			if (link.Read<BRect>(&rect) != B_OK) { commandProcessed = false; break; }
 			BGradient* gradient;
 			if (link.ReadGradient(&gradient) != B_OK) {
 				commandProcessed = false;
@@ -3235,11 +3228,7 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			BRect polyFrame;
 			bool isClosed = true;
 			int32 pointCount;
-
-			link.Read<BRect>(&polyFrame);
-			if (code == AS_STROKE_POLYGON)
-				link.Read<bool>(&isClosed);
-			link.Read<int32>(&pointCount);
+			if (link.Read<BRect>(&polyFrame) != B_OK || (code == AS_STROKE_POLYGON && link.Read<bool>(&isClosed) != B_OK) || link.Read<int32>(&pointCount) != B_OK || pointCount <= 0 || (uint64)pointCount * sizeof(BPoint) > SIZE_MAX) { commandProcessed = false; break; }
 
 			const SimpleTransform transform =
 				fCurrentView->PenToScreenTransform();
@@ -3270,10 +3259,7 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			BRect polyFrame;
 			bool isClosed = true;
 			int32 pointCount;
-			link.Read<BRect>(&polyFrame);
-			if (code == AS_STROKE_POLYGON_GRADIENT)
-				link.Read<bool>(&isClosed);
-			link.Read<int32>(&pointCount);
+			if (link.Read<BRect>(&polyFrame) != B_OK || (code == AS_STROKE_POLYGON_GRADIENT && link.Read<bool>(&isClosed) != B_OK) || link.Read<int32>(&pointCount) != B_OK || pointCount <= 0 || (uint64)pointCount * sizeof(BPoint) > SIZE_MAX) { commandProcessed = false; break; }
 
 			const SimpleTransform transform =
 				fCurrentView->PenToScreenTransform();
@@ -3309,11 +3295,7 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			BRect shapeFrame;
 			int32 opCount;
 			int32 ptCount;
-
-			link.Read<BRect>(&shapeFrame);
-			link.Read<int32>(&opCount);
-			link.Read<int32>(&ptCount);
-
+			if (link.Read<BRect>(&shapeFrame) != B_OK || link.Read<int32>(&opCount) != B_OK || link.Read<int32>(&ptCount) != B_OK || opCount < 0 || ptCount < 0 || (uint64)opCount * sizeof(uint32) > SIZE_MAX || (uint64)ptCount * sizeof(BPoint) > SIZE_MAX) { commandProcessed = false; break; }
 			uint32* opList = new(nothrow) uint32[opCount];
 			BPoint* ptList = new(nothrow) BPoint[ptCount];
 			if (opList == NULL || ptList == NULL) {
@@ -3414,8 +3396,7 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 				Title()));
 
 			BRegion region;
-			link.ReadRegion(&region);
-
+			if (link.ReadRegion(&region) < B_OK) { commandProcessed = false; break; }
 			BGradient* gradient;
 			if (link.ReadGradient(&gradient) != B_OK) {
 				commandProcessed = false;
@@ -3595,8 +3576,7 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 		case AS_VIEW_DRAW_PICTURE:
 		{
 			int32 token;
-			link.Read<int32>(&token);
-
+			if (link.Read<int32>(&token) != B_OK) { commandProcessed = false; break; }
 			BPoint where;
 			if (link.Read<BPoint>(&where) == B_OK) {
 				BReference<ServerPicture> picture(App()->GetPicture(token), true);

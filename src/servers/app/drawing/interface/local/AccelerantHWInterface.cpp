@@ -1756,7 +1756,17 @@ AccelerantHWInterface::IsDoubleBuffered() const
 void
 AccelerantHWInterface::_CopyBackToFront(/*const*/ BRegion& region)
 {
-	return HWInterface::_CopyBackToFront(region);
+	HWInterface::_CopyBackToFront(region);
+
+	// Some independent-output backends require an explicit present/commit
+	// after CPU rendering. The damage region is already framebuffer-local.
+	if (fUseMultiOutput && fAccPresentMultiOutput != NULL
+		&& region.CountRects() > 0) {
+		uint32 count = 0;
+		_RegionToRectParams(&region, &count);
+		if (count > 0)
+			fAccPresentMultiOutput(fOutputID, fRectParams, count);
+	}
 }
 
 

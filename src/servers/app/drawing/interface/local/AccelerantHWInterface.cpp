@@ -105,6 +105,10 @@ AccelerantHWInterface::AccelerantHWInterface(int32 deviceNumber,
 	fDevicePath(devicePath != NULL ? devicePath : ""),
 	fOutputID(outputID),
 	fUseMultiOutput(useMultiOutput),
+	fOutputFrame(0, 0, -1, -1),
+	fOutputScale(1.0f),
+	fGlobalCursorLocation(0, 0),
+	fHasGlobalCursorLocation(false),
 	fCardFD(-1),
 	fAccelerantImage(-1),
 	fAccelerantHook(NULL),
@@ -1585,6 +1589,14 @@ AccelerantHWInterface::HideOverlay(Overlay* overlay)
 void
 AccelerantHWInterface::SetCursor(ServerCursor* cursor)
 {
+	// Hardware cursors are currently device-global on the legacy accelerant
+	// interface. Use the software cursor for independent outputs so each
+	// framebuffer gets a correctly clipped cursor in its own pixel space.
+	if (fUseMultiOutput) {
+		HWInterface::SetCursor(cursor);
+		return;
+	}
+
 	// cursor should never be NULL, but let us be safe!!
 	if (cursor == NULL || LockExclusiveAccess() == false)
 		return;
@@ -1676,6 +1688,8 @@ void
 AccelerantHWInterface::SetCursorVisible(bool visible)
 {
 	HWInterface::SetCursorVisible(visible);
+	if (fUseMultiOutput)
+		return;
 
 	if (fHardwareCursorEnabled && LockExclusiveAccess()) {
 		if (fAccShowCursor != NULL)
@@ -1691,6 +1705,24 @@ AccelerantHWInterface::SetCursorVisible(bool visible)
 void
 AccelerantHWInterface::MoveCursorTo(float x, float y)
 {
+	if (fUseMultiOutput) {
+		BPoint localPosition;
+		if (LockExclusiveAccess()) {
+			fGlobalCursorLocation = BPoint(x, y);
+			fHasGlobalCursorLocation = true;
+			if (fOutputFrame.IsValid() && fOutputScale > 0.0f) {
+				localPosition = BPoint((x - fOutputFrame.left) * fOutputScale,
+					(y - fOutputFrame.top) * fOutputScale);
+			} else
+				localPosition = BPoint(x, y);
+			UnlockExclusiveAccess();
+		} else
+			return;
+
+		HWInterface::MoveCursorTo(localPosition.x, localPosition.y);
+		return;
+	}
+
 	HWInterface::MoveCursorTo(x, y);
 
 	if (fHardwareCursorEnabled && LockExclusiveAccess()) {
@@ -1704,6 +1736,31 @@ AccelerantHWInterface::MoveCursorTo(float x, float y)
 
 		UnlockExclusiveAccess();
 	}
+}
+
+
+void
+AccelerantHWInterface::SetOutputTransform(const BRect& frame, float scale)
+{
+	if (!fUseMultiOutput || !frame.IsValid() || !(scale > 0.0f)
+		|| !isfinite(scale)) {
+		return;
+	}
+
+	BPoint cursorPosition;
+	bool moveCursor = false;
+	if (!LockExclusiveAccess())
+		return;
+
+	fOutputFrame = frame;
+	fOutputScale = scale;
+	moveCursor = fHasGlobalCursorLocation;
+	cursorPosition = fGlobalCursorLocation;
+	UnlockExclusiveAccess();
+
+	// Re-map the saved desktop position after a move or DPI change.
+	if (moveCursor)
+		MoveCursorTo(cursorPosition.x, cursorPosition.y);
 }
 
 

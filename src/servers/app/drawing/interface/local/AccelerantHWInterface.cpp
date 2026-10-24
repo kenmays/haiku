@@ -991,11 +991,13 @@ AccelerantHWInterface::GetMode(display_mode* mode)
 status_t
 AccelerantHWInterface::_UpdateModeList()
 {
-	fModeCount = fUseMultiOutput
-		? (int32)fAccGetMultiOutputModeCount(fOutputID)
-		: (int32)fAccGetModeCount();
-	if (fModeCount <= 0)
-		return B_ERROR;
+	uint32 modeCount = fUseMultiOutput
+		? fAccGetMultiOutputModeCount(fOutputID) : fAccGetModeCount();
+	// Mode counts are driver-provided. Keep allocation and downstream loops
+	// bounded even if an accelerant returns a corrupt value.
+	if (modeCount == 0 || modeCount > 4096)
+		return B_BAD_DATA;
+	fModeCount = (int32)modeCount;
 
 	delete[] fModeList;
 	fModeList = new(nothrow) display_mode[fModeCount];
@@ -1023,6 +1025,10 @@ AccelerantHWInterface::_UpdateFrameBufferConfig()
 	if (status != B_OK) {
 		ATRACE(("unable to get frame buffer config\n"));
 		return status;
+	}
+	if (fFrameBufferConfig.frame_buffer == NULL
+		|| fFrameBufferConfig.bytes_per_row == 0) {
+		return B_BAD_DATA;
 	}
 
 	fFrontBuffer->SetFrameBufferConfig(fFrameBufferConfig);

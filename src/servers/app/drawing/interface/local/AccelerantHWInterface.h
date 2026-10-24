@@ -209,6 +209,8 @@ private:
 			display_mode		fDisplayMode;
 			bool				fInitialModeSwitch;
 			bool				fHasDisplayMode;
+			display_mode		fLastObservedOutputMode;
+			bool				fHasObservedOutputMode;
 
 			sem_id				fRetraceSemaphore;
 

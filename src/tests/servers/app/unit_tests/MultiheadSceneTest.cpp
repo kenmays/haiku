@@ -20,6 +20,7 @@ class MultiheadSceneTest : public CppUnit::TestFixture {
 	CPPUNIT_TEST(OutputSelectionUsesGlobalCoordinates);
 	CPPUNIT_TEST(MixedScalePixelClippingRoundsOutwards);
 	CPPUNIT_TEST(NegativeOriginMapsToLocalPixels);
+	CPPUNIT_TEST(FractionalOutputOriginsMapToLocalPixels);
 	CPPUNIT_TEST(GenerationTracksOutputChanges);
 	CPPUNIT_TEST(InvalidOutputUpdatesAreRejectedAtomically);
 	CPPUNIT_TEST(DisabledOutputsAreExcludedFromLayoutAndDamage);
@@ -221,6 +222,34 @@ public:
 				BPoint(maxFloat, 0), wideGlobal));
 		CPPUNIT_ASSERT(std::isfinite(wideGlobal.x));
 		CPPUNIT_ASSERT(wideGlobal.x > 3.0e38f);
+	}
+
+	void FractionalOutputOriginsMapToLocalPixels()
+	{
+		MultiheadScene scene;
+		CPPUNIT_ASSERT_EQUAL((status_t)B_OK,
+			scene.AddOutput(50, BRect(0.5f, 0.5f, 99.5f, 99.5f), 1.5f));
+
+		BPoint pixel;
+		CPPUNIT_ASSERT_EQUAL((status_t)B_OK,
+			scene.GlobalToOutputPixel(50, BPoint(1.5f, 2.5f), pixel));
+		CPPUNIT_ASSERT(std::fabs(pixel.x - 1.5f) < 0.001f);
+		CPPUNIT_ASSERT(std::fabs(pixel.y - 3.0f) < 0.001f);
+
+		BPoint global;
+		CPPUNIT_ASSERT_EQUAL((status_t)B_OK,
+			scene.OutputPixelToGlobal(50, pixel, global));
+		CPPUNIT_ASSERT(std::fabs(global.x - 1.5f) < 0.001f);
+		CPPUNIT_ASSERT(std::fabs(global.y - 2.5f) < 0.001f);
+
+		BRegion damage;
+		damage.Include(BRect(1, 1, 2, 2));
+		BRegion pixels;
+		CPPUNIT_ASSERT_EQUAL((status_t)B_OK,
+			scene.ClipRegionToOutput(50, damage, 150, 150, pixels));
+		CPPUNIT_ASSERT(pixels.CountRects() > 0);
+		CPPUNIT_ASSERT(pixels.Frame().left == 0.0f);
+		CPPUNIT_ASSERT(pixels.Frame().top == 0.0f);
 	}
 
 	void NegativeOriginMapsToLocalPixels()

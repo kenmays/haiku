@@ -173,11 +173,10 @@ VirtualScreen::AddScreen(Screen* screen, const ScreenConfigurations& configurati
 	monitor_info info;
 	bool hasInfo = screen->GetMonitorInfo(info) == B_OK;
 
-	// Keep the first screen as the deterministic legacy rendering backend.
-	// The current Desktop and Window paths still expose a single DrawingEngine;
-	// replacing it on every AddScreen() would silently route all drawing to
-	// whichever output happened to be enumerated last. Per-output rendering
-	// must be introduced at the call sites, not by changing this fallback.
+	// Keep the first screen as the deterministic legacy fallback for code
+	// paths that still request one DrawingEngine. Multi-output window drawing
+	// explicitly binds each intersecting output and must not be redirected by
+	// whichever connector happened to be enumerated last.
 	if (fScreenList.CountItems() == 0) {
 		fDrawingEngine = screen->GetDrawingEngine();
 		fHWInterface = screen->HWInterface();

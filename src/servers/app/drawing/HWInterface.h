@@ -135,9 +135,6 @@ public:
 	virtual void				ConfigureOverlay(Overlay* overlay);
 	virtual void				HideOverlay(Overlay* overlay);
 
-	// Output geometry for coordinate-sensitive per-output facilities (e.g. cursor).
-	virtual void				SetOutputTransform(const BRect& frame, float scale) {}
-
 	// frame buffer access (you need to ReadLock!)
 			RenderingBuffer*	DrawingBuffer() const;
 	virtual	RenderingBuffer*	FrontBuffer() const = 0;

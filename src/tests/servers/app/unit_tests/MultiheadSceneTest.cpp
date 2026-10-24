@@ -183,6 +183,18 @@ public:
 		CPPUNIT_ASSERT_EQUAL((status_t)B_OK,
 			scene.GlobalToOutputPixel(10, BPoint(0, 0), pixel));
 		CPPUNIT_ASSERT(pixel == BPoint(0, 0));
+
+		// The inverse mapping must also reject non-finite results without
+		// publishing a partially converted global coordinate.
+		MultiheadScene tinyScaleScene;
+		CPPUNIT_ASSERT_EQUAL((status_t)B_OK,
+			tinyScaleScene.AddOutput(20, BRect(0, 0, 99, 99),
+				std::numeric_limits<float>::min()));
+		BPoint global(31, 37);
+		CPPUNIT_ASSERT_EQUAL((status_t)B_BAD_VALUE,
+			tinyScaleScene.OutputPixelToGlobal(20,
+				BPoint(std::numeric_limits<float>::max(), 1.0f), global));
+		CPPUNIT_ASSERT(global == BPoint(31, 37));
 	}
 
 	void NegativeOriginMapsToLocalPixels()

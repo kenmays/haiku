@@ -967,7 +967,7 @@ AccelerantHWInterface::SetMode(const display_mode& mode)
 		if (!fInitialModeSwitch)
 			return status;
 
-		if (fModeList == NULL) {
+		if (fModeList == NULL || fModeCount <= 0) {
 			status = _UpdateModeList();
 			if (status != B_OK)
 				return status;
@@ -1079,6 +1079,13 @@ AccelerantHWInterface::GetMode(display_mode* mode)
 status_t
 AccelerantHWInterface::_UpdateModeList()
 {
+	// Invalidate the old cache before querying: a disconnected output may now
+	// advertise zero modes, and retaining its old list would expose stale
+	// timings after a hot-unplug or mode-generation change.
+	delete[] fModeList;
+	fModeList = NULL;
+	fModeCount = 0;
+
 	uint32 modeCount = fUseMultiOutput
 		? fAccGetMultiOutputModeCount(fOutputID) : fAccGetModeCount();
 	// Mode counts are driver-provided. Keep allocation and downstream loops
@@ -1087,16 +1094,20 @@ AccelerantHWInterface::_UpdateModeList()
 		return B_BAD_DATA;
 	fModeCount = (int32)modeCount;
 
-	delete[] fModeList;
 	fModeList = new(nothrow) display_mode[fModeCount];
-	if (!fModeList)
+	if (!fModeList) {
+		fModeCount = 0;
 		return B_NO_MEMORY;
+	}
 
 	status_t status = fUseMultiOutput
 		? fAccGetMultiOutputModeList(fOutputID, fModeList)
 		: fAccGetModeList(fModeList);
 	if (status != B_OK) {
 		ATRACE(("unable to get mode list\n"));
+		delete[] fModeList;
+		fModeList = NULL;
+		fModeCount = 0;
 		return status;
 	}
 
@@ -1112,8 +1123,11 @@ AccelerantHWInterface::_UpdateModeList()
 			fModeList[validCount++] = fModeList[i];
 		}
 		fModeCount = validCount;
-		if (fModeCount == 0)
+		if (fModeCount == 0) {
+			delete[] fModeList;
+			fModeList = NULL;
 			return B_NOT_SUPPORTED;
+		}
 	}
 
 	return B_OK;

@@ -531,7 +531,10 @@ AccelerantHWInterface::MultiOutputCount() const
 	if (!HasMultiOutputEnumeration())
 		return 1;
 
-	return fAccGetMultiOutputCount();
+	// Connector counts come from a driver module. Bound them before callers
+	// allocate arrays or iterate, and treat an implausible count as corrupt.
+	uint32 count = fAccGetMultiOutputCount();
+	return count <= 256 ? count : 0;
 }
 
 
@@ -558,6 +561,8 @@ AccelerantHWInterface::GetMultiOutputInfo(uint32 index,
 	}
 
 	uint32 countBefore = fAccGetMultiOutputCount();
+	if (countBefore > 256)
+		return B_BAD_DATA;
 	if (index >= countBefore)
 		return B_BAD_INDEX;
 

@@ -13,6 +13,7 @@
 
 
 static const uint32 kScreenChangedMessage = 'scch';
+static const uint32 kScanGraphicsMessage = 'scgr';
 
 #include "Screen.h"
 #include "ServerConfig.h"
@@ -23,6 +24,8 @@ static const uint32 kScreenChangedMessage = 'scch';
 #include <Directory.h>
 #include <Entry.h>
 #include <NodeMonitor.h>
+#include <MessageRunner.h>
+#include <Messenger.h>
 #include <Path.h>
 #include <unistd.h>
 
@@ -76,7 +79,8 @@ ScreenManager::ScreenManager()
 	BLooper("screen manager"),
 	fNextScreenID(0),
 	fKnownGraphicsDeviceCount(0),
-	fScreenList(4)
+	fScreenList(4),
+	fScanRunner(NULL)
 {
 #ifdef HAIKU_TARGET_PLATFORM_LIBBE_TEST
 #	if defined(USE_DIRECT_WINDOW_TEST_MODE)
@@ -92,11 +96,21 @@ ScreenManager::ScreenManager()
 	// misses hotplug events below that directory.
 	_WatchGraphicsDirectories("/dev/graphics");
 #endif
+
+#ifndef HAIKU_TARGET_PLATFORM_LIBBE_TEST
+	// Connector hotplug does not necessarily create/remove a /dev/graphics
+	// node. Poll the accelerant generation so unplug/replug is recovered even
+	// when the device path itself remains stable.
+	BMessage scanMessage(kScanGraphicsMessage);
+	fScanRunner = new(nothrow) BMessageRunner(BMessenger(this), &scanMessage,
+		1000000);
+#endif
 }
 
 
 ScreenManager::~ScreenManager()
 {
+	delete fScanRunner;
 	for (size_t i = 0; i < fWatchedDirectories.size(); i++)
 		unwatch_node(&fWatchedDirectories[i], this);
 }
@@ -647,6 +661,12 @@ void
 ScreenManager::MessageReceived(BMessage* message)
 {
 	switch (message->what) {
+		case kScanGraphicsMessage:
+#ifndef HAIKU_TARGET_PLATFORM_LIBBE_TEST
+			_ScanDrivers();
+#endif
+			break;
+
 		case kScreenChangedMessage:
 	{
 		int32 screenID;

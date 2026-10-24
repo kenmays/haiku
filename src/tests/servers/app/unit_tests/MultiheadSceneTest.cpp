@@ -228,19 +228,19 @@ public:
 	{
 		MultiheadScene scene;
 		CPPUNIT_ASSERT_EQUAL((status_t)B_OK,
-			scene.AddOutput(50, BRect(0.5f, 0.5f, 99.5f, 99.5f), 1.5f));
+			scene.AddOutput(50, BRect(1, 1, 100, 100), 1.5f));
 
 		BPoint pixel;
 		CPPUNIT_ASSERT_EQUAL((status_t)B_OK,
-			scene.GlobalToOutputPixel(50, BPoint(1.5f, 2.5f), pixel));
+			scene.GlobalToOutputPixel(50, BPoint(2.0f, 3.0f), pixel));
 		CPPUNIT_ASSERT(std::fabs(pixel.x - 1.5f) < 0.001f);
 		CPPUNIT_ASSERT(std::fabs(pixel.y - 3.0f) < 0.001f);
 
 		BPoint global;
 		CPPUNIT_ASSERT_EQUAL((status_t)B_OK,
 			scene.OutputPixelToGlobal(50, pixel, global));
-		CPPUNIT_ASSERT(std::fabs(global.x - 1.5f) < 0.001f);
-		CPPUNIT_ASSERT(std::fabs(global.y - 2.5f) < 0.001f);
+		CPPUNIT_ASSERT(std::fabs(global.x - 2.0f) < 0.001f);
+		CPPUNIT_ASSERT(std::fabs(global.y - 3.0f) < 0.001f);
 
 		BRegion damage;
 		damage.Include(BRect(1, 1, 2, 2));

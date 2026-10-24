@@ -472,8 +472,8 @@ Painter::_UpdateTransform()
 		fTransform.tx *= fRendererScale;
 		fTransform.ty *= fRendererScale;
 	}
-	// The rasterizer offset is integer-only. Preserve the subpixel part of
-	// an output's origin in the affine transform instead.
+	// Apply both parts of the output translation after scaling so geometry and
+	// the output-local clipping region use the same coordinate space.
 	fTransform.tx += fRendererOffsetX + fRendererFractionalOffsetX;
 	fTransform.ty += fRendererOffsetY + fRendererFractionalOffsetY;
 }

@@ -7,6 +7,8 @@
 
 #include <Region.h>
 
+#include <limits>
+
 #include <TestSuiteAddon.h>
 #include <cppunit/TestFixture.h>
 #include <cppunit/extensions/HelperMacros.h>
@@ -18,6 +20,7 @@ class MultiheadSceneTest : public CppUnit::TestFixture {
 	CPPUNIT_TEST(MixedScalePixelClippingRoundsOutwards);
 	CPPUNIT_TEST(NegativeOriginMapsToLocalPixels);
 	CPPUNIT_TEST(GenerationTracksOutputChanges);
+	CPPUNIT_TEST(InvalidOutputUpdatesAreRejectedAtomically);
 	CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -82,6 +85,35 @@ public:
 		generation = scene.Generation();
 		CPPUNIT_ASSERT_EQUAL((status_t)B_OK, scene.RemoveOutput(10));
 		CPPUNIT_ASSERT(scene.Generation() != generation);
+	}
+
+	// Malformed driver/layout data must not mutate a published scene or
+	// invalidate render plans that still refer to its valid generation.
+	void InvalidOutputUpdatesAreRejectedAtomically()
+	{
+		MultiheadScene scene;
+		CPPUNIT_ASSERT_EQUAL((status_t)B_OK,
+			scene.AddOutput(10, BRect(-100, -50, -1, 49), 1.0f));
+		const uint64 generation = scene.Generation();
+
+		CPPUNIT_ASSERT_EQUAL((status_t)B_BAD_VALUE,
+			scene.AddOutput(11, BRect(0, 0, 99, 99), 0.0f));
+		CPPUNIT_ASSERT_EQUAL((status_t)B_BAD_VALUE,
+			scene.AddOutput(11, BRect(0, 0, 99, 99),
+				std::numeric_limits<float>::infinity()));
+		CPPUNIT_ASSERT_EQUAL((status_t)B_NAME_IN_USE,
+			scene.AddOutput(10, BRect(0, 0, 99, 99), 1.0f));
+		CPPUNIT_ASSERT_EQUAL((status_t)B_BAD_VALUE,
+			scene.SetOutputFrame(10, BRect(0, 0, -1, 99)));
+		CPPUNIT_ASSERT_EQUAL((status_t)B_BAD_VALUE,
+			scene.SetOutputScale(10, -1.0f));
+
+		CPPUNIT_ASSERT_EQUAL(generation, scene.Generation());
+		CPPUNIT_ASSERT_EQUAL((int32)1, scene.CountOutputs());
+		const DisplayOutput* output = scene.OutputByID(10);
+		CPPUNIT_ASSERT(output != NULL);
+		CPPUNIT_ASSERT(output->frame == BRect(-100, -50, -1, 49));
+		CPPUNIT_ASSERT_EQUAL(1.0f, output->scale);
 	}
 
 	void NegativeOriginMapsToLocalPixels()

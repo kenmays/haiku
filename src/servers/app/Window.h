@@ -332,7 +332,8 @@ protected:
 			// different types of drawing
 			void				_TriggerContentRedraw(BRegion& dirty,
 									const BRegion& expose = BRegion());
-			bool				_SetDrawingEngineOutput(const ::Screen* screen);
+			bool				_SetDrawingEngineOutput(const ::Screen* screen,
+									DrawingEngine* engine = NULL);
 			void				_DrawBorder();
 
 			// handling update sessions

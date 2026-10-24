@@ -36,6 +36,8 @@ struct OutputRenderTarget {
 	float scale;
 	int32 rendererOffsetX;
 	int32 rendererOffsetY;
+	float rendererFractionalOffsetX;
+	float rendererFractionalOffsetY;
 	BRegion globalClip;
 	BRegion pixelClip;
 
@@ -49,13 +51,16 @@ struct OutputRenderTarget {
 		frame(0, 0, 0, 0),
 		scale(1.0f),
 		rendererOffsetX(0),
-		rendererOffsetY(0)
+		rendererOffsetY(0),
+		rendererFractionalOffsetX(0.0f),
+		rendererFractionalOffsetY(0.0f)
 	{
 	}
 
 	OutputRenderTarget(int32 id, const BRect& outputFrame, float outputScale,
 		int32 offsetX, int32 offsetY, const BRegion& logicalClip,
-		const BRegion& physicalClip)
+		const BRegion& physicalClip, float fractionalOffsetX = 0.0f,
+		float fractionalOffsetY = 0.0f)
 		:
 		screenID(id),
 		generation(0),
@@ -66,6 +71,8 @@ struct OutputRenderTarget {
 		scale(outputScale),
 		rendererOffsetX(offsetX),
 		rendererOffsetY(offsetY),
+		rendererFractionalOffsetX(fractionalOffsetX),
+		rendererFractionalOffsetY(fractionalOffsetY),
 		globalClip(logicalClip),
 		pixelClip(physicalClip)
 	{

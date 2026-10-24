@@ -125,6 +125,7 @@ private:
 
 private:
 			int32				fDeviceNumber;
+			BString				fDevicePath;
 			int					fCardFD;
 			image_id			fAccelerantImage;
 			GetAccelerantHook	fAccelerantHook;

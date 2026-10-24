@@ -19,6 +19,7 @@
 
 
 class BMessage;
+class BMessageRunner;
 
 class DrawingEngine;
 class HWInterface;
@@ -77,6 +78,7 @@ class ScreenManager : public BLooper {
 		int32				fKnownGraphicsDeviceCount;
 		std::vector<node_ref>		fWatchedDirectories;
 			BObjectList<screen_item, true>	fScreenList;
+			BMessageRunner*				fScanRunner;
 };
 
 extern ScreenManager *gScreenManager;

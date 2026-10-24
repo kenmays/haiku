@@ -653,7 +653,8 @@ AccelerantHWInterface::GetMultiOutputInfo(uint32 index,
 
 	if (output.size < offsetof(accelerant_output_info, reserved)
 		|| output.size > sizeof(output)
-		|| output.version != B_MULTI_OUTPUT_INFO_VERSION) {
+		|| output.version != B_MULTI_OUTPUT_INFO_VERSION
+		|| output.output_id == B_MULTI_OUTPUT_INVALID_ID) {
 		return B_BAD_DATA;
 	}
 	if (output.connection_state > B_MULTI_OUTPUT_CONNECTION_DISCONNECTED)

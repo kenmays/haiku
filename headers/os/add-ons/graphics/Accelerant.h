@@ -178,7 +178,7 @@ enum {
 typedef struct {
 	uint32	size;					/* caller sets sizeof(accelerant_output_info) */
 	uint32	version;				/* B_MULTI_OUTPUT_INFO_VERSION */
-	uint64	output_id;			/* stable within this graphics device */
+	uint64	output_id;			/* stable; must not be B_MULTI_OUTPUT_INVALID_ID */
 	uint32	connector_type;		/* B_MULTI_OUTPUT_CONNECTOR_* */
 	uint32	connection_state;	/* B_MULTI_OUTPUT_CONNECTION_* */
 	uint32	capabilities;		/* B_MULTI_OUTPUT_CAPABILITY_* */

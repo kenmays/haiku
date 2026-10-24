@@ -2559,8 +2559,17 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 	}
 
 	std::vector<OutputRenderTarget> targets;
-	if (virtualScreen.BuildRenderPlan(fCurrentDrawingRegion, targets) != B_OK
-		|| targets.size() < 2) {
+	status_t planStatus = virtualScreen.BuildRenderPlan(
+		fCurrentDrawingRegion, targets);
+	if (planStatus != B_OK) {
+		// An output may be disappearing or changing mode. Do not silently
+		// render this command on only the surviving output; schedule a normal
+		// redraw after the scene can produce a complete render plan.
+		BRegion dirty(fCurrentDrawingRegion);
+		fWindow->MarkContentDirtyAsync(dirty);
+		return;
+	}
+	if (targets.size() < 2) {
 		_DispatchViewDrawingMessageSingleOutput(code, link);
 		return;
 	}
@@ -2583,14 +2592,16 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 
 	const ::Screen* originalScreen = fWindow->Screen();
 	if (originalScreen == NULL) {
-		_DispatchViewDrawingMessageSingleOutput(code, link);
+		BRegion dirty(fCurrentDrawingRegion);
+		fWindow->MarkContentDirtyAsync(dirty);
 		return;
 	}
 
 	char* message = NULL;
 	int32 messageSize = 0;
 	if (link.CopyCurrentMessage(&message, &messageSize) != B_OK) {
-		_DispatchViewDrawingMessageSingleOutput(code, link);
+		BRegion dirty(fCurrentDrawingRegion);
+		fWindow->MarkContentDirtyAsync(dirty);
 		return;
 	}
 	std::unique_ptr<char, decltype(&free)> messageOwner(message, free);
@@ -2613,7 +2624,8 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 		replayReady = false;
 	}
 	if (!replayReady) {
-		_DispatchViewDrawingMessageSingleOutput(code, link);
+		BRegion dirty(fCurrentDrawingRegion);
+		fWindow->MarkContentDirtyAsync(dirty);
 		return;
 	}
 
@@ -2636,12 +2648,15 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 	if (!restored)
 		restored = fWindow->BindDrawingEngineOutput(originalScreen);
 	if (!restored) {
+		BRegion dirty(fCurrentDrawingRegion);
+		fWindow->MarkContentDirtyAsync(dirty);
 		debug_printf("ServerWindow %s: failed to restore drawing output after preflight\n",
 			Title());
 		return;
 	}
 	if (!canBindAll) {
-		_DispatchViewDrawingMessageSingleOutput(code, link);
+		BRegion dirty(fCurrentDrawingRegion);
+		fWindow->MarkContentDirtyAsync(dirty);
 		return;
 	}
 

@@ -550,6 +550,7 @@ VirtualScreen::BuildRenderTarget(const Screen* screen,
 	target.generation = fScene.Generation();
 	target.pixelWidth = mode.virtual_width;
 	target.pixelHeight = mode.virtual_height;
+	target.colorSpace = mode.space;
 	return B_OK;
 }
 
@@ -580,6 +581,7 @@ VirtualScreen::IsRenderTargetCurrent(const OutputRenderTarget& target) const
 	screen->GetMode(mode);
 	return mode.virtual_width == target.pixelWidth
 		&& mode.virtual_height == target.pixelHeight
+		&& mode.space == target.colorSpace
 		&& target.pixelWidth > 0 && target.pixelHeight > 0;
 }
 
@@ -601,7 +603,7 @@ VirtualScreen::BuildRenderPlan(const BRegion& globalDamage,
 			OutputRenderTarget target;
 			status_t status = BuildRenderTarget(item->screen, globalDamage,
 				target);
-			if (status == B_NAME_NOT_FOUND || status == B_BAD_VALUE)
+			if (status == B_NAME_NOT_FOUND)
 				continue;
 			if (status != B_OK) {
 				// Do not return a seemingly complete plan after an allocation or

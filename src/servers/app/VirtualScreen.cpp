@@ -240,6 +240,9 @@ VirtualScreen::AddScreen(Screen* screen, const ScreenConfigurations& configurati
 		return B_NO_MEMORY;
 	}
 
+	if (screen->HWInterface() != NULL)
+		screen->HWInterface()->SetOutputTransform(item->frame, screenScale);
+
 	// Save the actual geometry selected above, not Screen::Frame()'s
 	// origin-based framebuffer bounds. This makes the desktop layout survive
 	// the next app_server configuration cycle.
@@ -310,6 +313,11 @@ VirtualScreen::SetScreenFrame(int32 index, BRect frame)
 		return;
 
 	item->frame = frame;
+	if (item->screen->HWInterface() != NULL) {
+		const DisplayOutput* output = fScene.OutputByID(item->screen->ID());
+		item->screen->HWInterface()->SetOutputTransform(frame,
+			output != NULL ? output->scale : 1.0f);
+	}
 	UpdateFrame();
 }
 
@@ -367,6 +375,8 @@ VirtualScreen::SetScreenScale(int32 index, float scale)
 	}
 
 	item->frame = frame;
+	if (item->screen->HWInterface() != NULL)
+		item->screen->HWInterface()->SetOutputTransform(frame, scale);
 	UpdateFrame();
 	return B_OK;
 }

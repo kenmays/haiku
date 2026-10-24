@@ -1922,7 +1922,7 @@ Window::_TriggerContentRedraw(BRegion& dirty, const BRegion& expose)
 			if (outputExpose.CountRects() == 0)
 				continue;
 
-			if (!_SetDrawingEngineOutput(screen, engine)) {
+			if (!_SetDrawingEngineOutput(screen)) {
 				drewAllOutputs = false;
 				continue;
 			}
@@ -1941,7 +1941,7 @@ Window::_TriggerContentRedraw(BRegion& dirty, const BRegion& expose)
 		}
 
 		// Restore the window's assigned output after the per-output draw pass.
-		bool restoredOutput = _SetDrawingEngineOutput(fScreen, engine);
+		bool restoredOutput = _SetDrawingEngineOutput(fScreen);
 		if (!restoredOutput) {
 			BRegion retry(expose);
 			MarkContentDirtyAsync(retry);

@@ -134,6 +134,7 @@ private:
 			int32				fDeviceNumber;
 			BString				fDevicePath;
 			uint64				fOutputID;
+			uint32				fOutputCapabilities;
 			bool				fUseMultiOutput;
 			AccelerantHWInterface* fSharedAccelerant;
 			bool				fOwnsAccelerant;

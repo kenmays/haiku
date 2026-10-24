@@ -263,6 +263,8 @@ public:
 
 			void				SetRendererOffset(int32 offsetX,
 									int32 offsetY);
+			void				SetRendererFractionalOffset(float offsetX,
+									float offsetY);
 
 private:
 			float				_Align(float coord, bool round,
@@ -364,6 +366,8 @@ private:
 			float				fRendererScale;
 			int32				fRendererOffsetX;
 			int32				fRendererOffsetY;
+			float				fRendererFractionalOffsetX;
+			float				fRendererFractionalOffsetY;
 			BRegion				fScaledClippingRegion;
 			float				fPenSize;
 			BRegion				fSourceClippingRegion;

@@ -673,9 +673,9 @@ ScreenManager::_ScanMultiOutputs()
 
 		// Topology reconciliation above already adds and removes individual
 		// connectors. A topology-generation change is not itself a mode change:
-		// notifying every output here makes Desktop::ScreenChanged() select
-		// each monitor's preferred mode and can discard the user's chosen mode
-		// on otherwise unchanged displays. Poll the active mode for each stable
+		// notifying every output here needlessly re-enters mode handling and rebuilds
+		// mode-dependent desktop state on otherwise unchanged displays. Poll the
+		// active mode for each stable
 		// output ID and notify only the output whose mode actually changed.
 		for (int32 j = 0; j < fScreenList.CountItems(); j++) {
 			screen_item* current = fScreenList.ItemAt(j);

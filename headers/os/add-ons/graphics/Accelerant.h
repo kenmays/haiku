@@ -148,6 +148,7 @@ typedef struct {
  * accelerants continue to expose their existing single-output interface.
  */
 #define B_MULTI_OUTPUT_INFO_VERSION 1
+#define B_MULTI_OUTPUT_INVALID_ID ((uint64)~0)
 
 enum {
 	B_MULTI_OUTPUT_CONNECTOR_UNKNOWN = 0,

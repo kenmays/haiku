@@ -11,6 +11,9 @@
 
 #include "ScreenManager.h"
 
+
+static const uint32 kScreenChangedMessage = 'scch';
+
 #include "Screen.h"
 #include "ServerConfig.h"
 
@@ -261,14 +264,16 @@ ScreenManager::RemoveScreen(Screen* screen)
 void
 ScreenManager::ScreenChanged(Screen* screen)
 {
-	BAutolock locker(this);
+	if (screen == NULL)
+		return;
 
-	for (int32 i = 0; i < fScreenList.CountItems(); i++) {
-		screen_item* item = fScreenList.ItemAt(i);
-		if (item->screen.Get() == screen && !item->removing
-			&& item->owner != NULL)
-			item->owner->ScreenChanged(screen);
-	}
+	// Hardware notifications may arrive while Desktop holds its window/screen
+	// locks. Do not call back into Desktop while holding the manager lock (or
+	// synchronously from the hardware-notification stack): queue an ID-only
+	// notification and resolve it on the ScreenManager looper instead.
+	BMessage message(kScreenChangedMessage);
+	if (message.AddInt32("screen_id", screen->ID()) == B_OK)
+		PostMessage(&message);
 }
 
 
@@ -466,7 +471,33 @@ void
 ScreenManager::MessageReceived(BMessage* message)
 {
 	switch (message->what) {
-		case B_NODE_MONITOR:
+		case kScreenChangedMessage:
+	{
+		int32 screenID;
+		if (message->FindInt32("screen_id", &screenID) != B_OK)
+			break;
+
+		Screen* screen = NULL;
+		ScreenOwner* owner = NULL;
+		{
+			BAutolock locker(this);
+			for (int32 i = 0; i < fScreenList.CountItems(); i++) {
+				screen_item* item = fScreenList.ItemAt(i);
+				if (item->screen->ID() != screenID || item->removing)
+					continue;
+				screen = item->screen.Get();
+				owner = item->owner;
+				break;
+			}
+		}
+		// Never enter Desktop while the ScreenManager lock is held. Resolving
+		// by ID also makes a delayed notification harmless after hot-unplug.
+		if (screen != NULL && owner != NULL)
+			owner->ScreenChanged(screen);
+		break;
+	}
+
+	case B_NODE_MONITOR:
 #ifndef HAIKU_TARGET_PLATFORM_LIBBE_TEST
 		{
 			int32 opcode;

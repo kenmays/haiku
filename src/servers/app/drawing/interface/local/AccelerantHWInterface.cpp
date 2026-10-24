@@ -105,6 +105,7 @@ AccelerantHWInterface::AccelerantHWInterface(int32 deviceNumber,
 	fDeviceNumber(deviceNumber),
 	fDevicePath(devicePath != NULL ? devicePath : ""),
 	fOutputID(outputID),
+	fOutputCapabilities(0),
 	fUseMultiOutput(useMultiOutput),
 	fSharedAccelerant(sharedAccelerant),
 	fOwnsAccelerant(sharedAccelerant == NULL),
@@ -564,6 +565,7 @@ AccelerantHWInterface::_CopyHooksFrom(AccelerantHWInterface* shared)
 					| B_MULTI_OUTPUT_CAPABILITY_FRAME_BUFFER))
 				== (B_MULTI_OUTPUT_CAPABILITY_INDEPENDENT_MODE
 					| B_MULTI_OUTPUT_CAPABILITY_FRAME_BUFFER)) {
+			fOutputCapabilities = info.capabilities;
 			foundOutput = true;
 			break;
 		}
@@ -1848,7 +1850,8 @@ AccelerantHWInterface::_CopyBackToFront(/*const*/ BRegion& region)
 	// after CPU rendering. The damage region is already framebuffer-local.
 	// Use a private parameter array here: the shared accelerant scratch arrays
 	// can be in use by another drawing transaction on this interface.
-	if (!fUseMultiOutput || fAccPresentMultiOutput == NULL)
+	if (!fUseMultiOutput || fAccPresentMultiOutput == NULL
+		|| (fOutputCapabilities & B_MULTI_OUTPUT_CAPABILITY_PRESENT) == 0)
 		return;
 
 	int32 rectCount = region.CountRects();

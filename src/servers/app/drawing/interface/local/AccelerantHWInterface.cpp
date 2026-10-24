@@ -1166,7 +1166,7 @@ AccelerantHWInterface::GetModeList(display_mode** _modes, uint32* _count)
 
 	status_t status = B_OK;
 
-	if (fModeList == NULL)
+	if (fModeList == NULL || fModeCount <= 0)
 		status = _UpdateModeList();
 
 	if (status >= B_OK) {

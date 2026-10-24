@@ -134,8 +134,6 @@ public:
 			return;
 
 		BRegion deviceDirty(fDirty);
-		deviceDirty.OffsetBy(fEngine->fRendererOffsetX,
-			fEngine->fRendererOffsetY);
 		BRegion framebufferBounds(fEngine->fPainter->Bounds());
 		deviceDirty.IntersectWith(&framebufferBounds);
 		if (fEngine->fGraphicsCard != NULL
@@ -156,8 +154,6 @@ public:
 			return;
 
 		BRegion deviceDirty(fDirty);
-		deviceDirty.OffsetBy(fEngine->fRendererOffsetX,
-			fEngine->fRendererOffsetY);
 		BRegion framebufferBounds(fEngine->fPainter->Bounds());
 		deviceDirty.IntersectWith(&framebufferBounds);
 		if (fEngine->fGraphicsCard != NULL
@@ -179,8 +175,6 @@ public:
 			return;
 
 		BRegion deviceDirty(fDirty);
-		deviceDirty.OffsetBy(fEngine->fRendererOffsetX,
-			fEngine->fRendererOffsetY);
 		BRegion framebufferBounds(fEngine->fPainter->Bounds());
 		deviceDirty.IntersectWith(&framebufferBounds);
 		if (fEngine->fGraphicsCard != NULL
@@ -196,8 +190,6 @@ public:
 		if (fEngine->fCopyToFront) {
 
 		BRegion deviceDirty(fDirty);
-		deviceDirty.OffsetBy(fEngine->fRendererOffsetX,
-			fEngine->fRendererOffsetY);
 		BRegion framebufferBounds(fEngine->fPainter->Bounds());
 		deviceDirty.IntersectWith(&framebufferBounds);
 			if (fEngine->fGraphicsCard != NULL
@@ -998,8 +990,15 @@ DrawingEngine::FillRegion(BRegion& r, const rgb_color& color)
 	// the output selected for this engine. Clip to the framebuffer's logical
 	// bounds instead of dropping the entire fill when only part is in bounds.
 	BRect globalBounds = fPainter->Bounds();
-	globalBounds.OffsetBy(-fRendererOffsetX - fRendererFractionalOffsetX,
-		-fRendererOffsetY - fRendererFractionalOffsetY);
+	float inverseScale = 1.0f / fRendererScale;
+	globalBounds.left = (globalBounds.left - fRendererOffsetX
+		- fRendererFractionalOffsetX) * inverseScale;
+	globalBounds.top = (globalBounds.top - fRendererOffsetY
+		- fRendererFractionalOffsetY) * inverseScale;
+	globalBounds.right = (globalBounds.right - fRendererOffsetX
+		- fRendererFractionalOffsetX) * inverseScale;
+	globalBounds.bottom = (globalBounds.bottom - fRendererOffsetY
+		- fRendererFractionalOffsetY) * inverseScale;
 	BRegion clipped(r);
 	BRegion outputBounds(globalBounds);
 	clipped.IntersectWith(&outputBounds);
@@ -1561,7 +1560,6 @@ DrawingEngine::CopyRect(BRect src, int32 xOffset, int32 yOffset) const
 	if (buffer) {
 		// The caller uses global desktop coordinates; the backing buffer does
 		// not include the output's desktop origin.
-		src.OffsetBy(fRendererOffsetX, fRendererOffsetY);
 		BRect clip(0, 0, buffer->Width() - 1, buffer->Height() - 1);
 
 		dst = src;
@@ -1592,8 +1590,7 @@ DrawingEngine::CopyRect(BRect src, int32 xOffset, int32 yOffset) const
 			dst.OffsetBy(xOffset, yOffset);
 		}
 
-		// Return the destination in global desktop coordinates.
-		dst.OffsetBy(-fRendererOffsetX, -fRendererOffsetY);
+		// Return the destination in framebuffer-local coordinates.
 	}
 	return dst;
 }

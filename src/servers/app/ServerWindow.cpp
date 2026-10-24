@@ -2801,9 +2801,11 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 		case AS_STROKE_LINE:
 		{
 			ViewStrokeLineInfo info;
-			if (link.Read<ViewStrokeLineInfo>(&info) != B_OK)
+			if (link.Read<ViewStrokeLineInfo>(&info) != B_OK) {
 				commandProcessed = false;
 				break;
+
+			}
 
 			DTRACE(("ServerWindow %s: Message AS_STROKE_LINE: View: %s -> "
 				"BPoint(%.1f, %.1f) - BPoint(%.1f, %.1f)\n", Title(),
@@ -2832,14 +2834,18 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 		case AS_STROKE_LINE_GRADIENT:
 		{
 			ViewStrokeLineInfo info;
-			if (link.Read<ViewStrokeLineInfo>(&info) != B_OK)
+			if (link.Read<ViewStrokeLineInfo>(&info) != B_OK) {
 				commandProcessed = false;
 				break;
 
+			}
+
 			BGradient* gradient;
-			if (link.ReadGradient(&gradient) != B_OK)
+			if (link.ReadGradient(&gradient) != B_OK) {
 				commandProcessed = false;
 				break;
+
+			}
 
 			ObjectDeleter<BGradient> gradientDeleter(gradient);
 
@@ -2870,9 +2876,11 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 		case AS_VIEW_INVERT_RECT:
 		{
 			BRect rect;
-			if (link.Read<BRect>(&rect) != B_OK)
+			if (link.Read<BRect>(&rect) != B_OK) {
 				commandProcessed = false;
 				break;
+
+			}
 
 			DTRACE(("ServerWindow %s: Message AS_INVERT_RECT: View: %s -> "
 				"BRect(%.1f, %.1f, %.1f, %.1f)\n", Title(),
@@ -2886,9 +2894,11 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 		case AS_STROKE_RECT:
 		{
 			BRect rect;
-			if (link.Read<BRect>(&rect) != B_OK)
+			if (link.Read<BRect>(&rect) != B_OK) {
 				commandProcessed = false;
 				break;
+
+			}
 
 			DTRACE(("ServerWindow %s: Message AS_STROKE_RECT: View: %s -> "
 				"BRect(%.1f, %.1f, %.1f, %.1f)\n", Title(),
@@ -2902,9 +2912,11 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 		case AS_FILL_RECT:
 		{
 			BRect rect;
-			if (link.Read<BRect>(&rect) != B_OK)
+			if (link.Read<BRect>(&rect) != B_OK) {
 				commandProcessed = false;
 				break;
+
+			}
 
 			DTRACE(("ServerWindow %s: Message AS_FILL_RECT: View: %s -> "
 				"BRect(%.1f, %.1f, %.1f, %.1f)\n", Title(),
@@ -2920,9 +2932,11 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			BRect rect;
 			link.Read<BRect>(&rect);
 			BGradient* gradient;
-			if (link.ReadGradient(&gradient) != B_OK)
+			if (link.ReadGradient(&gradient) != B_OK) {
 				commandProcessed = false;
 				break;
+
+			}
 
 			GTRACE(("ServerWindow %s: Message AS_STROKE_RECT_GRADIENT: View: %s "
 				"-> BRect(%.1f, %.1f, %.1f, %.1f)\n", Title(),
@@ -2942,9 +2956,11 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			BRect rect;
 			link.Read<BRect>(&rect);
 			BGradient* gradient;
-			if (link.ReadGradient(&gradient) != B_OK)
+			if (link.ReadGradient(&gradient) != B_OK) {
 				commandProcessed = false;
 				break;
+
+			}
 
 			GTRACE(("ServerWindow %s: Message AS_FILL_RECT_GRADIENT: View: %s "
 				"-> BRect(%.1f, %.1f, %.1f, %.1f)\n", Title(),
@@ -2962,9 +2978,11 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 		case AS_VIEW_DRAW_BITMAP:
 		{
 			ViewDrawBitmapInfo info;
-			if (link.Read<ViewDrawBitmapInfo>(&info) != B_OK)
+			if (link.Read<ViewDrawBitmapInfo>(&info) != B_OK) {
 				commandProcessed = false;
 				break;
+
+			}
 
 #if 0
 			if (strcmp(fServerApp->SignatureLeaf(), "x-vnd.videolan-vlc") == 0)
@@ -3005,9 +3023,11 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 
 			link.Read<BRect>(&r);
 			link.Read<float>(&angle);
-			if (link.Read<float>(&span) != B_OK)
+			if (link.Read<float>(&span) != B_OK) {
 				commandProcessed = false;
 				break;
+
+			}
 
 			fCurrentView->PenToScreenTransform().Apply(&r);
 			drawingEngine->DrawArc(r, angle, span, code == AS_FILL_ARC);
@@ -3025,9 +3045,11 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			link.Read<float>(&angle);
 			link.Read<float>(&span);
 			BGradient* gradient;
-			if (link.ReadGradient(&gradient) != B_OK)
+			if (link.ReadGradient(&gradient) != B_OK) {
 				commandProcessed = false;
 				break;
+
+			}
 			const SimpleTransform transform =
 				fCurrentView->PenToScreenTransform();
 			transform.Apply(&r);
@@ -3070,9 +3092,11 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 				transform.Apply(&pts[i]);
 			}
 			BGradient* gradient;
-			if (link.ReadGradient(&gradient) != B_OK)
+			if (link.ReadGradient(&gradient) != B_OK) {
 				commandProcessed = false;
 				break;
+
+			}
 			transform.Apply(gradient);
 			drawingEngine->DrawBezier(pts, code == AS_FILL_BEZIER_GRADIENT, *gradient);
 			delete gradient;
@@ -3085,9 +3109,11 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 				Title()));
 
 			BRect rect;
-			if (link.Read<BRect>(&rect) != B_OK)
+			if (link.Read<BRect>(&rect) != B_OK) {
 				commandProcessed = false;
 				break;
+
+			}
 
 			fCurrentView->PenToScreenTransform().Apply(&rect);
 			drawingEngine->DrawEllipse(rect, code == AS_FILL_ELLIPSE);
@@ -3102,9 +3128,11 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			BRect rect;
 			link.Read<BRect>(&rect);
 			BGradient* gradient;
-			if (link.ReadGradient(&gradient) != B_OK)
+			if (link.ReadGradient(&gradient) != B_OK) {
 				commandProcessed = false;
 				break;
+
+			}
 			const SimpleTransform transform =
 				fCurrentView->PenToScreenTransform();
 			transform.Apply(&rect);
@@ -3124,9 +3152,11 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			float yRadius;
 			link.Read<BRect>(&rect);
 			link.Read<float>(&xRadius);
-			if (link.Read<float>(&yRadius) != B_OK)
+			if (link.Read<float>(&yRadius) != B_OK) {
 				commandProcessed = false;
 				break;
+
+			}
 
 			fCurrentView->PenToScreenTransform().Apply(&rect);
 			float scale = fCurrentView->CurrentState()->CombinedScale();
@@ -3146,9 +3176,11 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			link.Read<float>(&xrad);
 			link.Read<float>(&yrad);
 			BGradient* gradient;
-			if (link.ReadGradient(&gradient) != B_OK)
+			if (link.ReadGradient(&gradient) != B_OK) {
 				commandProcessed = false;
 				break;
+
+			}
 			const SimpleTransform transform =
 				fCurrentView->PenToScreenTransform();
 			transform.Apply(&rect);
@@ -3174,9 +3206,11 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 				transform.Apply(&pts[i]);
 			}
 
-			if (link.Read<BRect>(&rect) != B_OK)
+			if (link.Read<BRect>(&rect) != B_OK) {
 				commandProcessed = false;
 				break;
+
+			}
 
 			transform.Apply(&rect);
 			drawingEngine->DrawTriangle(pts, rect, code == AS_FILL_TRIANGLE);
@@ -3198,9 +3232,11 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			}
 			link.Read<BRect>(&rect);
 			BGradient* gradient;
-			if (link.ReadGradient(&gradient) != B_OK)
+			if (link.ReadGradient(&gradient) != B_OK) {
 				commandProcessed = false;
 				break;
+
+			}
 			transform.Apply(&rect);
 			transform.Apply(gradient);
 			drawingEngine->DrawTriangle(pts, rect, code == AS_FILL_TRIANGLE_GRADIENT, *gradient);
@@ -3355,9 +3391,11 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			DTRACE(("ServerWindow %s: Message AS_FILL_REGION\n", Title()));
 
 			BRegion region;
-			if (link.ReadRegion(&region) < B_OK)
+			if (link.ReadRegion(&region) < B_OK) {
 				commandProcessed = false;
 				break;
+
+			}
 
 			fCurrentView->PenToScreenTransform().Apply(&region);
 			drawingEngine->FillRegion(region);
@@ -3373,9 +3411,11 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			link.ReadRegion(&region);
 
 			BGradient* gradient;
-			if (link.ReadGradient(&gradient) != B_OK)
+			if (link.ReadGradient(&gradient) != B_OK) {
 				commandProcessed = false;
 				break;
+
+			}
 
 			const SimpleTransform transform =
 				fCurrentView->PenToScreenTransform();
@@ -3395,9 +3435,11 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			// 2) LineArrayData
 
 			int32 lineCount;
-			if (link.Read<int32>(&lineCount) != B_OK || lineCount <= 0)
+			if (link.Read<int32>(&lineCount) != B_OK || lineCount <= 0) {
 				commandProcessed = false;
 				break;
+
+			}
 
 			// To speed things up, try to use a stack allocation and only
 			// fall back to the heap if there are enough lines...
@@ -3453,9 +3495,11 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 				delta = &info.delta;
 			}
 
-			if (link.Read(string, info.stringLength) != B_OK)
+			if (link.Read(string, info.stringLength) != B_OK) {
 				commandProcessed = false;
 				break;
+
+			}
 
 			// Terminate the string, if nothing else, it's important
 			// for the DTRACE call below...
@@ -3485,14 +3529,18 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 		case AS_DRAW_STRING_WITH_OFFSETS:
 		{
 			int32 stringLength;
-			if (link.Read<int32>(&stringLength) != B_OK || stringLength <= 0)
+			if (link.Read<int32>(&stringLength) != B_OK || stringLength <= 0) {
 				commandProcessed = false;
 				break;
 
+			}
+
 			int32 glyphCount;
-			if (link.Read<int32>(&glyphCount) != B_OK || glyphCount <= 0)
+			if (link.Read<int32>(&glyphCount) != B_OK || glyphCount <= 0) {
 				commandProcessed = false;
 				break;
+
+			}
 
 			// NOTE: Careful, the + 1 is for termination!
 			BStackOrHeapArray<char, 512> string(
@@ -3501,15 +3549,19 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			if (!string.IsValid() || !locations.IsValid())
 				break;
 
-			if (link.Read(string, stringLength) != B_OK)
+			if (link.Read(string, stringLength) != B_OK) {
 				commandProcessed = false;
 				break;
+
+			}
 			// Count UTF8 glyphs and make sure we have enough locations
 			if ((int32)UTF8CountChars(string, stringLength) > glyphCount)
 				break;
-			if (link.Read(locations, glyphCount * sizeof(BPoint)) != B_OK)
+			if (link.Read(locations, glyphCount * sizeof(BPoint)) != B_OK) {
 				commandProcessed = false;
 				break;
+
+			}
 			// Terminate the string, if nothing else, it's important
 			// for the DTRACE call below...
 			string[stringLength] = '\0';

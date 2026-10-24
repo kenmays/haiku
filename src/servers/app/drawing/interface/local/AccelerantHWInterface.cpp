@@ -1588,6 +1588,10 @@ AccelerantHWInterface::HideOverlay(Overlay* overlay)
 void
 AccelerantHWInterface::SetCursor(ServerCursor* cursor)
 {
+	// cursor should never be NULL, but let us be safe!!
+	if (cursor == NULL)
+		return;
+
 	// Hardware cursors are currently device-global on the legacy accelerant
 	// interface. Use the software cursor for independent outputs so each
 	// framebuffer gets a correctly clipped cursor in its own pixel space.
@@ -1596,8 +1600,7 @@ AccelerantHWInterface::SetCursor(ServerCursor* cursor)
 		return;
 	}
 
-	// cursor should never be NULL, but let us be safe!!
-	if (cursor == NULL || LockExclusiveAccess() == false)
+	if (LockExclusiveAccess() == false)
 		return;
 
 	bool cursorSet = false;

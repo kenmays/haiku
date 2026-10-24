@@ -460,11 +460,11 @@ AccelerantHWInterface::_OpenAccelerant(int device)
 		// as the enumerator; ScreenManager creates output wrappers that share
 		// this hook table instead of calling init_accelerant() a second time.
 		if (!fUseMultiOutput) {
-			fOutputID = ~(uint64)0;
+			fOutputID = B_MULTI_OUTPUT_INVALID_ID;
 			fUseMultiOutput = true;
 		}
 
-		if (fOutputID != ~(uint64)0) {
+		if (fOutputID != B_MULTI_OUTPUT_INVALID_ID) {
 			bool foundOutput = false;
 			uint32 count = MultiOutputCount();
 			for (uint32 i = 0; i < count; i++) {
@@ -498,7 +498,7 @@ AccelerantHWInterface::_CopyHooksFrom(AccelerantHWInterface* shared)
 {
 	if (shared == NULL || shared->fAccelerantImage < 0
 		|| !shared->_HasIndependentOutputHooks() || !fUseMultiOutput
-		|| fOutputID == ~(uint64)0) {
+		|| fOutputID == B_MULTI_OUTPUT_INVALID_ID) {
 		return B_NOT_SUPPORTED;
 	}
 

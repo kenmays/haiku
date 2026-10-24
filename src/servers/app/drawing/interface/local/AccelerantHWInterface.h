@@ -16,6 +16,8 @@
 #include <AutoDeleter.h>
 #include <image.h>
 #include <String.h>
+#include <Point.h>
+#include <Rect.h>
 #include <video_overlay.h>
 
 
@@ -96,6 +98,7 @@ public:
 	virtual	void				SetCursor(ServerCursor* cursor);
 	virtual	void				SetCursorVisible(bool visible);
 	virtual	void				MoveCursorTo(float x, float y);
+	virtual void				SetOutputTransform(const BRect& frame, float scale);
 
 	// frame buffer access
 	virtual	RenderingBuffer*	FrontBuffer() const;
@@ -133,6 +136,10 @@ private:
 			BString				fDevicePath;
 			uint64				fOutputID;
 			bool				fUseMultiOutput;
+			BRect				fOutputFrame;
+			float				fOutputScale;
+			BPoint				fGlobalCursorLocation;
+			bool				fHasGlobalCursorLocation;
 			int					fCardFD;
 			image_id			fAccelerantImage;
 			GetAccelerantHook	fAccelerantHook;

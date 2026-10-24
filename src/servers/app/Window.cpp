@@ -678,14 +678,14 @@ void
 Window::SetScreen(const ::Screen* screen)
 {
 	fScreen = screen;
-	_SetDrawingEngineOutput(screen, engine);
+	_SetDrawingEngineOutput(screen);
 }
 
 
 bool
 Window::BindDrawingEngineOutput(const ::Screen* screen)
 {
-	return _SetDrawingEngineOutput(screen, engine);
+	return _SetDrawingEngineOutput(screen);
 }
 
 

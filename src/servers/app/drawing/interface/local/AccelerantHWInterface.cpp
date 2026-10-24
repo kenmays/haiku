@@ -602,7 +602,7 @@ AccelerantHWInterface::CheckOutputModeChanged(bool* changed)
 	if (status != B_OK)
 		return status;
 
-	*changed = currentMode != fDisplayMode;
+	*changed = !(currentMode == fDisplayMode);
 	return B_OK;
 }
 

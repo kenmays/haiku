@@ -35,6 +35,22 @@ static const uint64 kEnumeratorOutputID = B_MULTI_OUTPUT_INVALID_ID;
 using std::nothrow;
 
 
+static bool
+IsEnumeratorScreen(Screen* screen)
+{
+#ifndef HAIKU_TARGET_PLATFORM_LIBBE_TEST
+	if (screen == NULL)
+		return false;
+	AccelerantHWInterface* interface = dynamic_cast<AccelerantHWInterface*>(
+		screen->HWInterface());
+	return interface != NULL && interface->UsesMultiOutput()
+		&& interface->OutputID() == B_MULTI_OUTPUT_INVALID_ID;
+#else
+	return false;
+#endif
+}
+
+
 #ifndef HAIKU_TARGET_PLATFORM_LIBBE_TEST
 #	include "AccelerantHWInterface.h"
 #else
@@ -122,11 +138,19 @@ ScreenManager::ScreenAt(int32 index) const
 {
 	if (!IsLocked())
 		debugger("Called ScreenManager::ScreenAt() without lock!");
+	if (index < 0)
+		return NULL;
 
-	screen_item* item = fScreenList.ItemAt(index);
-	if (item != NULL)
-		return item->screen.Get();
-
+	int32 outputIndex = 0;
+	for (int32 i = 0; i < fScreenList.CountItems(); i++) {
+		screen_item* item = fScreenList.ItemAt(i);
+		if (item == NULL || item->screen.Get() == NULL
+			|| item->removing || IsEnumeratorScreen(item->screen.Get())) {
+			continue;
+		}
+		if (outputIndex++ == index)
+			return item->screen.Get();
+	}
 	return NULL;
 }
 
@@ -137,7 +161,15 @@ ScreenManager::CountScreens() const
 	if (!IsLocked())
 		debugger("Called ScreenManager::CountScreens() without lock!");
 
-	return fScreenList.CountItems();
+	int32 count = 0;
+	for (int32 i = 0; i < fScreenList.CountItems(); i++) {
+		screen_item* item = fScreenList.ItemAt(i);
+		if (item != NULL && item->screen.Get() != NULL
+			&& !item->removing && !IsEnumeratorScreen(item->screen.Get())) {
+			count++;
+		}
+	}
+	return count;
 }
 
 
@@ -154,6 +186,7 @@ ScreenManager::AcquireScreens(ScreenOwner* owner, int32* wishList,
 		screen_item* item = fScreenList.ItemAt(i);
 
 		if (!item->removing && item->owner == NULL
+			&& !IsEnumeratorScreen(item->screen.Get())
 			&& list.AddItem(item->screen.Get())) {
 			item->owner = owner;
 			added++;
@@ -661,6 +694,9 @@ ScreenManager::_AddHWInterface(HWInterface* interface)
 			if (item->listener.IsSet()
 				&& interface->AddListener(item->listener.Get())) {
 				if (fScreenList.AddItem(item)) {
+					if (IsEnumeratorScreen(item->screen.Get()))
+						return item;
+
 					// Offer a newly discovered screen to each existing owner once.
 					// The owner reports whether it incorporated the output.
 					int32 addedIndex = fScreenList.CountItems() - 1;

@@ -1992,6 +1992,7 @@ Window::_DrawBorder()
 		const VirtualScreen& virtualScreen = fDesktop->VirtualScreen();
 		bool canFanOut = virtualScreen.CountScreens() > 1;
 		bool intersectsOutput = false;
+		int32 intersectingOutputs = 0;
 
 		for (int32 i = 0; i < virtualScreen.CountScreens(); i++) {
 			const ::Screen* screen = virtualScreen.ScreenAt(i);
@@ -2005,6 +2006,7 @@ Window::_DrawBorder()
 				continue;
 
 			intersectsOutput = true;
+			intersectingOutputs++;
 			float scale = virtualScreen.ScreenScaleAt(i);
 			double pixelLeft = (double)frame.left * scale;
 			double pixelTop = (double)frame.top * scale;
@@ -2019,11 +2021,12 @@ Window::_DrawBorder()
 				|| floor(pixelTop) < -2147483647.0
 				|| floor(pixelTop) > 2147483647.0) {
 				canFanOut = false;
-				break;
+				continue;
 			}
 		}
 
 		bool drewOutput = false;
+		bool drewAllOutputs = true;
 		if (canFanOut && intersectsOutput) {
 			for (int32 i = 0; i < virtualScreen.CountScreens(); i++) {
 				const ::Screen* screen = virtualScreen.ScreenAt(i);
@@ -2033,13 +2036,17 @@ Window::_DrawBorder()
 				BRegion outputDamage(*dirtyBorderRegion);
 				BRegion outputBounds(virtualScreen.ScreenFrameAt(i));
 				outputDamage.IntersectWith(&outputBounds);
-				if (outputDamage.CountRects() == 0
-					|| !_SetDrawingEngineOutput(screen)) {
+				if (outputDamage.CountRects() == 0)
+					continue;
+				if (!_SetDrawingEngineOutput(screen)) {
+					drewAllOutputs = false;
 					continue;
 				}
 
-				if (!engine->LockParallelAccess())
+				if (!engine->LockParallelAccess()) {
+					drewAllOutputs = false;
 					continue;
+				}
 				engine->ConstrainClippingRegion(&outputDamage);
 				bool copyToFrontEnabled = engine->CopyToFrontEnabled();
 				engine->SetCopyToFrontEnabled(false);
@@ -2051,10 +2058,17 @@ Window::_DrawBorder()
 				drewOutput = true;
 			}
 
-			_SetDrawingEngineOutput(fScreen);
+			if (!_SetDrawingEngineOutput(fScreen))
+				drewAllOutputs = false;
 		}
 
-		if (!drewOutput && engine->LockParallelAccess()) {
+		if (drewOutput && !drewAllOutputs)
+			fWindow->ServerWindow()->RequestRedraw();
+		if (!canFanOut && intersectingOutputs > 1)
+			fWindow->ServerWindow()->RequestRedraw();
+
+		if (!drewOutput && intersectingOutputs <= 1
+			&& engine->LockParallelAccess()) {
 			engine->ConstrainClippingRegion(dirtyBorderRegion);
 			bool copyToFrontEnabled = engine->CopyToFrontEnabled();
 			engine->SetCopyToFrontEnabled(false);

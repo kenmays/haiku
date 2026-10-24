@@ -494,6 +494,23 @@ ScreenManager::_ScanMultiOutputs()
 				_AddHWInterface(enumerator);
 		}
 
+		AccelerantHWInterface* sharedAccelerant = NULL;
+		for (int32 j = 0; j < fScreenList.CountItems(); j++) {
+			screen_item* current = fScreenList.ItemAt(j);
+			AccelerantHWInterface* currentInterface = current != NULL
+				? dynamic_cast<AccelerantHWInterface*>(
+					current->screen->HWInterface()) : NULL;
+			if (currentInterface != NULL
+				&& currentInterface->UsesMultiOutput()
+				&& path == currentInterface->DevicePath()
+				&& currentInterface->OutputID() == kEnumeratorOutputID) {
+				sharedAccelerant = currentInterface;
+				break;
+			}
+		}
+		if (sharedAccelerant == NULL)
+			continue;
+
 		// Remember the stable generation on the persistent enumerator. A
 		// generation change also covers mode/capability changes on an output
 		// whose ID and connection state did not change.
@@ -567,7 +584,8 @@ ScreenManager::_ScanMultiOutputs()
 				continue;
 
 			HWInterface* outputInterface = new(nothrow) AccelerantHWInterface(
-				-1, path.String(), outputs[k].output_id, true);
+				-1, path.String(), outputs[k].output_id, true,
+				sharedAccelerant);
 			if (outputInterface != NULL)
 				_AddHWInterface(outputInterface);
 		}

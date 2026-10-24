@@ -21,6 +21,7 @@ class MultiheadSceneTest : public CppUnit::TestFixture {
 	CPPUNIT_TEST(NegativeOriginMapsToLocalPixels);
 	CPPUNIT_TEST(GenerationTracksOutputChanges);
 	CPPUNIT_TEST(InvalidOutputUpdatesAreRejectedAtomically);
+	CPPUNIT_TEST(DisabledOutputsAreExcludedFromLayoutAndDamage);
 	CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -114,6 +115,36 @@ public:
 		CPPUNIT_ASSERT(output != NULL);
 		CPPUNIT_ASSERT(output->frame == BRect(-100, -50, -1, 49));
 		CPPUNIT_ASSERT_EQUAL(1.0f, output->scale);
+	}
+
+	void DisabledOutputsAreExcludedFromLayoutAndDamage()
+	{
+		MultiheadScene scene;
+		CPPUNIT_ASSERT_EQUAL((status_t)B_OK,
+			scene.AddOutput(10, BRect(0, 0, 99, 99), 1.0f));
+		CPPUNIT_ASSERT_EQUAL((status_t)B_OK,
+			scene.AddOutput(20, BRect(100, 0, 199, 99), 2.0f));
+
+		CPPUNIT_ASSERT_EQUAL((status_t)B_OK,
+			scene.SetOutputEnabled(20, false));
+		CPPUNIT_ASSERT(scene.Bounds() == BRect(0, 0, 99, 99));
+		CPPUNIT_ASSERT_EQUAL((int32)10,
+			scene.OutputAtPoint(BPoint(150, 20)));
+		CPPUNIT_ASSERT_EQUAL((int32)-1,
+			scene.OutputWithLargestIntersection(BRect(120, 0, 180, 50)));
+
+		BPoint pixel(7, 9);
+		CPPUNIT_ASSERT_EQUAL((status_t)B_ENTRY_NOT_FOUND,
+			scene.GlobalToOutputPixel(20, BPoint(120, 10), pixel));
+		// Failed conversion must not publish a partial result.
+		CPPUNIT_ASSERT(pixel == BPoint(7, 9));
+
+		BRegion damage;
+		damage.Include(BRect(120, 0, 180, 50));
+		BRegion outputDamage;
+		CPPUNIT_ASSERT_EQUAL((status_t)B_ENTRY_NOT_FOUND,
+			scene.ClipRegionToOutput(20, damage, 200, 100, outputDamage));
+		CPPUNIT_ASSERT_EQUAL((int32)0, outputDamage.CountRects());
 	}
 
 	void NegativeOriginMapsToLocalPixels()

@@ -438,10 +438,46 @@ AccelerantHWInterface::_OpenAccelerant(int device)
 			uninitAccelerant();
 
 		unload_add_on(fAccelerantImage);
+		fAccelerantImage = -1;
+		fAccelerantHook = NULL;
 		return B_ERROR;
 	}
 
+	if (_HasIndependentOutputHooks()) {
+		if (!fUseMultiOutput) {
+			uint32 count = MultiOutputCount();
+			for (uint32 i = 0; i < count; i++) {
+				accelerant_output_info info;
+				if (GetMultiOutputInfo(i, &info) != B_OK
+					|| info.connection_state != B_MULTI_OUTPUT_CONNECTION_CONNECTED
+					|| (info.capabilities
+						& (B_MULTI_OUTPUT_CAPABILITY_INDEPENDENT_MODE
+							| B_MULTI_OUTPUT_CAPABILITY_FRAME_BUFFER))
+						!= (B_MULTI_OUTPUT_CAPABILITY_INDEPENDENT_MODE
+							| B_MULTI_OUTPUT_CAPABILITY_FRAME_BUFFER)) {
+					continue;
+				}
+
+				fOutputID = info.output_id;
+				fUseMultiOutput = true;
+				break;
+			}
+		}
+	}
+
 	return B_OK;
+}
+
+
+bool
+AccelerantHWInterface::_HasIndependentOutputHooks() const
+{
+	return HasMultiOutputEnumeration()
+		&& fAccGetMultiOutputModeCount != NULL
+		&& fAccGetMultiOutputModeList != NULL
+		&& fAccGetMultiOutputDisplayMode != NULL
+		&& fAccSetMultiOutputDisplayMode != NULL
+		&& fAccGetMultiOutputFrameBufferConfig != NULL;
 }
 
 
@@ -567,13 +603,39 @@ AccelerantHWInterface::_SetupDefaultHooks()
 		= (get_monitor_info)fAccelerantHook(B_GET_MONITOR_INFO, NULL);
 	fAccGetEDIDInfo = (get_edid_info)fAccelerantHook(B_GET_EDID_INFO, NULL);
 
-	// Optional multi-output capability. Old accelerants return NULL for these.
+	// Optional independent-output hooks. A multi-output device is only
+	// activated per connector when the complete mode/framebuffer contract is
+	// present; metadata-only hooks must not create duplicate screens.
 	fAccGetMultiOutputCount = (get_multi_output_count)fAccelerantHook(
 		B_GET_MULTI_OUTPUT_COUNT, NULL);
 	fAccGetMultiOutputInfo = (get_multi_output_info)fAccelerantHook(
 		B_GET_MULTI_OUTPUT_INFO, NULL);
+	fAccGetMultiOutputModeCount = (get_multi_output_mode_count)fAccelerantHook(
+		B_GET_MULTI_OUTPUT_MODE_COUNT, NULL);
+	fAccGetMultiOutputModeList = (get_multi_output_mode_list)fAccelerantHook(
+		B_GET_MULTI_OUTPUT_MODE_LIST, NULL);
+	fAccGetMultiOutputDisplayMode
+		= (get_multi_output_display_mode)fAccelerantHook(
+			B_GET_MULTI_OUTPUT_DISPLAY_MODE, NULL);
+	fAccSetMultiOutputDisplayMode
+		= (set_multi_output_display_mode)fAccelerantHook(
+			B_SET_MULTI_OUTPUT_DISPLAY_MODE, NULL);
+	fAccGetMultiOutputFrameBufferConfig
+		= (get_multi_output_frame_buffer_config)fAccelerantHook(
+			B_GET_MULTI_OUTPUT_FRAME_BUFFER_CONFIG, NULL);
+	fAccGetMultiOutputEDIDInfo = (get_multi_output_edid_info)fAccelerantHook(
+		B_GET_MULTI_OUTPUT_EDID_INFO, NULL);
 	fAccGetMultiOutputGeneration = (get_multi_output_generation)fAccelerantHook(
 		B_GET_MULTI_OUTPUT_GENERATION, NULL);
+	fAccPresentMultiOutput = (present_multi_output)fAccelerantHook(
+		B_PRESENT_MULTI_OUTPUT, NULL);
+	fAccSetMultiOutputCursorShape
+		= (set_multi_output_cursor_shape)fAccelerantHook(
+			B_SET_MULTI_OUTPUT_CURSOR_SHAPE, NULL);
+	fAccMoveMultiOutputCursor = (move_multi_output_cursor)fAccelerantHook(
+		B_MOVE_MULTI_OUTPUT_CURSOR, NULL);
+	fAccShowMultiOutputCursor = (show_multi_output_cursor)fAccelerantHook(
+		B_SHOW_MULTI_OUTPUT_CURSOR, NULL);
 
 	// cursor
 	fAccSetCursorShape

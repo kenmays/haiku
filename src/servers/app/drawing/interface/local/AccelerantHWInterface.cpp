@@ -1073,6 +1073,8 @@ AccelerantHWInterface::GetPixelClockLimits(display_mode *mode, uint32* _low,
 		return B_BAD_VALUE;
 
 	AutoReadLocker _(this);
+	if (fUseMultiOutput)
+		return B_UNSUPPORTED;
 	return fAccGetPixelClockLimits(mode, _low, _high);
 }
 
@@ -1086,6 +1088,8 @@ AccelerantHWInterface::GetTimingConstraints(
 
 	AutoReadLocker _(this);
 
+	if (fUseMultiOutput)
+		return B_UNSUPPORTED;
 	if (fAccGetTimingConstraints)
 		return fAccGetTimingConstraints(constraints);
 
@@ -1102,7 +1106,7 @@ AccelerantHWInterface::ProposeMode(display_mode* candidate,
 
 	AutoReadLocker _(this);
 
-	if (fAccProposeDisplayMode == NULL)
+	if (fUseMultiOutput || fAccProposeDisplayMode == NULL)
 		return B_UNSUPPORTED;
 
 	// avoid const issues
@@ -1225,20 +1229,28 @@ AccelerantHWInterface::GetPreferredMode(display_mode* preferredMode)
 status_t
 AccelerantHWInterface::GetMonitorInfo(monitor_info* info)
 {
-	status_t status = B_NOT_SUPPORTED;
+	if (info == NULL)
+		return B_BAD_VALUE;
 
-	if (fAccGetMonitorInfo != NULL) {
+	status_t status = B_NOT_SUPPORTED;
+	if (!fUseMultiOutput && fAccGetMonitorInfo != NULL) {
 		status = fAccGetMonitorInfo(info);
 		if (status == B_OK)
 			return B_OK;
 	}
 
-	if (fAccGetEDIDInfo == NULL)
-		return status;
-
 	edid1_info edid;
 	uint32 version;
-	status = fAccGetEDIDInfo(&edid, sizeof(edid), &version);
+	if (fUseMultiOutput) {
+		if (fAccGetMultiOutputEDIDInfo == NULL)
+			return B_NOT_SUPPORTED;
+		status = fAccGetMultiOutputEDIDInfo(fOutputID, &edid, sizeof(edid),
+			&version);
+	} else {
+		if (fAccGetEDIDInfo == NULL)
+			return status;
+		status = fAccGetEDIDInfo(&edid, sizeof(edid), &version);
+	}
 	if (status < B_OK)
 		return status;
 	if (version != EDID_VERSION_1)
@@ -1337,6 +1349,10 @@ AccelerantHWInterface::SetDPMSMode(uint32 state)
 {
 	AutoWriteLocker _(this);
 
+	// Legacy DPMS is device-wide; do not blank every connector when one
+	// independent output is being configured.
+	if (fUseMultiOutput)
+		return B_UNSUPPORTED;
 	if (!fAccSetDPMSMode)
 		return B_UNSUPPORTED;
 
@@ -1349,6 +1365,8 @@ AccelerantHWInterface::DPMSMode()
 {
 	AutoReadLocker _(this);
 
+	if (fUseMultiOutput)
+		return B_UNSUPPORTED;
 	if (!fAccDPMSMode)
 		return B_UNSUPPORTED;
 
@@ -1361,6 +1379,8 @@ AccelerantHWInterface::DPMSCapabilities()
 {
 	AutoReadLocker _(this);
 
+	if (fUseMultiOutput)
+		return 0;
 	if (!fAccDPMSCapabilities)
 		return B_UNSUPPORTED;
 
@@ -1373,6 +1393,8 @@ AccelerantHWInterface::SetBrightness(float brightness)
 {
 	AutoReadLocker _(this);
 
+	if (fUseMultiOutput)
+		return B_UNSUPPORTED;
 	if (!fAccSetBrightness)
 		return B_UNSUPPORTED;
 
@@ -1385,6 +1407,8 @@ AccelerantHWInterface::GetBrightness(float* brightness)
 {
 	AutoReadLocker _(this);
 
+	if (fUseMultiOutput)
+		return B_UNSUPPORTED;
 	if (!fAccGetBrightness)
 		return B_UNSUPPORTED;
 

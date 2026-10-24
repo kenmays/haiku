@@ -14,6 +14,7 @@
 
 static const uint32 kScreenChangedMessage = 'scch';
 static const uint32 kScanGraphicsMessage = 'scgr';
+static const uint64 kEnumeratorOutputID = ~(uint64)0;
 
 #include "Screen.h"
 #include "ServerConfig.h"
@@ -308,18 +309,34 @@ ScreenManager::_ScanDrivers()
 	// framebuffer attached would keep stale Screen/HWInterface pointers in
 	// windows and the virtual scene. RemoveScreen() detaches the owner before
 	// the Screen and its interface are released.
-	for (int32 i = 0; i < fScreenList.CountItems();) {
-		screen_item* item = fScreenList.ItemAt(i);
-		AccelerantHWInterface* accelerant =
-			dynamic_cast<AccelerantHWInterface*>(
-				item->screen->HWInterface());
-		const char* path = accelerant != NULL
-			? accelerant->DevicePath() : NULL;
-		if (path != NULL && path[0] != '\0' && access(path, F_OK) != 0) {
+	// Output wrappers borrow the accelerant image from the persistent
+	// enumerator. Remove those wrappers first and the enumerator last when a
+	// device node disappears, so no live wrapper calls an unloaded image.
+	for (int pass = 0; pass < 2; pass++) {
+		for (int32 i = 0; i < fScreenList.CountItems();) {
+			screen_item* item = fScreenList.ItemAt(i);
+			AccelerantHWInterface* accelerant =
+				dynamic_cast<AccelerantHWInterface*>(
+					item->screen->HWInterface());
+			const char* path = accelerant != NULL
+				? accelerant->DevicePath() : NULL;
+			bool missing = path != NULL && path[0] != '\0'
+				&& access(path, F_OK) != 0;
+			if (!missing) {
+				i++;
+				continue;
+			}
+
+			bool isEnumerator = accelerant != NULL
+				&& accelerant->UsesMultiOutput()
+				&& accelerant->OutputID() == kEnumeratorOutputID;
+			if ((pass == 0 && isEnumerator) || (pass == 1 && !isEnumerator)) {
+				i++;
+				continue;
+			}
+
 			RemoveScreen(item->screen.Get());
-			continue;
 		}
-		i++;
 	}
 
 	// If a real graphics node has appeared after the fallback backend was
@@ -472,7 +489,6 @@ ScreenManager::_ScanMultiOutputs()
 		// Keep one non-rendering handle per device so a later connector
 		// connection can be discovered even when every physical output is
 		// currently disconnected.
-		const uint64 kEnumeratorOutputID = ~(uint64)0;
 		bool hasEnumerator = false;
 		for (int32 j = 0; j < fScreenList.CountItems(); j++) {
 			screen_item* current = fScreenList.ItemAt(j);

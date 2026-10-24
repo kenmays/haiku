@@ -105,10 +105,6 @@ AccelerantHWInterface::AccelerantHWInterface(int32 deviceNumber,
 	fDevicePath(devicePath != NULL ? devicePath : ""),
 	fOutputID(outputID),
 	fUseMultiOutput(useMultiOutput),
-	fOutputFrame(0, 0, -1, -1),
-	fOutputScale(1.0f),
-	fGlobalCursorLocation(0, 0),
-	fHasGlobalCursorLocation(false),
 	fCardFD(-1),
 	fAccelerantImage(-1),
 	fAccelerantHook(NULL),
@@ -1705,25 +1701,13 @@ AccelerantHWInterface::SetCursorVisible(bool visible)
 void
 AccelerantHWInterface::MoveCursorTo(float x, float y)
 {
-	if (fUseMultiOutput) {
-		BPoint localPosition;
-		if (LockExclusiveAccess()) {
-			fGlobalCursorLocation = BPoint(x, y);
-			fHasGlobalCursorLocation = true;
-			if (fOutputFrame.IsValid() && fOutputScale > 0.0f) {
-				localPosition = BPoint((x - fOutputFrame.left) * fOutputScale,
-					(y - fOutputFrame.top) * fOutputScale);
-			} else
-				localPosition = BPoint(x, y);
-			UnlockExclusiveAccess();
-		} else
-			return;
-
-		HWInterface::MoveCursorTo(localPosition.x, localPosition.y);
-		return;
-	}
-
+	// Desktop has already converted global logical coordinates to this
+	// output's physical pixel coordinates before calling MoveCursorTo().
+	// Keep the software cursor output-local and avoid the legacy device-wide
+	// hardware cursor hook.
 	HWInterface::MoveCursorTo(x, y);
+	if (fUseMultiOutput)
+		return;
 
 	if (fHardwareCursorEnabled && LockExclusiveAccess()) {
 		if (fAccMoveCursor != NULL)
@@ -1736,31 +1720,6 @@ AccelerantHWInterface::MoveCursorTo(float x, float y)
 
 		UnlockExclusiveAccess();
 	}
-}
-
-
-void
-AccelerantHWInterface::SetOutputTransform(const BRect& frame, float scale)
-{
-	if (!fUseMultiOutput || !frame.IsValid() || !(scale > 0.0f)
-		|| !isfinite(scale)) {
-		return;
-	}
-
-	BPoint cursorPosition;
-	bool moveCursor = false;
-	if (!LockExclusiveAccess())
-		return;
-
-	fOutputFrame = frame;
-	fOutputScale = scale;
-	moveCursor = fHasGlobalCursorLocation;
-	cursorPosition = fGlobalCursorLocation;
-	UnlockExclusiveAccess();
-
-	// Re-map the saved desktop position after a move or DPI change.
-	if (moveCursor)
-		MoveCursorTo(cursorPosition.x, cursorPosition.y);
 }
 
 

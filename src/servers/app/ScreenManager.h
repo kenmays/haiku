@@ -65,6 +65,8 @@ class ScreenManager : public BLooper {
 			ObjectDeleter<Screen>	screen;
 			ScreenOwner*			owner;
 			bool				removing;
+			uint64				outputGeneration;
+			bool				hasOutputGeneration;
 			ObjectDeleter<HWInterfaceListener>
 									listener;
 		};

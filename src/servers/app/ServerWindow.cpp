@@ -2665,9 +2665,12 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 				continue;
 			}
 
-			_DispatchViewDrawingMessageSingleOutput(code, *replayReceivers[i],
-				!renderedAny);
-			renderedAny = true;
+			if (_DispatchViewDrawingMessageSingleOutput(code,
+					*replayReceivers[i], !renderedAny)) {
+				renderedAny = true;
+			} else {
+				allTargetsRendered = false;
+			}
 		}
 
 	} catch (...) {
@@ -2712,7 +2715,7 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 }
 
 
-void
+bool
 ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 	BPrivate::LinkReceiver &link, bool updateLogicalState)
 {
@@ -2724,7 +2727,7 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			fLink.StartMessage(B_ERROR);
 			fLink.Flush();
 		}
-		return;
+		return false;
 	}
 
 	DrawingEngine* drawingEngine = fWindow->GetDrawingEngine();
@@ -2736,7 +2739,7 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			fLink.StartMessage(B_ERROR);
 			fLink.Flush();
 		}
-		return;
+		return false;
 	}
 
 	_UpdateCurrentDrawingRegion();
@@ -2754,7 +2757,7 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			fLink.StartMessage(B_ERROR);
 			fLink.Flush();
 		}
-		return;
+		return false;
 	}
 
 	if (!drawingEngine->LockParallelAccess()) {
@@ -2765,7 +2768,7 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			fLink.StartMessage(B_ERROR);
 			fLink.Flush();
 		}
-		return;
+		return false;
 	}
 
 	// Painter borrows the clipping region until the drawing transaction ends.
@@ -3554,6 +3557,7 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 	}
 
 	drawingEngine->UnlockParallelAccess();
+	return true;
 }
 
 

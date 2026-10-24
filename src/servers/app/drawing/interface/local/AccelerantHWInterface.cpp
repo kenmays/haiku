@@ -1550,6 +1550,8 @@ AccelerantHWInterface::GetDriverPath(BString& string)
 overlay_token
 AccelerantHWInterface::AcquireOverlayChannel()
 {
+	if (fUseMultiOutput)
+		return NULL;
 	if (fAccAllocateOverlay == NULL
 		|| fAccReleaseOverlay == NULL)
 		return NULL;
@@ -1577,6 +1579,8 @@ status_t
 AccelerantHWInterface::GetOverlayRestrictions(const Overlay* overlay,
 	overlay_restrictions* restrictions)
 {
+	if (fUseMultiOutput)
+		return B_NOT_SUPPORTED;
 	if (overlay == NULL || restrictions == NULL)
 		return B_BAD_VALUE;
 	if (fAccGetOverlayConstraints == NULL)
@@ -1605,6 +1609,8 @@ bool
 AccelerantHWInterface::CheckOverlayRestrictions(int32 width, int32 height,
 	color_space colorSpace)
 {
+	if (fUseMultiOutput)
+		return false;
 	if (fAccOverlaySupportedSpaces == NULL
 		|| fAccGetOverlayConstraints == NULL
 		|| fAccAllocateOverlayBuffer == NULL
@@ -1635,7 +1641,7 @@ const overlay_buffer*
 AccelerantHWInterface::AllocateOverlayBuffer(int32 width, int32 height,
 	color_space space)
 {
-	if (fAccAllocateOverlayBuffer == NULL)
+	if (fUseMultiOutput || fAccAllocateOverlayBuffer == NULL)
 		return NULL;
 
 	return fAccAllocateOverlayBuffer(space, width, height);
@@ -1645,7 +1651,7 @@ AccelerantHWInterface::AllocateOverlayBuffer(int32 width, int32 height,
 void
 AccelerantHWInterface::FreeOverlayBuffer(const overlay_buffer* buffer)
 {
-	if (buffer == NULL || fAccReleaseOverlayBuffer == NULL)
+	if (fUseMultiOutput || buffer == NULL || fAccReleaseOverlayBuffer == NULL)
 		return;
 
 	fAccReleaseOverlayBuffer(buffer);
@@ -1655,6 +1661,8 @@ AccelerantHWInterface::FreeOverlayBuffer(const overlay_buffer* buffer)
 void
 AccelerantHWInterface::ConfigureOverlay(Overlay* overlay)
 {
+	if (fUseMultiOutput || overlay == NULL || fAccConfigureOverlay == NULL)
+		return;
 	// TODO: this only needs to be done on mode changes!
 	overlay->SetColorSpace(fDisplayMode.space);
 
@@ -1666,6 +1674,8 @@ AccelerantHWInterface::ConfigureOverlay(Overlay* overlay)
 void
 AccelerantHWInterface::HideOverlay(Overlay* overlay)
 {
+	if (fUseMultiOutput || overlay == NULL || fAccConfigureOverlay == NULL)
+		return;
 	fAccConfigureOverlay(overlay->OverlayToken(), overlay->OverlayBuffer(),
 		NULL, NULL);
 }

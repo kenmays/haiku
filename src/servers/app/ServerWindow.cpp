@@ -32,6 +32,7 @@
 #include <new>
 #include <math.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <memory>
 #include <utility>
 
@@ -3243,6 +3244,10 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			const SimpleTransform transform =
 				fCurrentView->PenToScreenTransform();
 			BPoint* pointList = new(nothrow) BPoint[pointCount];
+			if (pointList == NULL) {
+				commandProcessed = false;
+				break;
+			}
 			if (link.Read(pointList, pointCount * sizeof(BPoint)) >= B_OK) {
 				for (int32 i = 0; i < pointCount; i++)
 					transform.Apply(&pointList[i]);
@@ -3250,6 +3255,8 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 
 				drawingEngine->DrawPolygon(pointList, pointCount, polyFrame,
 					code == AS_FILL_POLYGON, isClosed && pointCount > 2);
+			} else {
+				commandProcessed = false;
 			}
 			delete[] pointList;
 			break;
@@ -3271,6 +3278,10 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			const SimpleTransform transform =
 				fCurrentView->PenToScreenTransform();
 			BPoint* pointList = new(nothrow) BPoint[pointCount];
+			if (pointList == NULL) {
+				commandProcessed = false;
+				break;
+			}
 			BGradient* gradient;
 			if (link.Read(pointList, pointCount * sizeof(BPoint)) == B_OK
 				&& link.ReadGradient(&gradient) == B_OK) {
@@ -3283,6 +3294,8 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 					polyFrame, code == AS_FILL_POLYGON_GRADIENT, isClosed && pointCount > 2,
 					*gradient);
 				delete gradient;
+			} else {
+				commandProcessed = false;
 			}
 			delete[] pointList;
 			break;
@@ -3303,8 +3316,10 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 
 			uint32* opList = new(nothrow) uint32[opCount];
 			BPoint* ptList = new(nothrow) BPoint[ptCount];
-			if (link.Read(opList, opCount * sizeof(uint32)) >= B_OK &&
-				link.Read(ptList, ptCount * sizeof(BPoint)) >= B_OK) {
+			if (opList == NULL || ptList == NULL) {
+				commandProcessed = false;
+			} else if (link.Read(opList, opCount * sizeof(uint32)) >= B_OK
+				&& link.Read(ptList, ptCount * sizeof(BPoint)) >= B_OK) {
 
 				// this might seem a bit weird, but under R5, the shapes
 				// are always offset by the current pen location
@@ -3320,6 +3335,8 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 				drawingEngine->DrawShape(shapeFrame, opCount, opList, ptCount,
 					ptList, code == AS_FILL_SHAPE, screenOffset,
 					fCurrentView->Scale());
+			} else {
+				commandProcessed = false;
 			}
 
 			delete[] opList;
@@ -3342,6 +3359,12 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 
 			uint32* opList = new(nothrow) uint32[opCount];
 			BPoint* ptList = new(nothrow) BPoint[ptCount];
+			if (opList == NULL || ptList == NULL) {
+				delete[] opList;
+				delete[] ptList;
+				commandProcessed = false;
+				break;
+			}
 			BGradient* gradient;
 			if (link.Read(opList, opCount * sizeof(uint32)) == B_OK
 				&& link.Read(ptList, ptCount * sizeof(BPoint)) == B_OK
@@ -3362,6 +3385,8 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 					ptCount, ptList, code == AS_FILL_SHAPE_GRADIENT, *gradient, screenOffset,
 					fCurrentView->Scale());
 				delete gradient;
+			} else {
+				commandProcessed = false;
 			}
 
 			delete[] opList;
@@ -3437,6 +3462,7 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			if (link.Read(lineData, dataSize) != B_OK) {
 				if (lineData != lineDataStackBuffer)
 					delete[] lineData;
+				commandProcessed = false;
 				break;
 			}
 
@@ -3459,14 +3485,17 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			ViewDrawStringInfo info;
 			if (link.Read<ViewDrawStringInfo>(&info) != B_OK
 				|| info.stringLength <= 0) {
+				commandProcessed = false;
 				break;
 			}
 
 			// NOTE: Careful, the + 1 is for termination!
 			BStackOrHeapArray<char, 4096> string(
 				(info.stringLength + 1 + 63) / 64 * 64);
-			if (!string.IsValid())
+			if (!string.IsValid()) {
+				commandProcessed = false;
 				break;
+			}
 
 			escapement_delta* delta = NULL;
 			if (code == AS_DRAW_STRING_WITH_DELTA) {

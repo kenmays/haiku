@@ -1940,7 +1940,12 @@ Window::_TriggerContentRedraw(BRegion& dirty, const BRegion& expose)
 		}
 
 		// Restore the window's assigned output after the per-output draw pass.
-		_SetDrawingEngineOutput(fScreen);
+		bool restoredOutput = _SetDrawingEngineOutput(fScreen);
+		if (!restoredOutput) {
+			BRegion retry(expose);
+			MarkContentDirtyAsync(retry);
+			return;
+		}
 		if (drewOutput && drewAllOutputs)
 			return;
 		if (!drewAllOutputs) {

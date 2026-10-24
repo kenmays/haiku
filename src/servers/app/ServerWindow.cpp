@@ -3237,7 +3237,7 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 				commandProcessed = false;
 				break;
 			}
-			if (link.Read(pointList, pointCount * sizeof(BPoint)) >= B_OK) {
+			if (link.Read(pointList, (size_t)pointCount * sizeof(BPoint)) >= B_OK) {
 				for (int32 i = 0; i < pointCount; i++)
 					transform.Apply(&pointList[i]);
 				transform.Apply(&polyFrame);
@@ -3300,8 +3300,8 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			BPoint* ptList = new(nothrow) BPoint[ptCount];
 			if (opList == NULL || ptList == NULL) {
 				commandProcessed = false;
-			} else if (link.Read(opList, opCount * sizeof(uint32)) >= B_OK
-				&& link.Read(ptList, ptCount * sizeof(BPoint)) >= B_OK) {
+			} else if (link.Read(opList, (size_t)opCount * sizeof(uint32)) >= B_OK
+				&& link.Read(ptList, (size_t)ptCount * sizeof(BPoint)) >= B_OK) {
 
 				// this might seem a bit weird, but under R5, the shapes
 				// are always offset by the current pen location
@@ -3344,8 +3344,8 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 				break;
 			}
 			BGradient* gradient;
-			if (link.Read(opList, opCount * sizeof(uint32)) == B_OK
-				&& link.Read(ptList, ptCount * sizeof(BPoint)) == B_OK
+			if (link.Read(opList, (size_t)opCount * sizeof(uint32)) == B_OK
+				&& link.Read(ptList, (size_t)ptCount * sizeof(BPoint)) == B_OK
 				&& link.ReadGradient(&gradient) == B_OK) {
 
 				// this might seem a bit weird, but under R5, the shapes
@@ -3528,17 +3528,21 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			BStackOrHeapArray<char, 512> string(
 				(stringLength + 1 + 63) / 64 * 64);
 			BStackOrHeapArray<BPoint, 512> locations(glyphCount);
-			if (!string.IsValid() || !locations.IsValid())
+			if (!string.IsValid() || !locations.IsValid()) {
+				commandProcessed = false;
 				break;
+			}
 
 			if (link.Read(string, stringLength) != B_OK) {
 				commandProcessed = false;
 				break;
 			}
 			// Count UTF8 glyphs and make sure we have enough locations
-			if ((int32)UTF8CountChars(string, stringLength) > glyphCount)
+			if ((int32)UTF8CountChars(string, stringLength) > glyphCount) {
+				commandProcessed = false;
 				break;
-			if (link.Read(locations, glyphCount * sizeof(BPoint)) != B_OK) {
+			}
+			if (link.Read(locations, (size_t)glyphCount * sizeof(BPoint)) != B_OK) {
 				commandProcessed = false;
 				break;
 			}

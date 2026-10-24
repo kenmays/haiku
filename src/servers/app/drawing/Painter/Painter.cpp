@@ -216,6 +216,8 @@ Painter::Painter()
 	fRendererScale(1.0f),
 	fRendererOffsetX(0),
 	fRendererOffsetY(0),
+	fRendererFractionalOffsetX(0.0f),
+	fRendererFractionalOffsetY(0.0f),
 	fScaledClippingRegion(),
 	fPenSize(1.0),
 	fSourceClippingRegion(),
@@ -383,21 +385,23 @@ Painter::ConstrainClipping(const BRegion* region)
 	const BRegion* source = &fSourceClippingRegion;
 
 	if (fRendererScale == 1.0f
-		&& fRendererOffsetX == 0 && fRendererOffsetY == 0) {
+		&& fRendererOffsetX == 0 && fRendererOffsetY == 0
+		&& fRendererFractionalOffsetX == 0.0f
+		&& fRendererFractionalOffsetY == 0.0f) {
 		fClippingRegion = source;
 	} else {
 		// Convert global logical desktop clipping to framebuffer-local pixels.
 		fScaledClippingRegion.MakeEmpty();
 		for (int32 i = 0; i < source->CountRects(); i++) {
 			BRect rect = source->RectAt(i);
-			rect.left = floorf(rect.left * fRendererScale)
-				+ fRendererOffsetX;
-			rect.top = floorf(rect.top * fRendererScale)
-				+ fRendererOffsetY;
-			rect.right = ceilf(rect.right * fRendererScale)
-				+ fRendererOffsetX;
-			rect.bottom = ceilf(rect.bottom * fRendererScale)
-				+ fRendererOffsetY;
+			rect.left = floorf(rect.left * fRendererScale
+				+ fRendererOffsetX + fRendererFractionalOffsetX);
+			rect.top = floorf(rect.top * fRendererScale
+				+ fRendererOffsetY + fRendererFractionalOffsetY);
+			rect.right = ceilf(rect.right * fRendererScale
+				+ fRendererOffsetX + fRendererFractionalOffsetX);
+			rect.bottom = ceilf(rect.bottom * fRendererScale
+				+ fRendererOffsetY + fRendererFractionalOffsetY);
 			fScaledClippingRegion.Include(rect);
 		}
 		fClippingRegion = &fScaledClippingRegion;
@@ -442,7 +446,9 @@ Painter::SetRendererScale(float scale)
 void
 Painter::_UpdateTransform()
 {
-	fIdentityTransform = fBaseTransform.IsIdentity() && fRendererScale == 1.0f;
+	fIdentityTransform = fBaseTransform.IsIdentity() && fRendererScale == 1.0f
+		&& fRendererFractionalOffsetX == 0.0f
+		&& fRendererFractionalOffsetY == 0.0f;
 	if (!fBaseTransform.IsIdentity()) {
 		fTransform = agg::trans_affine_translation(-fTransformOffsetX,
 			-fTransformOffsetY);
@@ -465,6 +471,10 @@ Painter::_UpdateTransform()
 		fTransform.tx *= fRendererScale;
 		fTransform.ty *= fRendererScale;
 	}
+	// The rasterizer offset is integer-only. Preserve the subpixel part of
+	// an output's origin in the affine transform instead.
+	fTransform.tx += fRendererFractionalOffsetX;
+	fTransform.ty += fRendererFractionalOffsetY;
 }
 
 
@@ -1731,6 +1741,24 @@ Painter::SetRendererOffset(int32 offsetX, int32 offsetY)
 
 	// The clipping source is owned by Painter, so it remains valid while an
 	// output is rebound between draw transactions.
+	if (fHasSourceClippingRegion)
+		ConstrainClipping(&fSourceClippingRegion);
+}
+
+
+void
+Painter::SetRendererFractionalOffset(float offsetX, float offsetY)
+{
+	if (!isfinite(offsetX) || !isfinite(offsetY))
+		return;
+	if (fRendererFractionalOffsetX == offsetX
+		&& fRendererFractionalOffsetY == offsetY) {
+		return;
+	}
+
+	fRendererFractionalOffsetX = offsetX;
+	fRendererFractionalOffsetY = offsetY;
+	_UpdateTransform();
 	if (fHasSourceClippingRegion)
 		ConstrainClipping(&fSourceClippingRegion);
 }

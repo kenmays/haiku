@@ -147,7 +147,9 @@ ScreenManager::~ScreenManager()
 			item->owner = NULL;
 			if (item->screen.Get() != NULL
 				&& item->listener.Get() != NULL) {
-				item->screen->HWInterface()->RemoveListener(item->listener.Get());
+				HWInterface* interface = item->screen->HWInterface();
+				if (interface != NULL)
+					interface->RemoveListener(item->listener.Get());
 			}
 			delete item;
 		}

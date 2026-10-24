@@ -494,6 +494,30 @@ ScreenManager::_ScanMultiOutputs()
 				_AddHWInterface(enumerator);
 		}
 
+		// Remember the stable generation on the persistent enumerator. A
+		// generation change also covers mode/capability changes on an output
+		// whose ID and connection state did not change.
+		bool generationChanged = false;
+		if (hasGeneration) {
+			for (int32 j = 0; j < fScreenList.CountItems(); j++) {
+				screen_item* current = fScreenList.ItemAt(j);
+				AccelerantHWInterface* currentInterface = current != NULL
+					? dynamic_cast<AccelerantHWInterface*>(
+						current->screen->HWInterface()) : NULL;
+				if (currentInterface == NULL
+					|| !currentInterface->UsesMultiOutput()
+					|| path != currentInterface->DevicePath()
+					|| currentInterface->OutputID() != kEnumeratorOutputID) {
+					continue;
+				}
+				generationChanged = current->hasOutputGeneration
+					&& current->outputGeneration != generationBefore;
+				current->outputGeneration = generationBefore;
+				current->hasOutputGeneration = true;
+				break;
+			}
+		}
+
 		// Detach outputs that disappeared or no longer provide the independent
 		// mode/framebuffer contract. The enumerator remains alive for recovery.
 		for (int32 j = 0; j < fScreenList.CountItems();) {
@@ -547,6 +571,23 @@ ScreenManager::_ScanMultiOutputs()
 			if (outputInterface != NULL)
 				_AddHWInterface(outputInterface);
 		}
+
+		if (generationChanged) {
+			// Queue notifications after reconciliation, so Desktop sees a
+			// complete, stable output set before rebuilding mode-dependent state.
+			for (int32 j = 0; j < fScreenList.CountItems(); j++) {
+				screen_item* current = fScreenList.ItemAt(j);
+				AccelerantHWInterface* currentInterface = current != NULL
+					? dynamic_cast<AccelerantHWInterface*>(
+						current->screen->HWInterface()) : NULL;
+				if (currentInterface != NULL && current->owner != NULL
+					&& currentInterface->UsesMultiOutput()
+					&& path == currentInterface->DevicePath()
+					&& currentInterface->OutputID() != kEnumeratorOutputID) {
+					ScreenChanged(current->screen.Get());
+				}
+			}
+		}
 	}
 #endif
 }
@@ -571,6 +612,8 @@ ScreenManager::_AddHWInterface(HWInterface* interface)
 			item->screen.SetTo(screen.Detach());
 			item->owner = NULL;
 			item->removing = false;
+			item->outputGeneration = 0;
+			item->hasOutputGeneration = false;
 			item->listener.SetTo(
 				new(nothrow) ScreenChangeListener(*this, item->screen.Get()));
 			if (item->listener.IsSet()

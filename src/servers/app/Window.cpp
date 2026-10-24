@@ -1985,14 +1985,11 @@ Window::_DrawBorder()
 			if (!(scale > 0.0f) || !isfinite(scale)
 				|| screen->HWInterface() == NULL
 				|| !frame.IsValid()
-				|| frame.left != floorf(frame.left)
-				|| frame.top != floorf(frame.top)
-				|| pixelLeft < -2147483647.0
-				|| pixelLeft > 2147483647.0
-				|| pixelTop < -2147483647.0
-				|| pixelTop > 2147483647.0
-				|| pixelLeft != floor(pixelLeft)
-				|| pixelTop != floor(pixelTop)) {
+				|| !isfinite(pixelLeft) || !isfinite(pixelTop)
+				|| floor(pixelLeft) < -2147483647.0
+				|| floor(pixelLeft) > 2147483647.0
+				|| floor(pixelTop) < -2147483647.0
+				|| floor(pixelTop) > 2147483647.0) {
 				canFanOut = false;
 				break;
 			}

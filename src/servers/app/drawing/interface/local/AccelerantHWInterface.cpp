@@ -98,11 +98,13 @@ use_fail_safe_video_mode()
 
 
 AccelerantHWInterface::AccelerantHWInterface(int32 deviceNumber,
-	const char* devicePath)
+	const char* devicePath, uint64 outputID, bool useMultiOutput)
 	:
 	HWInterface(),
 	fDeviceNumber(deviceNumber),
 	fDevicePath(devicePath != NULL ? devicePath : ""),
+	fOutputID(outputID),
+	fUseMultiOutput(useMultiOutput),
 	fCardFD(-1),
 	fAccelerantImage(-1),
 	fAccelerantHook(NULL),
@@ -124,7 +126,17 @@ AccelerantHWInterface::AccelerantHWInterface(int32 deviceNumber,
 	fAccGetMonitorInfo(NULL),
 	fAccGetMultiOutputCount(NULL),
 	fAccGetMultiOutputInfo(NULL),
+	fAccGetMultiOutputModeCount(NULL),
+	fAccGetMultiOutputModeList(NULL),
+	fAccGetMultiOutputDisplayMode(NULL),
+	fAccSetMultiOutputDisplayMode(NULL),
+	fAccGetMultiOutputFrameBufferConfig(NULL),
+	fAccGetMultiOutputEDIDInfo(NULL),
 	fAccGetMultiOutputGeneration(NULL),
+	fAccPresentMultiOutput(NULL),
+	fAccSetMultiOutputCursorShape(NULL),
+	fAccMoveMultiOutputCursor(NULL),
+	fAccShowMultiOutputCursor(NULL),
 	fAccGetEDIDInfo(NULL),
 	fAccSetCursorShape(NULL),
 	fAccSetCursorBitmap(NULL),

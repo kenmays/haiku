@@ -2779,13 +2779,15 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 	BRegion outputDrawingRegion;
 	const BRegion* drawingRegion = &outputDrawingRegion;
 	const ::Screen* output = fWindow->Screen();
+	OutputRenderTarget renderTarget;
+	bool hasCurrentRenderTarget = false;
 	if (output != NULL) {
-		OutputRenderTarget renderTarget;
 		status_t targetStatus = fDesktop->VirtualScreen().BuildRenderTarget(
 			output, fCurrentDrawingRegion, renderTarget);
 		if (targetStatus == B_OK
 			&& fDesktop->VirtualScreen().IsRenderTargetCurrent(renderTarget)) {
 			outputDrawingRegion = renderTarget.globalClip;
+			hasCurrentRenderTarget = true;
 		}
 	}
 	// An absent, invalid, or concurrently detached output leaves an empty
@@ -3556,8 +3558,12 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			break;
 	}
 
+	// A hot-unplug or mode/scale change during dispatch invalidates the
+	// success result. The caller will schedule a normal redraw for recovery.
+	bool outputStillCurrent = hasCurrentRenderTarget
+		&& fDesktop->VirtualScreen().IsRenderTargetCurrent(renderTarget);
 	drawingEngine->UnlockParallelAccess();
-	return true;
+	return outputStillCurrent;
 }
 
 

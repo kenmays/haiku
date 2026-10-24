@@ -22,6 +22,7 @@ class MultiheadSceneTest : public CppUnit::TestFixture {
 	CPPUNIT_TEST(GenerationTracksOutputChanges);
 	CPPUNIT_TEST(InvalidOutputUpdatesAreRejectedAtomically);
 	CPPUNIT_TEST(DisabledOutputsAreExcludedFromLayoutAndDamage);
+	CPPUNIT_TEST(OffscreenDamageDoesNotCollapseOntoFramebufferEdges);
 	CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -145,6 +146,24 @@ public:
 		CPPUNIT_ASSERT_EQUAL((status_t)B_ENTRY_NOT_FOUND,
 			scene.ClipRegionToOutput(20, damage, 200, 100, outputDamage));
 		CPPUNIT_ASSERT_EQUAL((int32)0, outputDamage.CountRects());
+	}
+
+	void OffscreenDamageDoesNotCollapseOntoFramebufferEdges()
+	{
+		MultiheadScene scene;
+		CPPUNIT_ASSERT_EQUAL((status_t)B_OK,
+			scene.AddOutput(10, BRect(-100, -50, -1, 49), 1.5f));
+
+		BRegion damage;
+		damage.Include(BRect(20, 20, 30, 30));
+		damage.Include(BRect(-150, 10, -120, 20));
+		BRegion pixels;
+		CPPUNIT_ASSERT_EQUAL((status_t)B_OK,
+			scene.ClipRegionToOutput(10, damage, 150, 150, pixels));
+
+		// Both input rectangles are wholly outside the output's logical
+		// frame. Clamping before rejection would incorrectly dirty edge pixels.
+		CPPUNIT_ASSERT_EQUAL((int32)0, pixels.CountRects());
 	}
 
 	void NegativeOriginMapsToLocalPixels()

@@ -38,10 +38,10 @@ public:
 			bool				UsesMultiOutput() const { return fUseMultiOutput; }
 			uint64				OutputID() const { return fOutputID; }
 			bool				HasMultiOutputEnumeration() const;
-			uint32				MultiOutputCount() const;
+			uint32				MultiOutputCount();
 			status_t			GetMultiOutputInfo(uint32 index,
-									accelerant_output_info* info) const;
-			status_t			GetMultiOutputGeneration(uint64* generation) const;
+									accelerant_output_info* info);
+			status_t			GetMultiOutputGeneration(uint64* generation);
 
 	virtual	status_t			Initialize();
 	virtual	status_t			Shutdown();

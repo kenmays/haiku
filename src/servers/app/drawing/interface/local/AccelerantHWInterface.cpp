@@ -770,16 +770,12 @@ AccelerantHWInterface::_SetFallbackMode(display_mode& newMode) const
 	// At first, we search the closest display mode from the list of
 	// supported modes - if that fails, we just take one
 
-	status_t (*setMode)(uint64, display_mode*) = NULL;
-	if (fUseMultiOutput) {
-		if (fAccSetMultiOutputDisplayMode == NULL)
-			return B_NOT_SUPPORTED;
-		setMode = NULL;
-	} else {
-		if (_FindBestMode(newMode, 0, newMode) == B_OK
-			&& fAccSetDisplayMode(&newMode) == B_OK) {
+	if (_FindBestMode(newMode, 0, newMode) == B_OK) {
+		status_t status = fUseMultiOutput
+			? fAccSetMultiOutputDisplayMode(fOutputID, &newMode)
+			: fAccSetDisplayMode(&newMode);
+		if (status == B_OK)
 			return B_OK;
-		}
 	}
 
 	// That failed as well, this looks like a bug in the graphics
@@ -884,14 +880,18 @@ AccelerantHWInterface::SetMode(const display_mode& mode)
 
 	// Update the frame buffer used by the on-screen KDL
 #ifndef HAIKU_TARGET_PLATFORM_LIBBE_TEST
-	uint32 depth = (fFrameBufferConfig.bytes_per_row
-		/ fFrontBuffer->Width()) << 3;
-	if (fDisplayMode.space == B_RGB15)
-		depth = 15;
+	// The kernel debugger has a single global framebuffer. Updating it for
+	// every connector would make the last configured output steal the console.
+	if (!fUseMultiOutput) {
+		uint32 depth = (fFrameBufferConfig.bytes_per_row
+			/ fFrontBuffer->Width()) << 3;
+		if (fDisplayMode.space == B_RGB15)
+			depth = 15;
 
-	_kern_frame_buffer_update((addr_t)fFrameBufferConfig.frame_buffer,
-		fFrontBuffer->Width(), fFrontBuffer->Height(),
-		depth, fFrameBufferConfig.bytes_per_row);
+		_kern_frame_buffer_update((addr_t)fFrameBufferConfig.frame_buffer,
+			fFrontBuffer->Width(), fFrontBuffer->Height(),
+			depth, fFrameBufferConfig.bytes_per_row);
+	}
 #endif
 
 	_UpdateHooksAfterModeChange();
@@ -1080,6 +1080,29 @@ AccelerantHWInterface::ProposeMode(display_mode* candidate,
 status_t
 AccelerantHWInterface::GetPreferredMode(display_mode* preferredMode)
 {
+	if (preferredMode == NULL)
+		return B_BAD_VALUE;
+
+	if (fUseMultiOutput) {
+		// The legacy preferred-mode hook is device-wide and may describe a
+		// different connector. Prefer this output's current mode; if it cannot
+		// be queried yet, use the first mode advertised for this output.
+		status_t status = fAccGetMultiOutputDisplayMode(fOutputID,
+			preferredMode);
+		if (status == B_OK && _IsValidMode(*preferredMode))
+			return B_OK;
+
+		if (fModeList == NULL) {
+			status = _UpdateModeList();
+			if (status != B_OK)
+				return status;
+		}
+		if (fModeCount <= 0)
+			return B_ERROR;
+		*preferredMode = fModeList[0];
+		return B_OK;
+	}
+
 	status_t status = B_NOT_SUPPORTED;
 
 	if (fAccGetPreferredDisplayMode != NULL) {

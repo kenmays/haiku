@@ -69,6 +69,7 @@ class ScreenManager : public BLooper {
 		};
 
 		void			_ScanDrivers();
+		void			_ScanMultiOutputs();
 		void			_WatchGraphicsDirectories(const char* path);
 		screen_item*	_AddHWInterface(HWInterface* interface);
 

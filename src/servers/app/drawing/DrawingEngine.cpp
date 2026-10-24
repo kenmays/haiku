@@ -100,7 +100,8 @@ class AutoFloatingOverlaysHider {
 
 static void
 transform_region_to_framebuffer(const BRegion& source, BRegion& destination,
-	float scale, int32 offsetX, int32 offsetY, const BRect& framebufferBounds)
+	float scale, int32 offsetX, int32 offsetY, float fractionalOffsetX,
+	float fractionalOffsetY, const BRect& framebufferBounds)
 {
 	destination.MakeEmpty();
 	if (!(scale > 0.0f) || !isfinite(scale))
@@ -108,10 +109,10 @@ transform_region_to_framebuffer(const BRegion& source, BRegion& destination,
 
 	for (int32 i = 0; i < source.CountRects(); i++) {
 		BRect rect = source.RectAt(i);
-		rect.left = floorf(rect.left * scale) + offsetX;
-		rect.top = floorf(rect.top * scale) + offsetY;
-		rect.right = ceilf(rect.right * scale) + offsetX;
-		rect.bottom = ceilf(rect.bottom * scale) + offsetY;
+		rect.left = floorf(rect.left * scale + offsetX + fractionalOffsetX);
+		rect.top = floorf(rect.top * scale + offsetY + fractionalOffsetY);
+		rect.right = ceilf(rect.right * scale + offsetX + fractionalOffsetX);
+		rect.bottom = ceilf(rect.bottom * scale + offsetY + fractionalOffsetY);
 		destination.Include(rect);
 	}
 
@@ -246,6 +247,8 @@ DrawingEngine::DrawingEngine(HWInterface* interface)
 	fCopyToFront(true),
 	fRendererOffsetX(0),
 	fRendererOffsetY(0),
+	fRendererFractionalOffsetX(0.0f),
+	fRendererFractionalOffsetY(0.0f),
 	fRendererScale(1.0f)
 {
 	SetHWInterface(interface);
@@ -362,7 +365,8 @@ DrawingEngine::CopyToFront(/*const*/ BRegion& region)
 
 	BRegion deviceRegion;
 	transform_region_to_framebuffer(region, deviceRegion, fRendererScale,
-		fRendererOffsetX, fRendererOffsetY, fPainter->Bounds());
+		fRendererOffsetX, fRendererOffsetY, fRendererFractionalOffsetX,
+		fRendererFractionalOffsetY, fPainter->Bounds());
 	if (deviceRegion.CountRects() > 0)
 		fGraphicsCard->InvalidateRegion(deviceRegion);
 }
@@ -1599,6 +1603,10 @@ DrawingEngine::SetRendererOffset(int32 offsetX, int32 offsetY)
 void
 DrawingEngine::SetRendererFractionalOffset(float offsetX, float offsetY)
 {
+	if (!isfinite(offsetX) || !isfinite(offsetY))
+		return;
+	fRendererFractionalOffsetX = offsetX;
+	fRendererFractionalOffsetY = offsetY;
 	fPainter->SetRendererFractionalOffset(offsetX, offsetY);
 }
 

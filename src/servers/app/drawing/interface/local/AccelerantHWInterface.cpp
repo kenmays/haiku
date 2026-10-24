@@ -443,6 +443,11 @@ AccelerantHWInterface::_OpenAccelerant(int device)
 		return B_ERROR;
 	}
 
+	if (fUseMultiOutput && !_HasIndependentOutputHooks()) {
+		Shutdown();
+		return B_NOT_SUPPORTED;
+	}
+
 	if (_HasIndependentOutputHooks()) {
 		if (!fUseMultiOutput) {
 			uint32 count = MultiOutputCount();
@@ -461,6 +466,38 @@ AccelerantHWInterface::_OpenAccelerant(int device)
 				fOutputID = info.output_id;
 				fUseMultiOutput = true;
 				break;
+			}
+
+			// Keep a non-rendering enumerator alive when every connector is
+			// disconnected. ScreenManager uses this stable device handle to
+			// discover outputs on a later topology scan.
+			if (!fUseMultiOutput) {
+				fOutputID = ~(uint64)0;
+				fUseMultiOutput = true;
+			}
+		}
+
+		if (fOutputID != ~(uint64)0) {
+			bool foundOutput = false;
+			uint32 count = MultiOutputCount();
+			for (uint32 i = 0; i < count; i++) {
+				accelerant_output_info info;
+				if (GetMultiOutputInfo(i, &info) != B_OK)
+					continue;
+				if (info.output_id == fOutputID
+					&& info.connection_state == B_MULTI_OUTPUT_CONNECTION_CONNECTED
+					&& (info.capabilities
+						& (B_MULTI_OUTPUT_CAPABILITY_INDEPENDENT_MODE
+							| B_MULTI_OUTPUT_CAPABILITY_FRAME_BUFFER))
+						== (B_MULTI_OUTPUT_CAPABILITY_INDEPENDENT_MODE
+							| B_MULTI_OUTPUT_CAPABILITY_FRAME_BUFFER)) {
+					foundOutput = true;
+					break;
+				}
+			}
+			if (!foundOutput) {
+				Shutdown();
+				return B_ENTRY_NOT_FOUND;
 			}
 		}
 	}

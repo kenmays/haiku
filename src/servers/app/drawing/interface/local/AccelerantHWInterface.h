@@ -26,13 +26,17 @@ class RenderingBuffer;
 class AccelerantHWInterface : public HWInterface {
 public:
 								AccelerantHWInterface(int32 deviceNumber = -1,
-									const char* devicePath = NULL);
+									const char* devicePath = NULL,
+									uint64 outputID = 0,
+									bool useMultiOutput = false);
 	virtual						~AccelerantHWInterface();
 
 			static	int32			CountGraphicsDevices();
 			static	status_t		GetGraphicsDevicePath(int32 deviceNumber,
 										BString& path);
 			const char*			DevicePath() const { return fDevicePath.String(); }
+			bool				UsesMultiOutput() const { return fUseMultiOutput; }
+			uint64				OutputID() const { return fOutputID; }
 			bool				HasMultiOutputEnumeration() const;
 			uint32				MultiOutputCount() const;
 			status_t			GetMultiOutputInfo(uint32 index,
@@ -108,6 +112,7 @@ private:
 			static bool		_RecursiveScan(const char* directory, int deviceNumber,
 									int& count, char* _path);
 			status_t			_OpenAccelerant(int device);
+			bool				_HasIndependentOutputHooks() const;
 			status_t			_SetupDefaultHooks();
 			void				_UpdateHooksAfterModeChange();
 			status_t			_UpdateModeList();
@@ -126,6 +131,8 @@ private:
 private:
 			int32				fDeviceNumber;
 			BString				fDevicePath;
+			uint64				fOutputID;
+			bool				fUseMultiOutput;
 			int					fCardFD;
 			image_id			fAccelerantImage;
 			GetAccelerantHook	fAccelerantHook;
@@ -147,7 +154,17 @@ private:
 			get_monitor_info		fAccGetMonitorInfo;
 			get_multi_output_count	fAccGetMultiOutputCount;
 			get_multi_output_info	fAccGetMultiOutputInfo;
+			get_multi_output_mode_count fAccGetMultiOutputModeCount;
+			get_multi_output_mode_list fAccGetMultiOutputModeList;
+			get_multi_output_display_mode fAccGetMultiOutputDisplayMode;
+			set_multi_output_display_mode fAccSetMultiOutputDisplayMode;
+			get_multi_output_frame_buffer_config fAccGetMultiOutputFrameBufferConfig;
+			get_multi_output_edid_info fAccGetMultiOutputEDIDInfo;
 			get_multi_output_generation	fAccGetMultiOutputGeneration;
+			present_multi_output	fAccPresentMultiOutput;
+			set_multi_output_cursor_shape fAccSetMultiOutputCursorShape;
+			move_multi_output_cursor fAccMoveMultiOutputCursor;
+			show_multi_output_cursor fAccShowMultiOutputCursor;
 			get_edid_info			fAccGetEDIDInfo;
 			set_cursor_shape		fAccSetCursorShape;
 			set_cursor_bitmap		fAccSetCursorBitmap;

@@ -358,6 +358,182 @@ ScreenManager::_ScanDrivers()
 		if (interface != NULL)
 			_AddHWInterface(interface);
 	}
+
+	// Reconcile connector topology on every device-tree scan. The graphics
+	// device node can remain present while individual monitor connections
+	// change, so device-path enumeration alone is not sufficient.
+	_ScanMultiOutputs();
+#endif
+}
+
+
+void
+ScreenManager::_ScanMultiOutputs()
+{
+#ifndef HAIKU_TARGET_PLATFORM_LIBBE_TEST
+	std::vector<BString> processedPaths;
+
+	// Process each physical graphics device once, even though a device with
+	// independent outputs now has one Screen/HWInterface per connector.
+	for (int32 i = 0; i < fScreenList.CountItems(); i++) {
+		screen_item* item = fScreenList.ItemAt(i);
+		if (item == NULL || item->screen.Get() == NULL)
+			continue;
+
+		AccelerantHWInterface* accelerant = dynamic_cast<AccelerantHWInterface*>(
+			item->screen->HWInterface());
+		if (accelerant == NULL || !accelerant->UsesMultiOutput())
+			continue;
+
+		BString path(accelerant->DevicePath());
+		if (path.Length() == 0)
+			continue;
+
+		bool alreadyProcessed = false;
+		for (size_t p = 0; p < processedPaths.size(); p++) {
+			if (processedPaths[p] == path) {
+				alreadyProcessed = true;
+				break;
+			}
+		}
+		if (alreadyProcessed)
+			continue;
+
+		try {
+			processedPaths.push_back(path);
+		} catch (...) {
+			return;
+		}
+
+		uint64 generationBefore = 0;
+		status_t generationStatus
+			= accelerant->GetMultiOutputGeneration(&generationBefore);
+		bool hasGeneration = generationStatus == B_OK;
+		if (generationStatus != B_OK && generationStatus != B_NOT_SUPPORTED)
+			continue;
+
+		uint32 countBefore = accelerant->MultiOutputCount();
+		// A corrupt driver must not be able to force an unbounded allocation.
+		if (countBefore > 256)
+			continue;
+
+		std::vector<accelerant_output_info> outputs;
+		bool stable = true;
+		try {
+			outputs.reserve(countBefore);
+			for (uint32 outputIndex = 0; outputIndex < countBefore;
+					outputIndex++) {
+				accelerant_output_info info;
+				status_t status = accelerant->GetMultiOutputInfo(outputIndex,
+					&info);
+				if (status != B_OK) {
+					stable = false;
+					break;
+				}
+				if (info.connection_state
+						!= B_MULTI_OUTPUT_CONNECTION_CONNECTED
+					|| (info.capabilities
+						& (B_MULTI_OUTPUT_CAPABILITY_INDEPENDENT_MODE
+							| B_MULTI_OUTPUT_CAPABILITY_FRAME_BUFFER))
+						!= (B_MULTI_OUTPUT_CAPABILITY_INDEPENDENT_MODE
+							| B_MULTI_OUTPUT_CAPABILITY_FRAME_BUFFER)) {
+					continue;
+				}
+				outputs.push_back(info);
+			}
+		} catch (...) {
+			continue;
+		}
+		if (!stable || accelerant->MultiOutputCount() != countBefore)
+			continue;
+
+		if (hasGeneration) {
+			uint64 generationAfter = 0;
+			if (accelerant->GetMultiOutputGeneration(&generationAfter) != B_OK
+				|| generationAfter != generationBefore) {
+				continue;
+			}
+		}
+
+		// Keep one non-rendering handle per device so a later connector
+		// connection can be discovered even when every physical output is
+		// currently disconnected.
+		const uint64 kEnumeratorOutputID = ~(uint64)0;
+		bool hasEnumerator = false;
+		for (int32 j = 0; j < fScreenList.CountItems(); j++) {
+			screen_item* current = fScreenList.ItemAt(j);
+			AccelerantHWInterface* currentInterface = current != NULL
+				? dynamic_cast<AccelerantHWInterface*>(
+					current->screen->HWInterface()) : NULL;
+			if (currentInterface != NULL
+				&& currentInterface->UsesMultiOutput()
+				&& path == currentInterface->DevicePath()
+				&& currentInterface->OutputID() == kEnumeratorOutputID) {
+				hasEnumerator = true;
+				break;
+			}
+		}
+		if (!hasEnumerator) {
+			HWInterface* enumerator = new(nothrow) AccelerantHWInterface(
+				-1, path.String(), kEnumeratorOutputID, true);
+			if (enumerator != NULL)
+				_AddHWInterface(enumerator);
+		}
+
+		// Detach outputs that disappeared or no longer provide the independent
+		// mode/framebuffer contract. The enumerator remains alive for recovery.
+		for (int32 j = 0; j < fScreenList.CountItems();) {
+			screen_item* current = fScreenList.ItemAt(j);
+			AccelerantHWInterface* currentInterface = current != NULL
+				? dynamic_cast<AccelerantHWInterface*>(
+					current->screen->HWInterface()) : NULL;
+			if (currentInterface == NULL || !currentInterface->UsesMultiOutput()
+				|| path != currentInterface->DevicePath()
+				|| currentInterface->OutputID() == kEnumeratorOutputID) {
+				j++;
+				continue;
+			}
+
+			bool stillConnected = false;
+			for (size_t k = 0; k < outputs.size(); k++) {
+				if (outputs[k].output_id == currentInterface->OutputID()) {
+					stillConnected = true;
+					break;
+				}
+			}
+			if (!stillConnected) {
+				RemoveScreen(current->screen.Get());
+				continue;
+			}
+			j++;
+		}
+
+		// Add each newly connected output as its own Screen and framebuffer
+		// interface. Output IDs are stable identifiers, never list indices.
+		for (size_t k = 0; k < outputs.size(); k++) {
+			bool exists = false;
+			for (int32 j = 0; j < fScreenList.CountItems(); j++) {
+				screen_item* current = fScreenList.ItemAt(j);
+				AccelerantHWInterface* currentInterface = current != NULL
+					? dynamic_cast<AccelerantHWInterface*>(
+						current->screen->HWInterface()) : NULL;
+				if (currentInterface != NULL
+					&& currentInterface->UsesMultiOutput()
+					&& path == currentInterface->DevicePath()
+					&& currentInterface->OutputID() == outputs[k].output_id) {
+					exists = true;
+					break;
+				}
+			}
+			if (exists)
+				continue;
+
+			HWInterface* outputInterface = new(nothrow) AccelerantHWInterface(
+				-1, path.String(), outputs[k].output_id, true);
+			if (outputInterface != NULL)
+				_AddHWInterface(outputInterface);
+		}
+	}
 #endif
 }
 

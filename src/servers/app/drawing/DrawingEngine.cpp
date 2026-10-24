@@ -1597,6 +1597,13 @@ DrawingEngine::SetRendererOffset(int32 offsetX, int32 offsetY)
 
 
 void
+DrawingEngine::SetRendererFractionalOffset(float offsetX, float offsetY)
+{
+	fPainter->SetRendererFractionalOffset(offsetX, offsetY);
+}
+
+
+void
 DrawingEngine::SetRendererScale(float scale)
 {
 	if (!(scale > 0.0f) || !isfinite(scale))

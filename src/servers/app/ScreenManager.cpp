@@ -470,6 +470,14 @@ ScreenManager::_ScanMultiOutputs()
 							| B_MULTI_OUTPUT_CAPABILITY_FRAME_BUFFER)) {
 					continue;
 				}
+				for (size_t existing = 0; existing < outputs.size(); existing++) {
+					if (outputs[existing].output_id == info.output_id) {
+						stable = false;
+						break;
+					}
+				}
+				if (!stable)
+					break;
 				outputs.push_back(info);
 			}
 		} catch (...) {

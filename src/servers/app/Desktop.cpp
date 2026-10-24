@@ -3904,8 +3904,12 @@ Desktop::_ScreenChanged(Screen* screen)
 		BRect oldFrame = fVirtualScreen.ScreenFrameAt(i);
 		float scale = fVirtualScreen.ScreenScaleAt(i);
 		if (scale > 0.0f && scale != 1.0f) {
-			frame.right = frame.left + frame.Width() / scale;
-			frame.bottom = frame.top + frame.Height() / scale;
+			// BRect::Width()/Height() are coordinate deltas, while display
+			// modes describe pixel counts. Convert the inclusive pixel bounds
+			// to inclusive logical bounds to avoid accumulating a fractional
+			// extra row/column at non-1x scales.
+			frame.right = frame.left + (frame.Width() + 1.0f) / scale - 1.0f;
+			frame.bottom = frame.top + (frame.Height() + 1.0f) / scale - 1.0f;
 		}
 		frame.OffsetTo(oldFrame.left, oldFrame.top);
 		fVirtualScreen.SetScreenFrame(i, frame);

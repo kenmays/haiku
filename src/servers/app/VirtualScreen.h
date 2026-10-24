@@ -31,6 +31,7 @@ struct OutputRenderTarget {
 	uint64 generation;
 	int32 pixelWidth;
 	int32 pixelHeight;
+	uint32 colorSpace;
 	BRect frame;
 	float scale;
 	int32 rendererOffsetX;
@@ -44,6 +45,7 @@ struct OutputRenderTarget {
 		generation(0),
 		pixelWidth(0),
 		pixelHeight(0),
+		colorSpace(0),
 		frame(0, 0, 0, 0),
 		scale(1.0f),
 		rendererOffsetX(0),
@@ -59,6 +61,7 @@ struct OutputRenderTarget {
 		generation(0),
 		pixelWidth(0),
 		pixelHeight(0),
+		colorSpace(0),
 		frame(outputFrame),
 		scale(outputScale),
 		rendererOffsetX(offsetX),

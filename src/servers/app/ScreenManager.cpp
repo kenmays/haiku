@@ -687,6 +687,27 @@ ScreenManager::_ScanMultiOutputs()
 					ScreenChanged(current->screen.Get());
 				}
 			}
+		} else {
+			// The generation hook is optional. Detect a mode change by polling
+			// the current mode for each stable output ID when no topology change
+			// was reported by the accelerant.
+			for (int32 j = 0; j < fScreenList.CountItems(); j++) {
+				screen_item* current = fScreenList.ItemAt(j);
+				AccelerantHWInterface* currentInterface = current != NULL
+					? dynamic_cast<AccelerantHWInterface*>(
+						current->screen->HWInterface()) : NULL;
+				if (currentInterface == NULL || current->owner == NULL
+					|| !currentInterface->UsesMultiOutput()
+					|| path != currentInterface->DevicePath()
+					|| currentInterface->OutputID() == kEnumeratorOutputID) {
+					continue;
+				}
+				bool modeChanged = false;
+				if (currentInterface->CheckOutputModeChanged(&modeChanged) == B_OK
+					&& modeChanged) {
+					ScreenChanged(current->screen.Get());
+				}
+			}
 		}
 	}
 #endif

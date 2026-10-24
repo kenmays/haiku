@@ -716,6 +716,8 @@ Window::_SetDrawingEngineOutput(const ::Screen* screen)
 			double integerPixelLeft = floor(pixelLeft);
 			double integerPixelTop = floor(pixelTop);
 			if (scale > 0.0f && isfinite(scale) && frame.IsValid()
+				&& frame.left == floorf(frame.left)
+				&& frame.top == floorf(frame.top)
 				&& isfinite(pixelLeft) && isfinite(pixelTop)
 				&& integerPixelLeft >= -2147483647.0
 				&& integerPixelLeft <= 2147483647.0
@@ -1885,6 +1887,8 @@ Window::_TriggerContentRedraw(BRegion& dirty, const BRegion& expose)
 		if (!(scale > 0.0f) || !isfinite(scale)
 			|| screen->HWInterface() == NULL
 			|| !frame.IsValid()
+			|| frame.left != floorf(frame.left)
+			|| frame.top != floorf(frame.top)
 			|| !isfinite(pixelLeft) || !isfinite(pixelTop)
 			|| floor(pixelLeft) < -2147483647.0
 			|| floor(pixelLeft) > 2147483647.0
@@ -1985,6 +1989,8 @@ Window::_DrawBorder()
 			if (!(scale > 0.0f) || !isfinite(scale)
 				|| screen->HWInterface() == NULL
 				|| !frame.IsValid()
+				|| frame.left != floorf(frame.left)
+				|| frame.top != floorf(frame.top)
 				|| !isfinite(pixelLeft) || !isfinite(pixelTop)
 				|| floor(pixelLeft) < -2147483647.0
 				|| floor(pixelLeft) > 2147483647.0

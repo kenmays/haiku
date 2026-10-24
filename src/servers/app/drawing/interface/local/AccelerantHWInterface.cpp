@@ -770,9 +770,16 @@ AccelerantHWInterface::_SetFallbackMode(display_mode& newMode) const
 	// At first, we search the closest display mode from the list of
 	// supported modes - if that fails, we just take one
 
-	if (_FindBestMode(newMode, 0, newMode) == B_OK
-		&& fAccSetDisplayMode(&newMode) == B_OK) {
-		return B_OK;
+	status_t (*setMode)(uint64, display_mode*) = NULL;
+	if (fUseMultiOutput) {
+		if (fAccSetMultiOutputDisplayMode == NULL)
+			return B_NOT_SUPPORTED;
+		setMode = NULL;
+	} else {
+		if (_FindBestMode(newMode, 0, newMode) == B_OK
+			&& fAccSetDisplayMode(&newMode) == B_OK) {
+			return B_OK;
+		}
 	}
 
 	// That failed as well, this looks like a bug in the graphics
@@ -781,7 +788,10 @@ AccelerantHWInterface::_SetFallbackMode(display_mode& newMode) const
 
 	for (int32 i = 0; i < fModeCount; i++) {
 		newMode = fModeList[i];
-		if (fAccSetDisplayMode(&newMode) == B_OK)
+		status_t status = fUseMultiOutput
+			? fAccSetMultiOutputDisplayMode(fOutputID, &newMode)
+			: fAccSetDisplayMode(&newMode);
+		if (status == B_OK)
 			return B_OK;
 	}
 
@@ -818,8 +828,11 @@ AccelerantHWInterface::SetMode(const display_mode& mode)
 	display_mode newMode = mode;
 
 	status_t status = B_ERROR;
-	if (!use_fail_safe_video_mode() || !fInitialModeSwitch)
-		status = fAccSetDisplayMode(&newMode);
+	if (!use_fail_safe_video_mode() || !fInitialModeSwitch) {
+		status = fUseMultiOutput
+			? fAccSetMultiOutputDisplayMode(fOutputID, &newMode)
+			: fAccSetDisplayMode(&newMode);
+	}
 	if (status != B_OK) {
 		ATRACE(("setting display mode failed\n"));
 		if (!fInitialModeSwitch)
@@ -842,7 +855,10 @@ AccelerantHWInterface::SetMode(const display_mode& mode)
 			// all.
 			// All we can do now is to ask the driver which mode we can
 			// use - this is always necessary for VESA mode, for example.
-			if (fAccGetDisplayMode(&newMode) != B_OK)
+			status = fUseMultiOutput
+				? fAccGetMultiOutputDisplayMode(fOutputID, &newMode)
+				: fAccGetDisplayMode(&newMode);
+			if (status != B_OK)
 				return B_ERROR;
 
 			// TODO: check if the mode returned is valid!
@@ -930,7 +946,9 @@ AccelerantHWInterface::GetMode(display_mode* mode)
 status_t
 AccelerantHWInterface::_UpdateModeList()
 {
-	fModeCount = fAccGetModeCount();
+	fModeCount = fUseMultiOutput
+		? (int32)fAccGetMultiOutputModeCount(fOutputID)
+		: (int32)fAccGetModeCount();
 	if (fModeCount <= 0)
 		return B_ERROR;
 
@@ -939,9 +957,12 @@ AccelerantHWInterface::_UpdateModeList()
 	if (!fModeList)
 		return B_NO_MEMORY;
 
-	if (fAccGetModeList(fModeList) != B_OK) {
+	status_t status = fUseMultiOutput
+		? fAccGetMultiOutputModeList(fOutputID, fModeList)
+		: fAccGetModeList(fModeList);
+	if (status != B_OK) {
 		ATRACE(("unable to get mode list\n"));
-		return B_ERROR;
+		return status;
 	}
 
 	return B_OK;
@@ -951,9 +972,12 @@ AccelerantHWInterface::_UpdateModeList()
 status_t
 AccelerantHWInterface::_UpdateFrameBufferConfig()
 {
-	if (fAccGetFrameBufferConfig(&fFrameBufferConfig) != B_OK) {
+	status_t status = fUseMultiOutput
+		? fAccGetMultiOutputFrameBufferConfig(fOutputID, &fFrameBufferConfig)
+		: fAccGetFrameBufferConfig(&fFrameBufferConfig);
+	if (status != B_OK) {
 		ATRACE(("unable to get frame buffer config\n"));
-		return B_ERROR;
+		return status;
 	}
 
 	fFrontBuffer->SetFrameBufferConfig(fFrameBufferConfig);

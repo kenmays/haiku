@@ -3109,7 +3109,7 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 				Title()));
 
 			BRect rect;
-			link.Read<BRect>(&rect);
+			if (link.Read<BRect>(&rect) != B_OK) { commandProcessed = false; break; }
 			BGradient* gradient;
 			if (link.ReadGradient(&gradient) != B_OK) {
 				commandProcessed = false;
@@ -3334,11 +3334,7 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			BRect shapeFrame;
 			int32 opCount;
 			int32 ptCount;
-
-			link.Read<BRect>(&shapeFrame);
-			link.Read<int32>(&opCount);
-			link.Read<int32>(&ptCount);
-
+			if (link.Read<BRect>(&shapeFrame) != B_OK || link.Read<int32>(&opCount) != B_OK || link.Read<int32>(&ptCount) != B_OK || opCount < 0 || ptCount < 0 || (uint64)opCount * sizeof(uint32) > SIZE_MAX || (uint64)ptCount * sizeof(BPoint) > SIZE_MAX) { commandProcessed = false; break; }
 			uint32* opList = new(nothrow) uint32[opCount];
 			BPoint* ptList = new(nothrow) BPoint[ptCount];
 			if (opList == NULL || ptList == NULL) {
@@ -3421,7 +3417,7 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 			// 2) LineArrayData
 
 			int32 lineCount;
-			if (link.Read<int32>(&lineCount) != B_OK || lineCount <= 0) {
+			if (link.Read<int32>(&lineCount) != B_OK || lineCount <= 0 || (uint64)lineCount * sizeof(ViewLineArrayInfo) > SIZE_MAX) {
 				commandProcessed = false;
 				break;
 			}
@@ -3465,7 +3461,7 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 		{
 			ViewDrawStringInfo info;
 			if (link.Read<ViewDrawStringInfo>(&info) != B_OK
-				|| info.stringLength <= 0) {
+				|| info.stringLength <= 0 || info.stringLength > INT32_MAX - 64) {
 				commandProcessed = false;
 				break;
 			}
@@ -3517,13 +3513,13 @@ ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
 		case AS_DRAW_STRING_WITH_OFFSETS:
 		{
 			int32 stringLength;
-			if (link.Read<int32>(&stringLength) != B_OK || stringLength <= 0) {
+			if (link.Read<int32>(&stringLength) != B_OK || stringLength <= 0 || stringLength > INT32_MAX - 64) {
 				commandProcessed = false;
 				break;
 			}
 
 			int32 glyphCount;
-			if (link.Read<int32>(&glyphCount) != B_OK || glyphCount <= 0) {
+			if (link.Read<int32>(&glyphCount) != B_OK || glyphCount <= 0 || (uint64)glyphCount * sizeof(BPoint) > SIZE_MAX) {
 				commandProcessed = false;
 				break;
 			}

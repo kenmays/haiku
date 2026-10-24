@@ -598,7 +598,6 @@ ScreenManager::_ScanMultiOutputs()
 		// Remember the stable generation on the persistent enumerator. A
 		// generation change also covers mode/capability changes on an output
 		// whose ID and connection state did not change.
-		bool generationChanged = false;
 		if (hasGeneration) {
 			for (int32 j = 0; j < fScreenList.CountItems(); j++) {
 				screen_item* current = fScreenList.ItemAt(j);
@@ -611,8 +610,6 @@ ScreenManager::_ScanMultiOutputs()
 					|| currentInterface->OutputID() != kEnumeratorOutputID) {
 					continue;
 				}
-				generationChanged = current->hasOutputGeneration
-					&& current->outputGeneration != generationBefore;
 				current->outputGeneration = generationBefore;
 				current->hasOutputGeneration = true;
 				break;
@@ -674,43 +671,27 @@ ScreenManager::_ScanMultiOutputs()
 				_AddHWInterface(outputInterface);
 		}
 
-		if (generationChanged) {
-			// Queue notifications after reconciliation, so Desktop sees a
-			// complete, stable output set before rebuilding mode-dependent state.
-			for (int32 j = 0; j < fScreenList.CountItems(); j++) {
-				screen_item* current = fScreenList.ItemAt(j);
-				AccelerantHWInterface* currentInterface = current != NULL
-					? dynamic_cast<AccelerantHWInterface*>(
-						current->screen->HWInterface()) : NULL;
-				if (currentInterface != NULL && current->owner != NULL
-					&& currentInterface->UsesMultiOutput()
-					&& path == currentInterface->DevicePath()
-					&& currentInterface->OutputID() != kEnumeratorOutputID) {
-					bool ignoredModeChange = false;
-					currentInterface->CheckOutputModeChanged(&ignoredModeChange);
-					ScreenChanged(current->screen.Get());
-				}
+		// Topology reconciliation above already adds and removes individual
+		// connectors. A topology-generation change is not itself a mode change:
+		// notifying every output here makes Desktop::ScreenChanged() select
+		// each monitor's preferred mode and can discard the user's chosen mode
+		// on otherwise unchanged displays. Poll the active mode for each stable
+		// output ID and notify only the output whose mode actually changed.
+		for (int32 j = 0; j < fScreenList.CountItems(); j++) {
+			screen_item* current = fScreenList.ItemAt(j);
+			AccelerantHWInterface* currentInterface = current != NULL
+				? dynamic_cast<AccelerantHWInterface*>(
+					current->screen->HWInterface()) : NULL;
+			if (currentInterface == NULL || current->owner == NULL
+				|| !currentInterface->UsesMultiOutput()
+				|| path != currentInterface->DevicePath()
+				|| currentInterface->OutputID() == kEnumeratorOutputID) {
+				continue;
 			}
-		} else {
-			// The generation hook is optional. Detect a mode change by polling
-			// the current mode for each stable output ID when no topology change
-			// was reported by the accelerant.
-			for (int32 j = 0; j < fScreenList.CountItems(); j++) {
-				screen_item* current = fScreenList.ItemAt(j);
-				AccelerantHWInterface* currentInterface = current != NULL
-					? dynamic_cast<AccelerantHWInterface*>(
-						current->screen->HWInterface()) : NULL;
-				if (currentInterface == NULL || current->owner == NULL
-					|| !currentInterface->UsesMultiOutput()
-					|| path != currentInterface->DevicePath()
-					|| currentInterface->OutputID() == kEnumeratorOutputID) {
-					continue;
-				}
-				bool modeChanged = false;
-				if (currentInterface->CheckOutputModeChanged(&modeChanged) == B_OK
-					&& modeChanged) {
-					ScreenChanged(current->screen.Get());
-				}
+			bool modeChanged = false;
+			if (currentInterface->CheckOutputModeChanged(&modeChanged) == B_OK
+				&& modeChanged) {
+				ScreenChanged(current->screen.Get());
 			}
 		}
 	}

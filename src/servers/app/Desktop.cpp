@@ -547,8 +547,10 @@ Desktop::Init()
 	if (fSettings->DefaultPlainFont() == *gFontManager->DefaultPlainFont()
 			&& !fSettings->DidLoadFontSettings()) {
 		float fontSize = fSettings->DefaultPlainFont().Size();
-		gScreenManager->Lock();
-		Screen* screen = gScreenManager->ScreenAt(0);
+		// ScreenManager also keeps a non-rendering accelerant enumerator for
+		// multi-output devices. Use the active virtual screen here rather than
+		// assuming its first manager entry is a display output.
+		Screen* screen = fVirtualScreen.ScreenAt(0);
 		if (screen != NULL) {
 			display_mode mode;
 			screen->GetMode(mode);
@@ -558,7 +560,6 @@ Desktop::Init()
 			else if (mode.virtual_width > 1920 && mode.virtual_height > 1080)
 				fontSize *= 1.5f;
 		}
-		gScreenManager->Unlock();
 
 		// modify settings without saving them
 		const_cast<ServerFont&>(fSettings->DefaultPlainFont()).SetSize(fontSize);

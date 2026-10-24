@@ -939,7 +939,12 @@ AccelerantHWInterface::SetMode(const display_mode& mode)
 	}
 
 	// some safety checks
-	// TODO: more of those!
+	// Palette hooks are device-wide, so indexed color spaces are not safe on
+	// independently configured outputs.
+	if (fUseMultiOutput
+		&& (mode.space == B_CMAP8 || mode.space == B_GRAY8)) {
+		return B_UNSUPPORTED;
+	}
 	if (!_IsValidMode(mode))
 		return B_BAD_VALUE;
 
@@ -1093,6 +1098,22 @@ AccelerantHWInterface::_UpdateModeList()
 	if (status != B_OK) {
 		ATRACE(("unable to get mode list\n"));
 		return status;
+	}
+
+	if (fUseMultiOutput) {
+		// Palette programming still uses device-wide legacy hooks. Exclude
+		// indexed modes until the accelerant exposes output-specific palettes.
+		int32 validCount = 0;
+		for (int32 i = 0; i < fModeCount; i++) {
+			if (fModeList[i].space == B_CMAP8
+				|| fModeList[i].space == B_GRAY8) {
+				continue;
+			}
+			fModeList[validCount++] = fModeList[i];
+		}
+		fModeCount = validCount;
+		if (fModeCount == 0)
+			return B_NOT_SUPPORTED;
 	}
 
 	return B_OK;

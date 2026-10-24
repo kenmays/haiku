@@ -459,8 +459,21 @@ AccelerantHWInterface::GetMultiOutputInfo(uint32 index,
 	if (!HasMultiOutputEnumeration())
 		return B_NOT_SUPPORTED;
 
-	uint32 count = fAccGetMultiOutputCount();
-	if (index >= count)
+	// Enumeration is a snapshot of a topology that can change while a monitor
+	// is being unplugged. When the accelerant exposes a generation counter,
+	// require the query to stay within one generation; otherwise compare the
+	// count before and after so a disappearing index is never returned as a
+	// valid, current output record.
+	uint64 generationBefore = 0;
+	bool hasGeneration = fAccGetMultiOutputGeneration != NULL;
+	if (hasGeneration) {
+		status_t status = fAccGetMultiOutputGeneration(&generationBefore);
+		if (status != B_OK)
+			return status;
+	}
+
+	uint32 countBefore = fAccGetMultiOutputCount();
+	if (index >= countBefore)
 		return B_BAD_INDEX;
 
 	accelerant_output_info output;
@@ -479,6 +492,19 @@ AccelerantHWInterface::GetMultiOutputInfo(uint32 index,
 	}
 	if (output.connection_state > B_MULTI_OUTPUT_CONNECTION_DISCONNECTED)
 		return B_BAD_DATA;
+
+	uint32 countAfter = fAccGetMultiOutputCount();
+	if (countBefore != countAfter || index >= countAfter)
+		return B_BUSY;
+
+	if (hasGeneration) {
+		uint64 generationAfter = 0;
+		status = fAccGetMultiOutputGeneration(&generationAfter);
+		if (status != B_OK)
+			return status;
+		if (generationBefore != generationAfter)
+			return B_BUSY;
+	}
 
 	*info = output;
 	return B_OK;

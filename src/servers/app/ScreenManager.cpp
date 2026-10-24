@@ -684,6 +684,8 @@ ScreenManager::_ScanMultiOutputs()
 					&& currentInterface->UsesMultiOutput()
 					&& path == currentInterface->DevicePath()
 					&& currentInterface->OutputID() != kEnumeratorOutputID) {
+					bool ignoredModeChange = false;
+					currentInterface->CheckOutputModeChanged(&ignoredModeChange);
 					ScreenChanged(current->screen.Get());
 				}
 			}

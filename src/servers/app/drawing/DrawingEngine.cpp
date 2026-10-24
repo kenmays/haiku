@@ -614,19 +614,26 @@ DrawingEngine::CopyRegion(/*const*/ BRegion* region, int32 xOffset,
 	// so scroll/copy operations also work when this engine is bound to an
 	// output whose origin is not (0, 0).
 	BRegion localRegion;
-	if (fRendererScale == 1.0f) {
+	if (fRendererScale == 1.0f && fRendererFractionalOffsetX == 0.0f
+		&& fRendererFractionalOffsetY == 0.0f) {
 		localRegion = *region;
 	} else {
 		for (int32 i = 0; i < region->CountRects(); i++) {
 			BRect rect = region->RectAt(i);
-			rect.left = floorf(rect.left * fRendererScale);
-			rect.top = floorf(rect.top * fRendererScale);
-			rect.right = ceilf(rect.right * fRendererScale);
-			rect.bottom = ceilf(rect.bottom * fRendererScale);
+			rect.left = floorf(rect.left * fRendererScale
+				+ fRendererFractionalOffsetX);
+			rect.top = floorf(rect.top * fRendererScale
+				+ fRendererFractionalOffsetY);
+			rect.right = ceilf(rect.right * fRendererScale
+				+ fRendererFractionalOffsetX);
+			rect.bottom = ceilf(rect.bottom * fRendererScale
+				+ fRendererFractionalOffsetY);
 			localRegion.Include(rect);
 		}
-		xOffset = (int32)lroundf(xOffset * fRendererScale);
-		yOffset = (int32)lroundf(yOffset * fRendererScale);
+		if (fRendererScale != 1.0f) {
+			xOffset = (int32)lroundf(xOffset * fRendererScale);
+			yOffset = (int32)lroundf(yOffset * fRendererScale);
+		}
 	}
 	localRegion.OffsetBy(fRendererOffsetX, fRendererOffsetY);
 
@@ -991,7 +998,8 @@ DrawingEngine::FillRegion(BRegion& r, const rgb_color& color)
 	// the output selected for this engine. Clip to the framebuffer's logical
 	// bounds instead of dropping the entire fill when only part is in bounds.
 	BRect globalBounds = fPainter->Bounds();
-	globalBounds.OffsetBy(-fRendererOffsetX, -fRendererOffsetY);
+	globalBounds.OffsetBy(-fRendererOffsetX - fRendererFractionalOffsetX,
+		-fRendererOffsetY - fRendererFractionalOffsetY);
 	BRegion clipped(r);
 	BRegion outputBounds(globalBounds);
 	clipped.IntersectWith(&outputBounds);

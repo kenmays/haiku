@@ -21,6 +21,7 @@ class MultiheadSceneTest : public CppUnit::TestFixture {
 	CPPUNIT_TEST(MixedScalePixelClippingRoundsOutwards);
 	CPPUNIT_TEST(NegativeOriginMapsToLocalPixels);
 	CPPUNIT_TEST(FractionalOutputOriginsMapToLocalPixels);
+	CPPUNIT_TEST(NegativeFractionalOutputOriginsMapToLocalPixels);
 	CPPUNIT_TEST(GenerationTracksOutputChanges);
 	CPPUNIT_TEST(OutputRemovalAndReconnectionPreservesStableIdentity);
 	CPPUNIT_TEST(InvalidOutputUpdatesAreRejectedAtomically);
@@ -279,6 +280,38 @@ public:
 		CPPUNIT_ASSERT(pixels.Frame().left == 0.0f);
 		CPPUNIT_ASSERT(pixels.Frame().top == 0.0f);
 	}
+
+
+	void NegativeFractionalOutputOriginsMapToLocalPixels()
+	{
+		MultiheadScene scene;
+		CPPUNIT_ASSERT_EQUAL((status_t)B_OK,
+			scene.AddOutput(60, BRect(-1, -1, 98, 98), 1.5f));
+
+		// A negative logical origin produces a fractional physical origin
+		// (-1.5 pixels). The first logical point must still map to the local
+		// framebuffer origin rather than leaving a one-pixel seam.
+		BPoint pixel;
+		CPPUNIT_ASSERT_EQUAL((status_t)B_OK,
+			scene.GlobalToOutputPixel(60, BPoint(-1, -1), pixel));
+		CPPUNIT_ASSERT(std::fabs(pixel.x) < 0.001f);
+		CPPUNIT_ASSERT(std::fabs(pixel.y) < 0.001f);
+
+		CPPUNIT_ASSERT_EQUAL((status_t)B_OK,
+			scene.GlobalToOutputPixel(60, BPoint(0, 0), pixel));
+		CPPUNIT_ASSERT(std::fabs(pixel.x - 1.5f) < 0.001f);
+		CPPUNIT_ASSERT(std::fabs(pixel.y - 1.5f) < 0.001f);
+
+		BRegion damage;
+		damage.Include(BRect(-1, -1, 0, 0));
+		BRegion pixels;
+		CPPUNIT_ASSERT_EQUAL((status_t)B_OK,
+			scene.ClipRegionToOutput(60, damage, 150, 150, pixels));
+		CPPUNIT_ASSERT(pixels.CountRects() > 0);
+		CPPUNIT_ASSERT(pixels.Frame().left == 0.0f);
+		CPPUNIT_ASSERT(pixels.Frame().top == 0.0f);
+	}
+
 
 	void NegativeOriginMapsToLocalPixels()
 	{

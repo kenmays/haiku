@@ -1760,13 +1760,29 @@ AccelerantHWInterface::_CopyBackToFront(/*const*/ BRegion& region)
 
 	// Some independent-output backends require an explicit present/commit
 	// after CPU rendering. The damage region is already framebuffer-local.
-	if (fUseMultiOutput && fAccPresentMultiOutput != NULL
-		&& region.CountRects() > 0) {
-		uint32 count = 0;
-		_RegionToRectParams(&region, &count);
-		if (count > 0)
-			fAccPresentMultiOutput(fOutputID, fRectParams, count);
+	// Use a private parameter array here: the shared accelerant scratch arrays
+	// can be in use by another drawing transaction on this interface.
+	if (!fUseMultiOutput || fAccPresentMultiOutput == NULL)
+		return;
+
+	int32 rectCount = region.CountRects();
+	if (rectCount <= 0)
+		return;
+
+	fill_rect_params* rects = new(nothrow) fill_rect_params[rectCount];
+	if (rects == NULL)
+		return;
+
+	for (int32 i = 0; i < rectCount; i++) {
+		clipping_rect rect = region.RectAtInt(i);
+		rects[i].left = (uint16)rect.left;
+		rects[i].top = (uint16)rect.top;
+		rects[i].right = (uint16)rect.right;
+		rects[i].bottom = (uint16)rect.bottom;
 	}
+
+	fAccPresentMultiOutput(fOutputID, rects, rectCount);
+	delete[] rects;
 }
 
 

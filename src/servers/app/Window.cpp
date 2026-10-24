@@ -1864,10 +1864,10 @@ Window::_TriggerContentRedraw(BRegion& dirty, const BRegion& expose)
 	const VirtualScreen& virtualScreen = fDesktop->VirtualScreen();
 	bool canFanOut = virtualScreen.CountScreens() > 1;
 	bool intersectsOutput = false;
+	int32 intersectingOutputs = 0;
 
-	// Preflight the entire expose region. If any intersected output lacks a
-	// supported scale/origin mapping, retain the legacy path rather than
-	// partially painting a multi-output window.
+	// Preflight the entire expose region before painting. A partial expose
+	// pass must be retried rather than reported as a completed redraw.
 	for (int32 i = 0; i < virtualScreen.CountScreens(); i++) {
 		const ::Screen* screen = virtualScreen.ScreenAt(i);
 		if (screen == NULL)
@@ -1881,6 +1881,7 @@ Window::_TriggerContentRedraw(BRegion& dirty, const BRegion& expose)
 			continue;
 
 		intersectsOutput = true;
+		intersectingOutputs++;
 		float scale = virtualScreen.ScreenScaleAt(i);
 		double pixelLeft = (double)frame.left * scale;
 		double pixelTop = (double)frame.top * scale;
@@ -1895,12 +1896,19 @@ Window::_TriggerContentRedraw(BRegion& dirty, const BRegion& expose)
 			|| floor(pixelTop) < -2147483647.0
 			|| floor(pixelTop) > 2147483647.0) {
 			canFanOut = false;
-			break;
+			continue;
 		}
+	}
+
+	if (!canFanOut && intersectingOutputs > 1) {
+		BRegion retry(expose);
+		MarkContentDirtyAsync(retry);
+		return;
 	}
 
 	if (canFanOut && intersectsOutput) {
 		bool drewOutput = false;
+		bool drewAllOutputs = true;
 		for (int32 i = 0; i < virtualScreen.CountScreens(); i++) {
 			const ::Screen* screen = virtualScreen.ScreenAt(i);
 			if (screen == NULL)
@@ -1913,8 +1921,10 @@ Window::_TriggerContentRedraw(BRegion& dirty, const BRegion& expose)
 			if (outputExpose.CountRects() == 0)
 				continue;
 
-			if (!_SetDrawingEngineOutput(screen))
+			if (!_SetDrawingEngineOutput(screen)) {
+				drewAllOutputs = false;
 				continue;
+			}
 
 			if (fDrawingEngine->LockParallelAccess()) {
 				bool copyToFrontEnabled = fDrawingEngine->CopyToFrontEnabled();
@@ -1924,17 +1934,24 @@ Window::_TriggerContentRedraw(BRegion& dirty, const BRegion& expose)
 				fDrawingEngine->SetCopyToFrontEnabled(copyToFrontEnabled);
 				fDrawingEngine->UnlockParallelAccess();
 				drewOutput = true;
+			} else {
+				drewAllOutputs = false;
 			}
 		}
 
 		// Restore the window's assigned output after the per-output draw pass.
 		_SetDrawingEngineOutput(fScreen);
-		if (drewOutput)
+		if (drewOutput && drewAllOutputs)
 			return;
+		if (!drewAllOutputs) {
+			BRegion retry(expose);
+			MarkContentDirtyAsync(retry);
+			return;
+		}
 	}
 
-	// Use the legacy single-output path when an output's pixel origin cannot
-	// be represented by the renderer's integer framebuffer offset.
+	// The legacy path is reserved for damage that intersects only one output
+	// or for the single-output compatibility configuration.
 	if (fDrawingEngine->LockParallelAccess()) {
 		bool copyToFrontEnabled = fDrawingEngine->CopyToFrontEnabled();
 		fDrawingEngine->SetCopyToFrontEnabled(true);

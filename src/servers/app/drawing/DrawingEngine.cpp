@@ -1005,7 +1005,14 @@ DrawingEngine::FillRegion(BRegion& r, const rgb_color& color)
 	if (clipped.CountRects() == 0)
 		return;
 
-	DrawTransaction transaction(this, clipped);
+	BRegion deviceClipped;
+	for (int32 i = 0; i < clipped.CountRects(); i++) {
+		BRect deviceRect = fPainter->TransformAndClipRect(
+			clipped.RectAtInt(i));
+		if (deviceRect.IsValid())
+			deviceClipped.Include(deviceRect);
+	}
+	DrawTransaction transaction(this, deviceClipped);
 
 	int32 count = clipped.CountRects();
 	for (int32 i = 0; i < count; i++)
@@ -1558,8 +1565,9 @@ DrawingEngine::CopyRect(BRect src, int32 xOffset, int32 yOffset) const
 	BRect dst;
 	RenderingBuffer* buffer = fGraphicsCard->DrawingBuffer();
 	if (buffer) {
-		// The caller uses global desktop coordinates; the backing buffer does
-		// not include the output's desktop origin.
+		// CopyRegion has already translated this rectangle into framebuffer-
+		// local coordinates, including the output's integer and fractional
+		// origin offsets.
 		BRect clip(0, 0, buffer->Width() - 1, buffer->Height() - 1);
 
 		dst = src;

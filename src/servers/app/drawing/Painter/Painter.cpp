@@ -447,6 +447,7 @@ void
 Painter::_UpdateTransform()
 {
 	fIdentityTransform = fBaseTransform.IsIdentity() && fRendererScale == 1.0f
+		&& fRendererOffsetX == 0 && fRendererOffsetY == 0
 		&& fRendererFractionalOffsetX == 0.0f
 		&& fRendererFractionalOffsetY == 0.0f;
 	if (!fBaseTransform.IsIdentity()) {
@@ -473,8 +474,8 @@ Painter::_UpdateTransform()
 	}
 	// The rasterizer offset is integer-only. Preserve the subpixel part of
 	// an output's origin in the affine transform instead.
-	fTransform.tx += fRendererFractionalOffsetX;
-	fTransform.ty += fRendererFractionalOffsetY;
+	fTransform.tx += fRendererOffsetX + fRendererFractionalOffsetX;
+	fTransform.ty += fRendererOffsetY + fRendererFractionalOffsetY;
 }
 
 
@@ -1737,7 +1738,12 @@ Painter::SetRendererOffset(int32 offsetX, int32 offsetY)
 
 	fRendererOffsetX = offsetX;
 	fRendererOffsetY = offsetY;
-	fBaseRenderer.set_offset(offsetX, offsetY);
+
+	// Keep the integer and fractional translations in the same affine
+	// transform. Mixing an AGG renderer offset with transformed clipping
+	// coordinates makes the draw bounds and clip region disagree.
+	fBaseRenderer.set_offset(0, 0);
+	_UpdateTransform();
 
 	// The clipping source is owned by Painter, so it remains valid while an
 	// output is rebound between draw transactions.

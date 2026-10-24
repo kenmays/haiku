@@ -699,6 +699,8 @@ Window::_SetDrawingEngineOutput(const ::Screen* screen)
 	HWInterface* interface = fDesktop->HWInterface();
 	int32 offsetX = 0;
 	int32 offsetY = 0;
+	float fractionalOffsetX = 0.0f;
+	float fractionalOffsetY = 0.0f;
 	float outputScale = 1.0f;
 	bool useOutput = false;
 
@@ -711,22 +713,20 @@ Window::_SetDrawingEngineOutput(const ::Screen* screen)
 			float scale = virtualScreen.ScreenScaleAt(i);
 			double pixelLeft = (double)frame.left * scale;
 			double pixelTop = (double)frame.top * scale;
-			// The renderer currently stores its final framebuffer translation
-			// as integer pixels. Only bind an output when its scaled origin is
-			// representable exactly; otherwise use the safe legacy backend.
+			double integerPixelLeft = floor(pixelLeft);
+			double integerPixelTop = floor(pixelTop);
 			if (scale > 0.0f && isfinite(scale) && frame.IsValid()
-				&& frame.left == floorf(frame.left)
-				&& frame.top == floorf(frame.top)
-				&& pixelLeft >= -2147483647.0
-				&& pixelLeft <= 2147483647.0
-				&& pixelTop >= -2147483647.0
-				&& pixelTop <= 2147483647.0
-				&& pixelLeft == floor(pixelLeft)
-				&& pixelTop == floor(pixelTop)
+				&& isfinite(pixelLeft) && isfinite(pixelTop)
+				&& integerPixelLeft >= -2147483647.0
+				&& integerPixelLeft <= 2147483647.0
+				&& integerPixelTop >= -2147483647.0
+				&& integerPixelTop <= 2147483647.0
 				&& screen->HWInterface() != NULL) {
 				interface = screen->HWInterface();
-				offsetX = -(int32)pixelLeft;
-				offsetY = -(int32)pixelTop;
+				offsetX = -(int32)integerPixelLeft;
+				offsetY = -(int32)integerPixelTop;
+				fractionalOffsetX = (float)(integerPixelLeft - pixelLeft);
+				fractionalOffsetY = (float)(integerPixelTop - pixelTop);
 				outputScale = scale;
 				useOutput = true;
 			}
@@ -740,6 +740,7 @@ Window::_SetDrawingEngineOutput(const ::Screen* screen)
 	fDrawingEngine->SetHWInterface(interface);
 	if (interface == NULL) {
 		fDrawingEngine->SetRendererOffset(0, 0);
+		fDrawingEngine->SetRendererFractionalOffset(0.0f, 0.0f);
 		fDrawingEngine->SetRendererScale(1.0f);
 		return false;
 	}
@@ -749,6 +750,9 @@ Window::_SetDrawingEngineOutput(const ::Screen* screen)
 
 	fDrawingEngine->SetRendererOffset(useOutput ? offsetX : 0,
 		useOutput ? offsetY : 0);
+	fDrawingEngine->SetRendererFractionalOffset(
+		useOutput ? fractionalOffsetX : 0.0f,
+		useOutput ? fractionalOffsetY : 0.0f);
 	fDrawingEngine->SetRendererScale(useOutput ? outputScale : 1.0f);
 	fDrawingEngine->UnlockExclusiveAccess();
 
@@ -1881,14 +1885,11 @@ Window::_TriggerContentRedraw(BRegion& dirty, const BRegion& expose)
 		if (!(scale > 0.0f) || !isfinite(scale)
 			|| screen->HWInterface() == NULL
 			|| !frame.IsValid()
-			|| frame.left != floorf(frame.left)
-			|| frame.top != floorf(frame.top)
-			|| pixelLeft < -2147483647.0
-			|| pixelLeft > 2147483647.0
-			|| pixelTop < -2147483647.0
-			|| pixelTop > 2147483647.0
-			|| pixelLeft != floor(pixelLeft)
-			|| pixelTop != floor(pixelTop)) {
+			|| !isfinite(pixelLeft) || !isfinite(pixelTop)
+			|| floor(pixelLeft) < -2147483647.0
+			|| floor(pixelLeft) > 2147483647.0
+			|| floor(pixelTop) < -2147483647.0
+			|| floor(pixelTop) > 2147483647.0) {
 			canFanOut = false;
 			break;
 		}

@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 
 MultiheadScene::MultiheadScene()
@@ -227,12 +228,20 @@ MultiheadScene::GlobalToOutputPixel(int32 id, BPoint global,
 	if (output == NULL || !output->enabled)
 		return B_ENTRY_NOT_FOUND;
 
-	BPoint result((global.x - output->frame.left) * output->scale,
-		(global.y - output->frame.top) * output->scale);
-	if (!std::isfinite(result.x) || !std::isfinite(result.y))
+	// Do intermediate arithmetic in double precision. Subtracting two finite
+	// float coordinates can overflow in float before a small output scale is
+	// applied, even when the final pixel coordinate is representable.
+	const double x = ((double)global.x - output->frame.left)
+		* (double)output->scale;
+	const double y = ((double)global.y - output->frame.top)
+		* (double)output->scale;
+	if (!std::isfinite(x) || !std::isfinite(y)
+		|| std::fabs(x) > std::numeric_limits<float>::max()
+		|| std::fabs(y) > std::numeric_limits<float>::max()) {
 		return B_BAD_VALUE;
+	}
 
-	pixel = result;
+	pixel = BPoint((float)x, (float)y);
 	return B_OK;
 }
 
@@ -248,12 +257,20 @@ MultiheadScene::OutputPixelToGlobal(int32 id, BPoint pixel,
 	if (output == NULL || !output->enabled)
 		return B_ENTRY_NOT_FOUND;
 
-	BPoint result(output->frame.left + pixel.x / output->scale,
-		output->frame.top + pixel.y / output->scale);
-	if (!std::isfinite(result.x) || !std::isfinite(result.y))
+	// As above, keep division and origin addition in double precision so
+	// overflow in an intermediate float operation cannot corrupt a valid
+	// result or leak a partial value to the caller.
+	const double x = (double)output->frame.left
+		+ (double)pixel.x / output->scale;
+	const double y = (double)output->frame.top
+		+ (double)pixel.y / output->scale;
+	if (!std::isfinite(x) || !std::isfinite(y)
+		|| std::fabs(x) > std::numeric_limits<float>::max()
+		|| std::fabs(y) > std::numeric_limits<float>::max()) {
 		return B_BAD_VALUE;
+	}
 
-	global = result;
+	global = BPoint((float)x, (float)y);
 	return B_OK;
 }
 

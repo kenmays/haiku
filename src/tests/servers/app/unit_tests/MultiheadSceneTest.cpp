@@ -23,6 +23,7 @@ class MultiheadSceneTest : public CppUnit::TestFixture {
 	CPPUNIT_TEST(InvalidOutputUpdatesAreRejectedAtomically);
 	CPPUNIT_TEST(DisabledOutputsAreExcludedFromLayoutAndDamage);
 	CPPUNIT_TEST(OffscreenDamageDoesNotCollapseOntoFramebufferEdges);
+	CPPUNIT_TEST(OverflowingCoordinateConversionDoesNotPublishResult);
 	CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -164,6 +165,24 @@ public:
 		// Both input rectangles are wholly outside the output's logical
 		// frame. Clamping before rejection would incorrectly dirty edge pixels.
 		CPPUNIT_ASSERT_EQUAL((int32)0, pixels.CountRects());
+	}
+
+	void OverflowingCoordinateConversionDoesNotPublishResult()
+	{
+		MultiheadScene scene;
+		CPPUNIT_ASSERT_EQUAL((status_t)B_OK,
+			scene.AddOutput(10, BRect(0, 0, 99, 99),
+				std::numeric_limits<float>::max()));
+
+		BPoint pixel(17, 23);
+		CPPUNIT_ASSERT_EQUAL((status_t)B_BAD_VALUE,
+			scene.GlobalToOutputPixel(10, BPoint(1.0e30f, 1.0e30f), pixel));
+		CPPUNIT_ASSERT(pixel == BPoint(17, 23));
+
+		// The output remains usable after a rejected conversion.
+		CPPUNIT_ASSERT_EQUAL((status_t)B_OK,
+			scene.GlobalToOutputPixel(10, BPoint(0, 0), pixel));
+		CPPUNIT_ASSERT(pixel == BPoint(0, 0));
 	}
 
 	void NegativeOriginMapsToLocalPixels()

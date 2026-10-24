@@ -43,6 +43,7 @@ public:
 			status_t			GetMultiOutputInfo(uint32 index,
 									accelerant_output_info* info);
 			status_t			GetMultiOutputGeneration(uint64* generation);
+			status_t			CheckOutputModeChanged(bool* changed);
 
 	virtual	status_t			Initialize();
 	virtual	status_t			Shutdown();
@@ -207,6 +208,7 @@ private:
 
 			display_mode		fDisplayMode;
 			bool				fInitialModeSwitch;
+			bool				fHasDisplayMode;
 
 			sem_id				fRetraceSemaphore;
 

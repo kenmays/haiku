@@ -128,6 +128,31 @@ ScreenManager::ScreenManager()
 ScreenManager::~ScreenManager()
 {
 	delete fScanRunner;
+
+	// Shared accelerant sessions must outlive all output wrappers. Tear down
+	// rendered outputs first and the non-rendering enumerators last, without
+	// calling back into Desktop during server shutdown.
+	for (int pass = 0; pass < 2; pass++) {
+		for (int32 i = 0; i < fScreenList.CountItems();) {
+			screen_item* item = fScreenList.ItemAt(i);
+			bool isEnumerator = item != NULL
+				&& IsEnumeratorScreen(item->screen.Get());
+			if ((pass == 0 && isEnumerator) || (pass == 1 && !isEnumerator)) {
+				i++;
+				continue;
+			}
+			item = fScreenList.RemoveItem(i);
+			if (item == NULL)
+				continue;
+			item->owner = NULL;
+			if (item->screen.Get() != NULL
+				&& item->listener.Get() != NULL) {
+				item->screen->HWInterface()->RemoveListener(item->listener.Get());
+			}
+			delete item;
+		}
+	}
+
 	for (size_t i = 0; i < fWatchedDirectories.size(); i++)
 		unwatch_node(&fWatchedDirectories[i], this);
 }

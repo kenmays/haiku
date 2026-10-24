@@ -678,21 +678,22 @@ void
 Window::SetScreen(const ::Screen* screen)
 {
 	fScreen = screen;
-	_SetDrawingEngineOutput(screen);
+	_SetDrawingEngineOutput(screen, engine);
 }
 
 
 bool
 Window::BindDrawingEngineOutput(const ::Screen* screen)
 {
-	return _SetDrawingEngineOutput(screen);
+	return _SetDrawingEngineOutput(screen, engine);
 }
 
 
 bool
-Window::_SetDrawingEngineOutput(const ::Screen* screen)
+Window::_SetDrawingEngineOutput(const ::Screen* screen, DrawingEngine* engine)
 {
-	if (fDrawingEngine.IsSet() == false || fDesktop == NULL)
+	DrawingEngine* targetEngine = engine != NULL ? engine : fDrawingEngine.Get();
+	if (targetEngine == NULL || fDesktop == NULL)
 		return false;
 
 	const VirtualScreen& virtualScreen = fDesktop->VirtualScreen();
@@ -739,24 +740,24 @@ Window::_SetDrawingEngineOutput(const ::Screen* screen)
 	// The renderer is shared by this window's redraw operations. Rebinding is
 	// performed only between draw transactions, never while it is locked for
 	// parallel painting.
-	fDrawingEngine->SetHWInterface(interface);
+	targetEngine->SetHWInterface(interface);
 	if (interface == NULL) {
-		fDrawingEngine->SetRendererOffset(0, 0);
-		fDrawingEngine->SetRendererFractionalOffset(0.0f, 0.0f);
-		fDrawingEngine->SetRendererScale(1.0f);
+		targetEngine->SetRendererOffset(0, 0);
+		targetEngine->SetRendererFractionalOffset(0.0f, 0.0f);
+		targetEngine->SetRendererScale(1.0f);
 		return false;
 	}
 
-	if (!fDrawingEngine->LockExclusiveAccess())
+	if (!targetEngine->LockExclusiveAccess())
 		return false;
 
-	fDrawingEngine->SetRendererOffset(useOutput ? offsetX : 0,
+	targetEngine->SetRendererOffset(useOutput ? offsetX : 0,
 		useOutput ? offsetY : 0);
-	fDrawingEngine->SetRendererFractionalOffset(
+	targetEngine->SetRendererFractionalOffset(
 		useOutput ? fractionalOffsetX : 0.0f,
 		useOutput ? fractionalOffsetY : 0.0f);
-	fDrawingEngine->SetRendererScale(useOutput ? outputScale : 1.0f);
-	fDrawingEngine->UnlockExclusiveAccess();
+	targetEngine->SetRendererScale(useOutput ? outputScale : 1.0f);
+	targetEngine->UnlockExclusiveAccess();
 
 	return useOutput;
 }
@@ -1921,7 +1922,7 @@ Window::_TriggerContentRedraw(BRegion& dirty, const BRegion& expose)
 			if (outputExpose.CountRects() == 0)
 				continue;
 
-			if (!_SetDrawingEngineOutput(screen)) {
+			if (!_SetDrawingEngineOutput(screen, engine)) {
 				drewAllOutputs = false;
 				continue;
 			}
@@ -1940,7 +1941,7 @@ Window::_TriggerContentRedraw(BRegion& dirty, const BRegion& expose)
 		}
 
 		// Restore the window's assigned output after the per-output draw pass.
-		bool restoredOutput = _SetDrawingEngineOutput(fScreen);
+		bool restoredOutput = _SetDrawingEngineOutput(fScreen, engine);
 		if (!restoredOutput) {
 			BRegion retry(expose);
 			MarkContentDirtyAsync(retry);
@@ -2038,7 +2039,7 @@ Window::_DrawBorder()
 				outputDamage.IntersectWith(&outputBounds);
 				if (outputDamage.CountRects() == 0)
 					continue;
-				if (!_SetDrawingEngineOutput(screen)) {
+				if (!_SetDrawingEngineOutput(screen, engine)) {
 					drewAllOutputs = false;
 					continue;
 				}
@@ -2058,7 +2059,7 @@ Window::_DrawBorder()
 				drewOutput = true;
 			}
 
-			if (!_SetDrawingEngineOutput(fScreen))
+			if (!_SetDrawingEngineOutput(fScreen, engine))
 				drewAllOutputs = false;
 		}
 

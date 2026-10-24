@@ -14,7 +14,7 @@
 
 static const uint32 kScreenChangedMessage = 'scch';
 static const uint32 kScanGraphicsMessage = 'scgr';
-static const uint64 kEnumeratorOutputID = ~(uint64)0;
+static const uint64 kEnumeratorOutputID = B_MULTI_OUTPUT_INVALID_ID;
 
 #include "Screen.h"
 #include "ServerConfig.h"

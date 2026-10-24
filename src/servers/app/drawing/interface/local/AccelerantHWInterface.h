@@ -28,7 +28,8 @@ public:
 								AccelerantHWInterface(int32 deviceNumber = -1,
 									const char* devicePath = NULL,
 									uint64 outputID = 0,
-									bool useMultiOutput = false);
+									bool useMultiOutput = false,
+									AccelerantHWInterface* sharedAccelerant = NULL);
 	virtual						~AccelerantHWInterface();
 
 			static	int32			CountGraphicsDevices();
@@ -112,6 +113,7 @@ private:
 			static bool		_RecursiveScan(const char* directory, int deviceNumber,
 									int& count, char* _path);
 			status_t			_OpenAccelerant(int device);
+			status_t			_CopyHooksFrom(AccelerantHWInterface* shared);
 			bool				_HasIndependentOutputHooks() const;
 			status_t			_SetupDefaultHooks();
 			void				_UpdateHooksAfterModeChange();
@@ -133,6 +135,8 @@ private:
 			BString				fDevicePath;
 			uint64				fOutputID;
 			bool				fUseMultiOutput;
+			AccelerantHWInterface* fSharedAccelerant;
+			bool				fOwnsAccelerant;
 			int					fCardFD;
 			image_id			fAccelerantImage;
 			GetAccelerantHook	fAccelerantHook;

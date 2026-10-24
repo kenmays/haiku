@@ -595,15 +595,14 @@ AccelerantHWInterface::CheckOutputModeChanged(bool* changed)
 	}
 
 	AutoReadLocker _(this);
-	if (!fHasDisplayMode)
-		return B_OK;
-
 	display_mode currentMode;
 	status_t status = fAccGetMultiOutputDisplayMode(fOutputID, &currentMode);
 	if (status != B_OK)
 		return status;
+	if (!_IsValidMode(currentMode))
+		return B_BAD_DATA;
 
-	if (currentMode == fDisplayMode) {
+	if (fHasDisplayMode && currentMode == fDisplayMode) {
 		fHasObservedOutputMode = false;
 		return B_OK;
 	}
@@ -1040,6 +1039,10 @@ AccelerantHWInterface::SetMode(const display_mode& mode)
 		}
 	}
 
+	// The driver mode has changed, but local framebuffer state is not
+	// valid until all output-specific buffers have been rebuilt below.
+	fHasDisplayMode = false;
+	fHasObservedOutputMode = false;
 	fDisplayMode = newMode;
 	fInitialModeSwitch = false;
 

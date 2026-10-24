@@ -98,13 +98,16 @@ use_fail_safe_video_mode()
 
 
 AccelerantHWInterface::AccelerantHWInterface(int32 deviceNumber,
-	const char* devicePath, uint64 outputID, bool useMultiOutput)
+	const char* devicePath, uint64 outputID, bool useMultiOutput,
+	AccelerantHWInterface* sharedAccelerant)
 	:
 	HWInterface(),
 	fDeviceNumber(deviceNumber),
 	fDevicePath(devicePath != NULL ? devicePath : ""),
 	fOutputID(outputID),
 	fUseMultiOutput(useMultiOutput),
+	fSharedAccelerant(sharedAccelerant),
+	fOwnsAccelerant(sharedAccelerant == NULL),
 	fCardFD(-1),
 	fAccelerantImage(-1),
 	fAccelerantHook(NULL),
@@ -211,6 +214,9 @@ AccelerantHWInterface::Initialize()
 		return B_NO_MEMORY;
 
 	if (ret >= B_OK) {
+		if (fSharedAccelerant != NULL)
+			return _CopyHooksFrom(fSharedAccelerant);
+
 		if (fDevicePath.Length() > 0) {
 			fCardFD = open(fDevicePath.String(), B_READ_WRITE);
 			if (fCardFD < 0)
@@ -449,32 +455,12 @@ AccelerantHWInterface::_OpenAccelerant(int device)
 	}
 
 	if (_HasIndependentOutputHooks()) {
+		// This interface owns the device-wide accelerant session. It remains
+		// as the enumerator; ScreenManager creates output wrappers that share
+		// this hook table instead of calling init_accelerant() a second time.
 		if (!fUseMultiOutput) {
-			uint32 count = MultiOutputCount();
-			for (uint32 i = 0; i < count; i++) {
-				accelerant_output_info info;
-				if (GetMultiOutputInfo(i, &info) != B_OK
-					|| info.connection_state != B_MULTI_OUTPUT_CONNECTION_CONNECTED
-					|| (info.capabilities
-						& (B_MULTI_OUTPUT_CAPABILITY_INDEPENDENT_MODE
-							| B_MULTI_OUTPUT_CAPABILITY_FRAME_BUFFER))
-						!= (B_MULTI_OUTPUT_CAPABILITY_INDEPENDENT_MODE
-							| B_MULTI_OUTPUT_CAPABILITY_FRAME_BUFFER)) {
-					continue;
-				}
-
-				fOutputID = info.output_id;
-				fUseMultiOutput = true;
-				break;
-			}
-
-			// Keep a non-rendering enumerator alive when every connector is
-			// disconnected. ScreenManager uses this stable device handle to
-			// discover outputs on a later topology scan.
-			if (!fUseMultiOutput) {
-				fOutputID = ~(uint64)0;
-				fUseMultiOutput = true;
-			}
+			fOutputID = ~(uint64)0;
+			fUseMultiOutput = true;
 		}
 
 		if (fOutputID != ~(uint64)0) {
@@ -500,6 +486,92 @@ AccelerantHWInterface::_OpenAccelerant(int device)
 				return B_ENTRY_NOT_FOUND;
 			}
 		}
+	}
+
+	return B_OK;
+}
+
+
+status_t
+AccelerantHWInterface::_CopyHooksFrom(AccelerantHWInterface* shared)
+{
+	if (shared == NULL || shared->fAccelerantImage < 0
+		|| !shared->_HasIndependentOutputHooks() || !fUseMultiOutput
+		|| fOutputID == ~(uint64)0) {
+		return B_NOT_SUPPORTED;
+	}
+
+	// The accelerant image and init_accelerant() state are device-wide. Copy
+	// the immutable hook table, but keep this output's mode list, front/back
+	// buffers, and drawing state local to the wrapper.
+	fAccelerantImage = shared->fAccelerantImage;
+	fAccelerantHook = shared->fAccelerantHook;
+	fAccGetModeCount = shared->fAccGetModeCount;
+	fAccGetModeList = shared->fAccGetModeList;
+	fAccGetFrameBufferConfig = shared->fAccGetFrameBufferConfig;
+	fAccSetDisplayMode = shared->fAccSetDisplayMode;
+	fAccGetDisplayMode = shared->fAccGetDisplayMode;
+	fAccGetPixelClockLimits = shared->fAccGetPixelClockLimits;
+	fAccGetTimingConstraints = shared->fAccGetTimingConstraints;
+	fAccProposeDisplayMode = shared->fAccProposeDisplayMode;
+	fAccGetPreferredDisplayMode = shared->fAccGetPreferredDisplayMode;
+	fAccGetMonitorInfo = shared->fAccGetMonitorInfo;
+	fAccGetMultiOutputCount = shared->fAccGetMultiOutputCount;
+	fAccGetMultiOutputInfo = shared->fAccGetMultiOutputInfo;
+	fAccGetMultiOutputModeCount = shared->fAccGetMultiOutputModeCount;
+	fAccGetMultiOutputModeList = shared->fAccGetMultiOutputModeList;
+	fAccGetMultiOutputDisplayMode = shared->fAccGetMultiOutputDisplayMode;
+	fAccSetMultiOutputDisplayMode = shared->fAccSetMultiOutputDisplayMode;
+	fAccGetMultiOutputFrameBufferConfig
+		= shared->fAccGetMultiOutputFrameBufferConfig;
+	fAccGetMultiOutputEDIDInfo = shared->fAccGetMultiOutputEDIDInfo;
+	fAccGetMultiOutputGeneration = shared->fAccGetMultiOutputGeneration;
+	fAccPresentMultiOutput = shared->fAccPresentMultiOutput;
+	fAccSetMultiOutputCursorShape = shared->fAccSetMultiOutputCursorShape;
+	fAccMoveMultiOutputCursor = shared->fAccMoveMultiOutputCursor;
+	fAccShowMultiOutputCursor = shared->fAccShowMultiOutputCursor;
+	fAccGetEDIDInfo = shared->fAccGetEDIDInfo;
+	fAccSetCursorShape = shared->fAccSetCursorShape;
+	fAccSetCursorBitmap = shared->fAccSetCursorBitmap;
+	fAccMoveCursor = shared->fAccMoveCursor;
+	fAccShowCursor = shared->fAccShowCursor;
+	fAccDPMSCapabilities = shared->fAccDPMSCapabilities;
+	fAccDPMSMode = shared->fAccDPMSMode;
+	fAccSetDPMSMode = shared->fAccSetDPMSMode;
+	fAccSetBrightness = shared->fAccSetBrightness;
+	fAccGetBrightness = shared->fAccGetBrightness;
+	fAccOverlayCount = shared->fAccOverlayCount;
+	fAccOverlaySupportedSpaces = shared->fAccOverlaySupportedSpaces;
+	fAccOverlaySupportedFeatures = shared->fAccOverlaySupportedFeatures;
+	fAccAllocateOverlayBuffer = shared->fAccAllocateOverlayBuffer;
+	fAccReleaseOverlayBuffer = shared->fAccReleaseOverlayBuffer;
+	fAccGetOverlayConstraints = shared->fAccGetOverlayConstraints;
+	fAccAllocateOverlay = shared->fAccAllocateOverlay;
+	fAccReleaseOverlay = shared->fAccReleaseOverlay;
+	fAccConfigureOverlay = shared->fAccConfigureOverlay;
+	fOwnsAccelerant = false;
+
+	bool foundOutput = false;
+	uint32 count = shared->MultiOutputCount();
+	for (uint32 i = 0; i < count; i++) {
+		accelerant_output_info info;
+		if (shared->GetMultiOutputInfo(i, &info) != B_OK)
+			return B_BUSY;
+		if (info.output_id == fOutputID
+			&& info.connection_state == B_MULTI_OUTPUT_CONNECTION_CONNECTED
+			&& (info.capabilities
+				& (B_MULTI_OUTPUT_CAPABILITY_INDEPENDENT_MODE
+					| B_MULTI_OUTPUT_CAPABILITY_FRAME_BUFFER))
+				== (B_MULTI_OUTPUT_CAPABILITY_INDEPENDENT_MODE
+					| B_MULTI_OUTPUT_CAPABILITY_FRAME_BUFFER)) {
+			foundOutput = true;
+			break;
+		}
+	}
+	if (!foundOutput) {
+		fAccelerantImage = -1;
+		fAccelerantHook = NULL;
+		return B_ENTRY_NOT_FOUND;
 	}
 
 	return B_OK;
@@ -731,6 +803,14 @@ AccelerantHWInterface::_UpdateHooksAfterModeChange()
 status_t
 AccelerantHWInterface::Shutdown()
 {
+	// Output wrappers borrow the device-wide accelerant image and hook table.
+	// Only the persistent enumerator is allowed to uninitialize or unload it.
+	if (!fOwnsAccelerant) {
+		fAccelerantImage = -1;
+		fAccelerantHook = NULL;
+		return B_OK;
+	}
+
 	if (fAccelerantHook != NULL) {
 		uninit_accelerant uninitAccelerant
 			= (uninit_accelerant)fAccelerantHook(B_UNINIT_ACCELERANT, NULL);

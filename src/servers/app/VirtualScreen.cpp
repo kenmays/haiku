@@ -525,10 +525,24 @@ VirtualScreen::BuildRenderTarget(const Screen* screen,
 
 	double pixelLeft = (double)output->frame.left * output->scale;
 	double pixelTop = (double)output->frame.top * output->scale;
-	if (!std::isfinite(pixelLeft) || !std::isfinite(pixelTop)
-		|| pixelLeft < -2147483647.0 || pixelLeft > 2147483647.0
-		|| pixelTop < -2147483647.0 || pixelTop > 2147483647.0
-		|| pixelLeft != floor(pixelLeft) || pixelTop != floor(pixelTop)) {
+	if (!std::isfinite(pixelLeft) || !std::isfinite(pixelTop))
+		return B_BAD_VALUE;
+
+	// The rasterizer's native translation is integer-only. Split the exact
+	// output origin into an integer translation and a subpixel residual so
+	// fractional-DPI origins remain representable without rounding the layout.
+	double integerPixelLeft = floor(pixelLeft);
+	double integerPixelTop = floor(pixelTop);
+	if (integerPixelLeft < -2147483647.0
+		|| integerPixelLeft > 2147483647.0
+		|| integerPixelTop < -2147483647.0
+		|| integerPixelTop > 2147483647.0) {
+		return B_BAD_VALUE;
+	}
+	float fractionalOffsetX = (float)(integerPixelLeft - pixelLeft);
+	float fractionalOffsetY = (float)(integerPixelTop - pixelTop);
+	if (!std::isfinite(fractionalOffsetX)
+		|| !std::isfinite(fractionalOffsetY)) {
 		return B_BAD_VALUE;
 	}
 
@@ -546,7 +560,8 @@ VirtualScreen::BuildRenderTarget(const Screen* screen,
 		return B_NAME_NOT_FOUND;
 
 	target = OutputRenderTarget(screen->ID(), output->frame, output->scale,
-		-(int32)pixelLeft, -(int32)pixelTop, logicalClip, pixelClip);
+		-(int32)integerPixelLeft, -(int32)integerPixelTop, logicalClip,
+		pixelClip, fractionalOffsetX, fractionalOffsetY);
 	target.generation = fScene.Generation();
 	target.pixelWidth = mode.virtual_width;
 	target.pixelHeight = mode.virtual_height;

@@ -219,6 +219,8 @@ private:
 			bool			fCopyToFront;
 			int32			fRendererOffsetX;
 			int32			fRendererOffsetY;
+			float			fRendererFractionalOffsetX;
+			float			fRendererFractionalOffsetY;
 			float			fRendererScale;
 };
 

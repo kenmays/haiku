@@ -126,6 +126,9 @@ private:
 									BPrivate::LinkReceiver &link);
 			void				_DispatchViewDrawingMessage(int32 code,
 									BPrivate::LinkReceiver &link);
+			bool				_DispatchViewDrawingMessageSingleOutput(int32 code,
+									BPrivate::LinkReceiver &link,
+									bool updateLogicalState = true);
 			bool				_DispatchPictureMessage(int32 code,
 									BPrivate::LinkReceiver &link);
 			void				_MessageLooper();

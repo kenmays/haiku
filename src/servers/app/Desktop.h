@@ -106,6 +106,7 @@ public:
 			void				SetCursor(ServerCursor* cursor);
 			ServerCursorReference Cursor() const;
 			void				SetManagementCursor(ServerCursor* newCursor);
+			void				UpdateCursorPosition(const BPoint& position);
 
 			void				SetLastMouseState(const BPoint& position,
 									int32 buttons, Window* windowUnderMouse);
@@ -123,6 +124,7 @@ public:
 
 			status_t			SetScreenMode(int32 workspace, int32 id,
 									const display_mode& mode, bool makeDefault);
+			status_t			SetScreenScale(int32 id, float scale);
 			status_t			GetScreenMode(int32 workspace, int32 id,
 									display_mode& mode);
 			status_t			GetScreenFrame(int32 workspace, int32 id,
@@ -149,8 +151,8 @@ public:
 									// this function
 
 	// ScreenOwner implementation
-	virtual	void				ScreenRemoved(Screen* screen) {}
-	virtual	void				ScreenAdded(Screen* screen) {}
+	virtual	void				ScreenRemoved(Screen* screen);
+	virtual	bool				ScreenAdded(Screen* screen);
 	virtual	void				ScreenChanged(Screen* screen);
 	virtual	bool				ReleaseScreen(Screen* screen) { return false; }
 

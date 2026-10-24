@@ -26,6 +26,7 @@
 #include <AffineTransform.h>
 #include <Font.h>
 #include <Rect.h>
+#include <Region.h>
 
 
 class BBitmap;
@@ -69,6 +70,7 @@ public:
 								// object settings
 			void				SetTransform(BAffineTransform transform,
 									int32 xOffset, int32 yOffset);
+			void				SetRendererScale(float scale);
 
 	inline	bool				IsIdentityTransform() const
 									{ return fIdentityTransform; }
@@ -261,6 +263,8 @@ public:
 
 			void				SetRendererOffset(int32 offsetX,
 									int32 offsetY);
+			void				SetRendererFractionalOffset(float offsetX,
+									float offsetY);
 
 private:
 			float				_Align(float coord, bool round,
@@ -269,6 +273,7 @@ private:
 									bool centerOffset) const;
 			void				_Align(BPoint* point,
 									bool centerOffset = true) const;
+			void				_UpdateTransform();
 			BPoint				_Align(const BPoint& point,
 									bool centerOffset = true) const;
 			BRect				_Clipped(const BRect& rect) const;
@@ -355,7 +360,18 @@ private:
 			bool				fIdentityTransform : 1;
 
 			Transformable		fTransform;
+			BAffineTransform	fBaseTransform;
+			int32				fTransformOffsetX;
+			int32				fTransformOffsetY;
+			float				fRendererScale;
+			int32				fRendererOffsetX;
+			int32				fRendererOffsetY;
+			float				fRendererFractionalOffsetX;
+			float				fRendererFractionalOffsetY;
+			BRegion				fScaledClippingRegion;
 			float				fPenSize;
+			BRegion				fSourceClippingRegion;
+			bool				fHasSourceClippingRegion;
 			const BRegion*		fClippingRegion;
 			drawing_mode		fDrawingMode;
 			source_alpha		fAlphaSrcMode;

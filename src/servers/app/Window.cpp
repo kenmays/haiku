@@ -18,6 +18,7 @@
 
 #include <new>
 #include <stdio.h>
+#include <math.h>
 
 #include <Debug.h>
 
@@ -676,9 +677,89 @@ Window::ReloadDecor()
 void
 Window::SetScreen(const ::Screen* screen)
 {
-	// TODO this assert fails in Desktop::ShowWindow
-	//ASSERT_MULTI_WRITE_LOCKED(fDesktop->ScreenLocker());
 	fScreen = screen;
+	_SetDrawingEngineOutput(screen);
+}
+
+
+bool
+Window::BindDrawingEngineOutput(const ::Screen* screen)
+{
+	return _SetDrawingEngineOutput(screen);
+}
+
+
+bool
+Window::_SetDrawingEngineOutput(const ::Screen* screen, DrawingEngine* engine)
+{
+	DrawingEngine* targetEngine = engine != NULL ? engine : fDrawingEngine.Get();
+	if (targetEngine == NULL || fDesktop == NULL)
+		return false;
+
+	const VirtualScreen& virtualScreen = fDesktop->VirtualScreen();
+	HWInterface* interface = fDesktop->HWInterface();
+	int32 offsetX = 0;
+	int32 offsetY = 0;
+	float fractionalOffsetX = 0.0f;
+	float fractionalOffsetY = 0.0f;
+	float outputScale = 1.0f;
+	bool useOutput = false;
+
+	if (screen != NULL) {
+		for (int32 i = 0; i < virtualScreen.CountScreens(); i++) {
+			if (virtualScreen.ScreenAt(i) != screen)
+				continue;
+
+			BRect frame = virtualScreen.ScreenFrameAt(i);
+			float scale = virtualScreen.ScreenScaleAt(i);
+			double pixelLeft = (double)frame.left * scale;
+			double pixelTop = (double)frame.top * scale;
+			double integerPixelLeft = floor(pixelLeft);
+			double integerPixelTop = floor(pixelTop);
+			if (scale > 0.0f && isfinite(scale) && frame.IsValid()
+				&& frame.left == floorf(frame.left)
+				&& frame.top == floorf(frame.top)
+				&& isfinite(pixelLeft) && isfinite(pixelTop)
+				&& integerPixelLeft >= -2147483647.0
+				&& integerPixelLeft <= 2147483647.0
+				&& integerPixelTop >= -2147483647.0
+				&& integerPixelTop <= 2147483647.0
+				&& screen->HWInterface() != NULL) {
+				interface = screen->HWInterface();
+				offsetX = -(int32)integerPixelLeft;
+				offsetY = -(int32)integerPixelTop;
+				fractionalOffsetX = (float)(integerPixelLeft - pixelLeft);
+				fractionalOffsetY = (float)(integerPixelTop - pixelTop);
+				outputScale = scale;
+				useOutput = true;
+			}
+			break;
+		}
+	}
+
+	// The renderer is shared by this window's redraw operations. Rebinding is
+	// performed only between draw transactions, never while it is locked for
+	// parallel painting.
+	targetEngine->SetHWInterface(interface);
+	if (interface == NULL) {
+		targetEngine->SetRendererOffset(0, 0);
+		targetEngine->SetRendererFractionalOffset(0.0f, 0.0f);
+		targetEngine->SetRendererScale(1.0f);
+		return false;
+	}
+
+	if (!targetEngine->LockExclusiveAccess())
+		return false;
+
+	targetEngine->SetRendererOffset(useOutput ? offsetX : 0,
+		useOutput ? offsetY : 0);
+	targetEngine->SetRendererFractionalOffset(
+		useOutput ? fractionalOffsetX : 0.0f,
+		useOutput ? fractionalOffsetY : 0.0f);
+	targetEngine->SetRendererScale(useOutput ? outputScale : 1.0f);
+	targetEngine->UnlockExclusiveAccess();
+
+	return useOutput;
 }
 
 
@@ -1773,19 +1854,116 @@ Window::_TriggerContentRedraw(BRegion& dirty, const BRegion& expose)
 	if (!IsVisible() || dirty.CountRects() == 0 || (fFlags & kWindowScreenFlag) != 0)
 		return;
 
-	// put this into the pending dirty region
-	// to eventually trigger a client redraw
+	// The update region is global desktop geometry and must be transferred
+	// only once even when the backing pixels need to be painted on several
+	// output framebuffers.
 	_TransferToUpdateSession(&dirty);
 
-	if (expose.CountRects() > 0) {
-		// draw exposed region background right now to avoid stamping artifacts
-		if (fDrawingEngine->LockParallelAccess()) {
-			bool copyToFrontEnabled = fDrawingEngine->CopyToFrontEnabled();
-			fDrawingEngine->SetCopyToFrontEnabled(true);
-			fTopView->Draw(fDrawingEngine.Get(), &expose, &fContentRegion, true);
-			fDrawingEngine->SetCopyToFrontEnabled(copyToFrontEnabled);
-			fDrawingEngine->UnlockParallelAccess();
+	if (expose.CountRects() == 0)
+		return;
+
+	const VirtualScreen& virtualScreen = fDesktop->VirtualScreen();
+	bool canFanOut = virtualScreen.CountScreens() > 1;
+	bool intersectsOutput = false;
+	int32 intersectingOutputs = 0;
+
+	// Preflight the entire expose region before painting. A partial expose
+	// pass must be retried rather than reported as a completed redraw.
+	for (int32 i = 0; i < virtualScreen.CountScreens(); i++) {
+		const ::Screen* screen = virtualScreen.ScreenAt(i);
+		if (screen == NULL)
+			continue;
+
+		BRect frame = virtualScreen.ScreenFrameAt(i);
+		BRegion outputRegion(expose);
+		BRegion outputBounds(frame);
+		outputRegion.IntersectWith(&outputBounds);
+		if (outputRegion.CountRects() == 0)
+			continue;
+
+		intersectsOutput = true;
+		intersectingOutputs++;
+		float scale = virtualScreen.ScreenScaleAt(i);
+		double pixelLeft = (double)frame.left * scale;
+		double pixelTop = (double)frame.top * scale;
+		if (!(scale > 0.0f) || !isfinite(scale)
+			|| screen->HWInterface() == NULL
+			|| !frame.IsValid()
+			|| frame.left != floorf(frame.left)
+			|| frame.top != floorf(frame.top)
+			|| !isfinite(pixelLeft) || !isfinite(pixelTop)
+			|| floor(pixelLeft) < -2147483647.0
+			|| floor(pixelLeft) > 2147483647.0
+			|| floor(pixelTop) < -2147483647.0
+			|| floor(pixelTop) > 2147483647.0) {
+			canFanOut = false;
+			continue;
 		}
+	}
+
+	if (!canFanOut && intersectingOutputs > 1) {
+		BRegion retry(expose);
+		MarkContentDirtyAsync(retry);
+		return;
+	}
+
+	if (canFanOut && intersectsOutput) {
+		bool drewOutput = false;
+		bool drewAllOutputs = true;
+		for (int32 i = 0; i < virtualScreen.CountScreens(); i++) {
+			const ::Screen* screen = virtualScreen.ScreenAt(i);
+			if (screen == NULL)
+				continue;
+
+			BRect frame = virtualScreen.ScreenFrameAt(i);
+			BRegion outputExpose(expose);
+			BRegion outputBounds(frame);
+			outputExpose.IntersectWith(&outputBounds);
+			if (outputExpose.CountRects() == 0)
+				continue;
+
+			if (!_SetDrawingEngineOutput(screen)) {
+				drewAllOutputs = false;
+				continue;
+			}
+
+			if (fDrawingEngine->LockParallelAccess()) {
+				bool copyToFrontEnabled = fDrawingEngine->CopyToFrontEnabled();
+				fDrawingEngine->SetCopyToFrontEnabled(true);
+				fTopView->Draw(fDrawingEngine.Get(), &outputExpose,
+					&fContentRegion, true);
+				fDrawingEngine->SetCopyToFrontEnabled(copyToFrontEnabled);
+				fDrawingEngine->UnlockParallelAccess();
+				drewOutput = true;
+			} else {
+				drewAllOutputs = false;
+			}
+		}
+
+		// Restore the window's assigned output after the per-output draw pass.
+		bool restoredOutput = _SetDrawingEngineOutput(fScreen);
+		if (!restoredOutput) {
+			BRegion retry(expose);
+			MarkContentDirtyAsync(retry);
+			return;
+		}
+		if (drewOutput && drewAllOutputs)
+			return;
+		if (!drewAllOutputs) {
+			BRegion retry(expose);
+			MarkContentDirtyAsync(retry);
+			return;
+		}
+	}
+
+	// The legacy path is reserved for damage that intersects only one output
+	// or for the single-output compatibility configuration.
+	if (fDrawingEngine->LockParallelAccess()) {
+		bool copyToFrontEnabled = fDrawingEngine->CopyToFrontEnabled();
+		fDrawingEngine->SetCopyToFrontEnabled(true);
+		fTopView->Draw(fDrawingEngine.Get(), &expose, &fContentRegion, true);
+		fDrawingEngine->SetCopyToFrontEnabled(copyToFrontEnabled);
+		fDrawingEngine->UnlockParallelAccess();
 	}
 }
 
@@ -1811,25 +1989,96 @@ Window::_DrawBorder()
 	dirtyBorderRegion->IntersectWith(&fDirtyRegion);
 
 	DrawingEngine* engine = decorator->GetDrawingEngine();
-	if (dirtyBorderRegion->CountRects() > 0 && engine->LockParallelAccess()) {
-		engine->ConstrainClippingRegion(dirtyBorderRegion);
-		bool copyToFrontEnabled = engine->CopyToFrontEnabled();
-		engine->SetCopyToFrontEnabled(false);
+	if (dirtyBorderRegion->CountRects() > 0 && engine != NULL) {
+		const VirtualScreen& virtualScreen = fDesktop->VirtualScreen();
+		bool canFanOut = virtualScreen.CountScreens() > 1;
+		bool intersectsOutput = false;
+		int32 intersectingOutputs = 0;
 
-		decorator->Draw(dirtyBorderRegion->Frame());
+		for (int32 i = 0; i < virtualScreen.CountScreens(); i++) {
+			const ::Screen* screen = virtualScreen.ScreenAt(i);
+			if (screen == NULL)
+				continue;
+			BRect frame = virtualScreen.ScreenFrameAt(i);
+			BRegion outputDamage(*dirtyBorderRegion);
+			BRegion outputBounds(frame);
+			outputDamage.IntersectWith(&outputBounds);
+			if (outputDamage.CountRects() == 0)
+				continue;
 
-		engine->SetCopyToFrontEnabled(copyToFrontEnabled);
-		engine->CopyToFront(*dirtyBorderRegion);
+			intersectsOutput = true;
+			intersectingOutputs++;
+			float scale = virtualScreen.ScreenScaleAt(i);
+			double pixelLeft = (double)frame.left * scale;
+			double pixelTop = (double)frame.top * scale;
+			if (!(scale > 0.0f) || !isfinite(scale)
+				|| screen->HWInterface() == NULL
+				|| !frame.IsValid()
+				|| frame.left != floorf(frame.left)
+				|| frame.top != floorf(frame.top)
+				|| !isfinite(pixelLeft) || !isfinite(pixelTop)
+				|| floor(pixelLeft) < -2147483647.0
+				|| floor(pixelLeft) > 2147483647.0
+				|| floor(pixelTop) < -2147483647.0
+				|| floor(pixelTop) > 2147483647.0) {
+				canFanOut = false;
+				continue;
+			}
+		}
 
-// TODO: remove this once the DrawState stuff is handled
-// more cleanly. The reason why this is needed is that
-// when the decorator draws strings, a draw state is set
-// on the Painter object, and this is were it might get
-// out of sync with what the ServerWindow things is the
-// current DrawState set on the Painter
-fWindow->ResyncDrawState();
+		bool drewOutput = false;
+		bool drewAllOutputs = true;
+		if (canFanOut && intersectsOutput) {
+			for (int32 i = 0; i < virtualScreen.CountScreens(); i++) {
+				const ::Screen* screen = virtualScreen.ScreenAt(i);
+				if (screen == NULL)
+					continue;
 
-		engine->UnlockParallelAccess();
+				BRegion outputDamage(*dirtyBorderRegion);
+				BRegion outputBounds(virtualScreen.ScreenFrameAt(i));
+				outputDamage.IntersectWith(&outputBounds);
+				if (outputDamage.CountRects() == 0)
+					continue;
+				if (!_SetDrawingEngineOutput(screen, engine)) {
+					drewAllOutputs = false;
+					continue;
+				}
+
+				if (!engine->LockParallelAccess()) {
+					drewAllOutputs = false;
+					continue;
+				}
+				engine->ConstrainClippingRegion(&outputDamage);
+				bool copyToFrontEnabled = engine->CopyToFrontEnabled();
+				engine->SetCopyToFrontEnabled(false);
+				decorator->Draw(outputDamage.Frame());
+				engine->SetCopyToFrontEnabled(copyToFrontEnabled);
+				engine->CopyToFront(outputDamage);
+				fWindow->ResyncDrawState();
+				engine->UnlockParallelAccess();
+				drewOutput = true;
+			}
+
+			if (!_SetDrawingEngineOutput(fScreen, engine))
+				drewAllOutputs = false;
+		}
+
+		if (drewOutput && !drewAllOutputs)
+			fWindow->ServerWindow()->RequestRedraw();
+		if (!canFanOut && intersectingOutputs > 1)
+			fWindow->ServerWindow()->RequestRedraw();
+
+		if (!drewOutput && intersectingOutputs <= 1
+			&& engine->LockParallelAccess()) {
+			engine->ConstrainClippingRegion(dirtyBorderRegion);
+			bool copyToFrontEnabled = engine->CopyToFrontEnabled();
+			engine->SetCopyToFrontEnabled(false);
+			decorator->Draw(dirtyBorderRegion->Frame());
+			engine->SetCopyToFrontEnabled(copyToFrontEnabled);
+			engine->CopyToFront(*dirtyBorderRegion);
+			fWindow->ResyncDrawState();
+			engine->UnlockParallelAccess();
+		}
 	}
 	fRegionPool.Recycle(dirtyBorderRegion);
 }

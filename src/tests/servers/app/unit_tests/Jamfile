@@ -10,6 +10,8 @@ UnitTestLib app_server_unit_tests.so :
 	IntPoint.cpp
 	IntRect.cpp
 	SimpleTransformTest.cpp
+	MultiheadSceneTest.cpp
+	MultiheadScene.cpp
 
 	: be [ TargetLibstdc++ ]
 	;

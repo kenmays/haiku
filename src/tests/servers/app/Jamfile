@@ -7,6 +7,14 @@ SimpleTest app_server_debug :
 	: be
 ;
 
+UseHeaders [ FDirName $(HAIKU_TOP) src servers app ] ;
+
+SimpleTest app_server_multihead_scene :
+	app_server_multihead_scene.cpp
+	[ FDirName $(HAIKU_TOP) src servers app MultiheadScene.cpp ]
+	: be
+;
+
 SetSubDirSupportedPlatforms libbe_test ;
 
 # No need to define any of those targets, when not building for libbe_test

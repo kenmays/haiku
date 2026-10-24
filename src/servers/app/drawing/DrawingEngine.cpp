@@ -16,6 +16,7 @@
 #include <stdio.h>
 
 #include <algorithm>
+#include <math.h>
 #include <stack>
 
 #include "DrawState.h"
@@ -97,6 +98,29 @@ class AutoFloatingOverlaysHider {
 
 };
 
+static void
+transform_region_to_framebuffer(const BRegion& source, BRegion& destination,
+	float scale, int32 offsetX, int32 offsetY, float fractionalOffsetX,
+	float fractionalOffsetY, const BRect& framebufferBounds)
+{
+	destination.MakeEmpty();
+	if (!(scale > 0.0f) || !isfinite(scale))
+		scale = 1.0f;
+
+	for (int32 i = 0; i < source.CountRects(); i++) {
+		BRect rect = source.RectAt(i);
+		rect.left = floorf(rect.left * scale + offsetX + fractionalOffsetX);
+		rect.top = floorf(rect.top * scale + offsetY + fractionalOffsetY);
+		rect.right = ceilf(rect.right * scale + offsetX + fractionalOffsetX);
+		rect.bottom = ceilf(rect.bottom * scale + offsetY + fractionalOffsetY);
+		destination.Include(rect);
+	}
+
+	BRegion bounds(framebufferBounds);
+	destination.IntersectWith(&bounds);
+}
+
+
 class DrawTransaction {
 public:
 	DrawTransaction(DrawingEngine *engine, const BRect &bounds)
@@ -108,8 +132,16 @@ public:
 		fDirty.IntersectWith(fEngine->fPainter->ClippingRegion());
 		if (fDirty.CountRects() == 0)
 			return;
-		fOverlaysHidden
-			= fEngine->fGraphicsCard->HideFloatingOverlays(fDirty.Frame());
+
+		BRegion deviceDirty(fDirty);
+		BRegion framebufferBounds(fEngine->fPainter->Bounds());
+		deviceDirty.IntersectWith(&framebufferBounds);
+		if (fEngine->fGraphicsCard != NULL
+			&& deviceDirty.CountRects() > 0) {
+			fOverlaysHidden
+				= fEngine->fGraphicsCard->HideFloatingOverlays(
+					deviceDirty.Frame());
+		}
 	}
 
 	DrawTransaction(DrawingEngine *engine)
@@ -120,8 +152,16 @@ public:
 		fDirty = *fEngine->fPainter->ClippingRegion();
 		if (fDirty.CountRects() == 0)
 			return;
-		fOverlaysHidden
-			= fEngine->fGraphicsCard->HideFloatingOverlays(fDirty.Frame());
+
+		BRegion deviceDirty(fDirty);
+		BRegion framebufferBounds(fEngine->fPainter->Bounds());
+		deviceDirty.IntersectWith(&framebufferBounds);
+		if (fEngine->fGraphicsCard != NULL
+			&& deviceDirty.CountRects() > 0) {
+			fOverlaysHidden
+				= fEngine->fGraphicsCard->HideFloatingOverlays(
+					deviceDirty.Frame());
+		}
 	}
 
 	DrawTransaction(DrawingEngine *engine, const BRegion &region)
@@ -133,15 +173,31 @@ public:
 		fDirty = region;
 		if (fDirty.CountRects() == 0)
 			return;
-		fOverlaysHidden
-			= fEngine->fGraphicsCard->HideFloatingOverlays(fDirty.Frame());
+
+		BRegion deviceDirty(fDirty);
+		BRegion framebufferBounds(fEngine->fPainter->Bounds());
+		deviceDirty.IntersectWith(&framebufferBounds);
+		if (fEngine->fGraphicsCard != NULL
+			&& deviceDirty.CountRects() > 0) {
+			fOverlaysHidden
+				= fEngine->fGraphicsCard->HideFloatingOverlays(
+					deviceDirty.Frame());
+		}
 	}
 
 	~DrawTransaction()
 	{
-		if (fEngine->fCopyToFront)
-			fEngine->fGraphicsCard->InvalidateRegion(fDirty);
-		if (fOverlaysHidden)
+		if (fEngine->fCopyToFront) {
+
+		BRegion deviceDirty(fDirty);
+		BRegion framebufferBounds(fEngine->fPainter->Bounds());
+		deviceDirty.IntersectWith(&framebufferBounds);
+			if (fEngine->fGraphicsCard != NULL
+				&& deviceDirty.CountRects() > 0) {
+				fEngine->fGraphicsCard->InvalidateRegion(deviceDirty);
+			}
+		}
+		if (fOverlaysHidden && fEngine->fGraphicsCard != NULL)
 			fEngine->fGraphicsCard->ShowFloatingOverlays();
 	}
 
@@ -180,7 +236,12 @@ DrawingEngine::DrawingEngine(HWInterface* interface)
 	:
 	fPainter(new Painter()),
 	fGraphicsCard(NULL),
-	fCopyToFront(true)
+	fCopyToFront(true),
+	fRendererOffsetX(0),
+	fRendererOffsetY(0),
+	fRendererFractionalOffsetX(0.0f),
+	fRendererFractionalOffsetY(0.0f),
+	fRendererScale(1.0f)
 {
 	SetHWInterface(interface);
 }
@@ -198,7 +259,7 @@ DrawingEngine::~DrawingEngine()
 bool
 DrawingEngine::LockParallelAccess()
 {
-	return fGraphicsCard->LockParallelAccess();
+	return fGraphicsCard != NULL && fGraphicsCard->LockParallelAccess();
 }
 
 
@@ -206,7 +267,8 @@ DrawingEngine::LockParallelAccess()
 bool
 DrawingEngine::IsParallelAccessLocked() const
 {
-	return fGraphicsCard->IsParallelAccessLocked();
+	return fGraphicsCard != NULL
+		&& fGraphicsCard->IsParallelAccessLocked();
 }
 #endif
 
@@ -214,28 +276,31 @@ DrawingEngine::IsParallelAccessLocked() const
 void
 DrawingEngine::UnlockParallelAccess()
 {
-	fGraphicsCard->UnlockParallelAccess();
+	if (fGraphicsCard != NULL)
+		fGraphicsCard->UnlockParallelAccess();
 }
 
 
 bool
 DrawingEngine::LockExclusiveAccess()
 {
-	return fGraphicsCard->LockExclusiveAccess();
+	return fGraphicsCard != NULL && fGraphicsCard->LockExclusiveAccess();
 }
 
 
 bool
 DrawingEngine::IsExclusiveAccessLocked() const
 {
-	return fGraphicsCard->IsExclusiveAccessLocked();
+	return fGraphicsCard != NULL
+		&& fGraphicsCard->IsExclusiveAccessLocked();
 }
 
 
 void
 DrawingEngine::UnlockExclusiveAccess()
 {
-	fGraphicsCard->UnlockExclusiveAccess();
+	if (fGraphicsCard != NULL)
+		fGraphicsCard->UnlockExclusiveAccess();
 }
 
 
@@ -287,7 +352,15 @@ DrawingEngine::SetCopyToFrontEnabled(bool enable)
 void
 DrawingEngine::CopyToFront(/*const*/ BRegion& region)
 {
-	fGraphicsCard->InvalidateRegion(region);
+	if (fGraphicsCard == NULL)
+		return;
+
+	BRegion deviceRegion;
+	transform_region_to_framebuffer(region, deviceRegion, fRendererScale,
+		fRendererOffsetX, fRendererOffsetY, fRendererFractionalOffsetX,
+		fRendererFractionalOffsetY, fPainter->Bounds());
+	if (deviceRegion.CountRects() > 0)
+		fGraphicsCard->InvalidateRegion(deviceRegion);
 }
 
 
@@ -523,29 +596,68 @@ void
 DrawingEngine::CopyRegion(/*const*/ BRegion* region, int32 xOffset,
 	int32 yOffset)
 {
-	// NOTE: region is already clipped
+	if (fGraphicsCard == NULL || region == NULL)
+		return;
+
+	// NOTE: region is already clipped in global desktop coordinates.
 	ASSERT_PARALLEL_LOCKED();
 
-	BRect frame = region->Frame();
+	// CopyRect operates on framebuffer coordinates. Translate a private copy
+	// so scroll/copy operations also work when this engine is bound to an
+	// output whose origin is not (0, 0).
+	BRegion localRegion;
+	if (fRendererScale == 1.0f && fRendererFractionalOffsetX == 0.0f
+		&& fRendererFractionalOffsetY == 0.0f) {
+		localRegion = *region;
+	} else {
+		for (int32 i = 0; i < region->CountRects(); i++) {
+			BRect rect = region->RectAt(i);
+			rect.left = floorf(rect.left * fRendererScale
+				+ fRendererFractionalOffsetX);
+			rect.top = floorf(rect.top * fRendererScale
+				+ fRendererFractionalOffsetY);
+			rect.right = ceilf(rect.right * fRendererScale
+				+ fRendererFractionalOffsetX);
+			rect.bottom = ceilf(rect.bottom * fRendererScale
+				+ fRendererFractionalOffsetY);
+			localRegion.Include(rect);
+		}
+		if (fRendererScale != 1.0f) {
+			xOffset = (int32)lroundf(xOffset * fRendererScale);
+			yOffset = (int32)lroundf(yOffset * fRendererScale);
+		}
+	}
+	localRegion.OffsetBy(fRendererOffsetX, fRendererOffsetY);
+
+	BRegion framebufferBounds(fPainter->Bounds());
+	BRegion allowedSourceBounds(framebufferBounds);
+	BRegion allowedDestinationSourceBounds(framebufferBounds);
+	allowedDestinationSourceBounds.OffsetBy(-xOffset, -yOffset);
+	allowedSourceBounds.IntersectWith(&allowedDestinationSourceBounds);
+	localRegion.IntersectWith(&allowedSourceBounds);
+	if (localRegion.CountRects() == 0)
+		return;
+
+	BRect frame = localRegion.Frame();
 	frame = frame | frame.OffsetByCopy(xOffset, yOffset);
 
 	AutoFloatingOverlaysHider _(fGraphicsCard, frame);
 
-	int32 count = region->CountRects();
+	int32 count = localRegion.CountRects();
 
 	// TODO: make this step unnecessary
 	// (by using different stack impl inside node)
 	BStackOrHeapArray<node, 64> nodes(count);
 	for (int32 i= 0; i < count; i++) {
-		nodes[i].init(region->RectAt(i), count);
+		nodes[i].init(localRegion.RectAt(i), count);
 		if (nodes[i].pointers == NULL)
 			return;
 	}
 
 	for (int32 i = 0; i < count; i++) {
-		BRect a = region->RectAt(i);
+		BRect a = localRegion.RectAt(i);
 		for (int32 k = i + 1; k < count; k++) {
-			BRect b = region->RectAt(k);
+			BRect b = localRegion.RectAt(k);
 			int cmp = 0;
 			// compare horizontally
 			if (xOffset > 0) {
@@ -874,28 +986,37 @@ DrawingEngine::FillRegion(BRegion& r, const rgb_color& color)
 {
 	ASSERT_PARALLEL_LOCKED();
 
-	// NOTE: region expected to be already clipped correctly!!
-	BRect frame = r.Frame();
-	if (!fPainter->Bounds().Contains(frame)) {
-		// NOTE: I am not quite sure yet how this can happen, but apparently it
-		// can (see bug #634).
-		// This function is used for internal app_server painting, in the case of
-		// bug #634, the background of views is painted. But the view region
-		// should never be outside the frame buffer bounds.
-//		char message[1024];
-//		BRect bounds = fPainter->Bounds();
-//		sprintf(message, "FillRegion() - painter: (%d, %d)->(%d, %d), region: (%d, %d)->(%d, %d)",
-//			(int)bounds.left, (int)bounds.top, (int)bounds.right, (int)bounds.bottom,
-//			(int)frame.left, (int)frame.top, (int)frame.right, (int)frame.bottom);
-//		debugger(message);
+	// View regions are in global desktop coordinates and can extend beyond
+	// the output selected for this engine. Clip to the framebuffer's logical
+	// bounds instead of dropping the entire fill when only part is in bounds.
+	BRect globalBounds = fPainter->Bounds();
+	float inverseScale = 1.0f / fRendererScale;
+	globalBounds.left = (globalBounds.left - fRendererOffsetX
+		- fRendererFractionalOffsetX) * inverseScale;
+	globalBounds.top = (globalBounds.top - fRendererOffsetY
+		- fRendererFractionalOffsetY) * inverseScale;
+	globalBounds.right = (globalBounds.right - fRendererOffsetX
+		- fRendererFractionalOffsetX) * inverseScale;
+	globalBounds.bottom = (globalBounds.bottom - fRendererOffsetY
+		- fRendererFractionalOffsetY) * inverseScale;
+	BRegion clipped(r);
+	BRegion outputBounds(globalBounds);
+	clipped.IntersectWith(&outputBounds);
+	if (clipped.CountRects() == 0)
 		return;
+
+	BRegion deviceClipped;
+	for (int32 i = 0; i < clipped.CountRects(); i++) {
+		BRect deviceRect = fPainter->TransformAndClipRect(
+			clipped.RectAtInt(i));
+		if (deviceRect.IsValid())
+			deviceClipped.Include(deviceRect);
 	}
+	DrawTransaction transaction(this, deviceClipped);
 
-	DrawTransaction transaction(this, r);
-
-	int32 count = r.CountRects();
+	int32 count = clipped.CountRects();
 	for (int32 i = 0; i < count; i++)
-		fPainter->FillRectNoClipping(r.RectAtInt(i), color);
+		fPainter->FillRectNoClipping(clipped.RectAtInt(i), color);
 }
 
 
@@ -1376,6 +1497,9 @@ DrawingEngine::ReadBitmap(ServerBitmap* bitmap, bool drawCursor, BRect bounds)
 {
 	ASSERT_EXCLUSIVE_LOCKED();
 
+	if (fGraphicsCard == NULL || bitmap == NULL)
+		return B_ERROR;
+
 	RenderingBuffer* buffer = fGraphicsCard->FrontBuffer();
 	if (buffer == NULL)
 		return B_ERROR;
@@ -1441,6 +1565,9 @@ DrawingEngine::CopyRect(BRect src, int32 xOffset, int32 yOffset) const
 	BRect dst;
 	RenderingBuffer* buffer = fGraphicsCard->DrawingBuffer();
 	if (buffer) {
+		// CopyRegion has already translated this rectangle into framebuffer-
+		// local coordinates, including the output's integer and fractional
+		// origin offsets.
 		BRect clip(0, 0, buffer->Width() - 1, buffer->Height() - 1);
 
 		dst = src;
@@ -1470,6 +1597,8 @@ DrawingEngine::CopyRect(BRect src, int32 xOffset, int32 yOffset) const
 			// offset dest again, because it is return value
 			dst.OffsetBy(xOffset, yOffset);
 		}
+
+		// Return the destination in framebuffer-local coordinates.
 	}
 	return dst;
 }
@@ -1478,7 +1607,30 @@ DrawingEngine::CopyRect(BRect src, int32 xOffset, int32 yOffset) const
 void
 DrawingEngine::SetRendererOffset(int32 offsetX, int32 offsetY)
 {
+	fRendererOffsetX = offsetX;
+	fRendererOffsetY = offsetY;
 	fPainter->SetRendererOffset(offsetX, offsetY);
+}
+
+
+void
+DrawingEngine::SetRendererFractionalOffset(float offsetX, float offsetY)
+{
+	if (!isfinite(offsetX) || !isfinite(offsetY))
+		return;
+	fRendererFractionalOffsetX = offsetX;
+	fRendererFractionalOffsetY = offsetY;
+	fPainter->SetRendererFractionalOffset(offsetX, offsetY);
+}
+
+
+void
+DrawingEngine::SetRendererScale(float scale)
+{
+	if (!(scale > 0.0f) || !isfinite(scale))
+		scale = 1.0f;
+	fRendererScale = scale;
+	fPainter->SetRendererScale(scale);
 }
 
 

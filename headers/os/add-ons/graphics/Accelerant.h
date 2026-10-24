@@ -55,6 +55,22 @@ enum {
 	B_SET_BRIGHTNESS,                   /* optional */
 	B_GET_BRIGHTNESS,                   /* optional */
 
+	/* optional independent-output hooks; absent hooks mean one output */
+	B_ACCELERANT_MULTI_OUTPUT_START = 0x500,
+	B_GET_MULTI_OUTPUT_COUNT,
+	B_GET_MULTI_OUTPUT_INFO,
+	B_GET_MULTI_OUTPUT_MODE_COUNT,
+	B_GET_MULTI_OUTPUT_MODE_LIST,
+	B_GET_MULTI_OUTPUT_DISPLAY_MODE,
+	B_SET_MULTI_OUTPUT_DISPLAY_MODE,
+	B_GET_MULTI_OUTPUT_FRAME_BUFFER_CONFIG,
+	B_GET_MULTI_OUTPUT_EDID_INFO,
+	B_GET_MULTI_OUTPUT_GENERATION,
+	B_PRESENT_MULTI_OUTPUT,
+	B_SET_MULTI_OUTPUT_CURSOR_SHAPE,
+	B_MOVE_MULTI_OUTPUT_CURSOR,
+	B_SHOW_MULTI_OUTPUT_CURSOR,
+
 	/* cursor managment */
 	B_MOVE_CURSOR = 0x200,				/* optional */
 	B_SET_CURSOR_SHAPE,					/* optional */
@@ -119,6 +135,57 @@ typedef struct {
 	uint32			flags;				/* mode flags (Some drivers use this */
 										/* for dual head related options.) */
 } display_mode;
+
+/*
+ * Optional multi-output accelerant interface.
+ *
+ * Output IDs are stable for the lifetime of a device connection and must not
+ * be derived from the current enumeration index. The info hook receives a
+ * caller-initialized size/version record and must not write beyond size.
+ * The generation hook changes when output connectivity, modes, or capabilities
+ * change. Present damage rectangles use framebuffer-local physical pixels and
+ * inclusive right/bottom coordinates. Missing hooks mean unsupported; legacy
+ * accelerants continue to expose their existing single-output interface.
+ */
+#define B_MULTI_OUTPUT_INFO_VERSION 1
+#define B_MULTI_OUTPUT_INVALID_ID ((uint64)~0)
+
+enum {
+	B_MULTI_OUTPUT_CONNECTOR_UNKNOWN = 0,
+	B_MULTI_OUTPUT_CONNECTOR_VGA,
+	B_MULTI_OUTPUT_CONNECTOR_DVI,
+	B_MULTI_OUTPUT_CONNECTOR_HDMI,
+	B_MULTI_OUTPUT_CONNECTOR_DISPLAYPORT,
+	B_MULTI_OUTPUT_CONNECTOR_EDP,
+	B_MULTI_OUTPUT_CONNECTOR_LVDS,
+	B_MULTI_OUTPUT_CONNECTOR_USB,
+	B_MULTI_OUTPUT_CONNECTOR_VIRTUAL
+};
+
+enum {
+	B_MULTI_OUTPUT_CONNECTION_UNKNOWN = 0,
+	B_MULTI_OUTPUT_CONNECTION_CONNECTED,
+	B_MULTI_OUTPUT_CONNECTION_DISCONNECTED
+};
+
+enum {
+	B_MULTI_OUTPUT_CAPABILITY_INDEPENDENT_MODE = 1 << 0,
+	B_MULTI_OUTPUT_CAPABILITY_FRAME_BUFFER = 1 << 1,
+	B_MULTI_OUTPUT_CAPABILITY_PRESENT = 1 << 2,
+	B_MULTI_OUTPUT_CAPABILITY_HARDWARE_CURSOR = 1 << 3
+};
+
+typedef struct {
+	uint32	size;					/* caller sets sizeof(accelerant_output_info) */
+	uint32	version;				/* B_MULTI_OUTPUT_INFO_VERSION */
+	uint64	output_id;			/* stable; must not be B_MULTI_OUTPUT_INVALID_ID */
+	uint32	connector_type;		/* B_MULTI_OUTPUT_CONNECTOR_* */
+	uint32	connection_state;	/* B_MULTI_OUTPUT_CONNECTION_* */
+	uint32	capabilities;		/* B_MULTI_OUTPUT_CAPABILITY_* */
+	uint32	reserved[4];			/* initialize to zero */
+	char	name[64];				/* diagnostic connector name */
+} accelerant_output_info;
+
 
 typedef struct {
 	void*	frame_buffer;				/* pointer to first byte of frame */
@@ -309,6 +376,31 @@ typedef status_t (*get_monitor_info)(monitor_info* info);
 typedef status_t (*get_edid_info)(void* info, uint32 size, uint32* _version);
 typedef status_t (*set_brightness)(float brightness);
 typedef status_t (*get_brightness)(float* brightness);
+
+/* Optional multi-output hook signatures. */
+typedef uint32 (*get_multi_output_count)(void);
+typedef status_t (*get_multi_output_info)(uint32 index,
+	accelerant_output_info* info);
+typedef uint32 (*get_multi_output_mode_count)(uint64 outputID);
+typedef status_t (*get_multi_output_mode_list)(uint64 outputID,
+	display_mode* modeList);
+typedef status_t (*get_multi_output_display_mode)(uint64 outputID,
+	display_mode* currentMode);
+typedef status_t (*set_multi_output_display_mode)(uint64 outputID,
+	display_mode* modeToSet);
+typedef status_t (*get_multi_output_frame_buffer_config)(uint64 outputID,
+	frame_buffer_config* frameBuffer);
+typedef status_t (*get_multi_output_edid_info)(uint64 outputID, void* info,
+	uint32 size, uint32* _version);
+typedef status_t (*get_multi_output_generation)(uint64* generation);
+typedef status_t (*present_multi_output)(uint64 outputID,
+	const fill_rect_params* damageRects, uint32 count);
+typedef status_t (*set_multi_output_cursor_shape)(uint64 outputID,
+	uint16 width, uint16 height, uint16 hotX, uint16 hotY,
+	const uint8* andMask, const uint8* xorMask);
+typedef status_t (*move_multi_output_cursor)(uint64 outputID, uint16 x,
+	uint16 y);
+typedef status_t (*show_multi_output_cursor)(uint64 outputID, bool isVisible);
 
 typedef sem_id (*accelerant_retrace_semaphore)(void);
 

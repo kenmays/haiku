@@ -17,6 +17,7 @@
 #include "AccelerantHWInterface.h"
 
 #include <new>
+#include <stddef.h>
 
 #include <dirent.h>
 #include <edid.h>
@@ -96,9 +97,18 @@ use_fail_safe_video_mode()
 //	#pragma mark - AccelerantHWInterface
 
 
-AccelerantHWInterface::AccelerantHWInterface()
+AccelerantHWInterface::AccelerantHWInterface(int32 deviceNumber,
+	const char* devicePath, uint64 outputID, bool useMultiOutput,
+	AccelerantHWInterface* sharedAccelerant)
 	:
 	HWInterface(),
+	fDeviceNumber(deviceNumber),
+	fDevicePath(devicePath != NULL ? devicePath : ""),
+	fOutputID(outputID),
+	fOutputCapabilities(0),
+	fUseMultiOutput(useMultiOutput),
+	fSharedAccelerant(sharedAccelerant),
+	fOwnsAccelerant(sharedAccelerant == NULL),
 	fCardFD(-1),
 	fAccelerantImage(-1),
 	fAccelerantHook(NULL),
@@ -116,6 +126,22 @@ AccelerantHWInterface::AccelerantHWInterface()
 	// optional accelerant hooks
 	fAccGetTimingConstraints(NULL),
 	fAccProposeDisplayMode(NULL),
+	fAccGetPreferredDisplayMode(NULL),
+	fAccGetMonitorInfo(NULL),
+	fAccGetMultiOutputCount(NULL),
+	fAccGetMultiOutputInfo(NULL),
+	fAccGetMultiOutputModeCount(NULL),
+	fAccGetMultiOutputModeList(NULL),
+	fAccGetMultiOutputDisplayMode(NULL),
+	fAccSetMultiOutputDisplayMode(NULL),
+	fAccGetMultiOutputFrameBufferConfig(NULL),
+	fAccGetMultiOutputEDIDInfo(NULL),
+	fAccGetMultiOutputGeneration(NULL),
+	fAccPresentMultiOutput(NULL),
+	fAccSetMultiOutputCursorShape(NULL),
+	fAccMoveMultiOutputCursor(NULL),
+	fAccShowMultiOutputCursor(NULL),
+	fAccGetEDIDInfo(NULL),
 	fAccSetCursorShape(NULL),
 	fAccSetCursorBitmap(NULL),
 	fAccMoveCursor(NULL),
@@ -148,6 +174,8 @@ AccelerantHWInterface::AccelerantHWInterface()
 	fFrontBuffer(new (nothrow) AccelerantBuffer()),
 
 	fInitialModeSwitch(true),
+	fHasDisplayMode(false),
+	fHasObservedOutputMode(false),
 
 	fRetraceSemaphore(-1),
 
@@ -189,6 +217,40 @@ AccelerantHWInterface::Initialize()
 		return B_NO_MEMORY;
 
 	if (ret >= B_OK) {
+		if (fSharedAccelerant != NULL)
+			return _CopyHooksFrom(fSharedAccelerant);
+
+		if (fDevicePath.Length() > 0) {
+			fCardFD = open(fDevicePath.String(), B_READ_WRITE);
+			if (fCardFD < 0)
+				return B_ENTRY_NOT_FOUND;
+
+			status_t status = _OpenAccelerant(fCardFD);
+			if (status != B_OK) {
+				close(fCardFD);
+				fCardFD = -1;
+				return status;
+			}
+			return B_OK;
+		}
+
+		if (fDeviceNumber >= 0) {
+			// ScreenManager creates one interface per enumerated device. Do not
+			// silently open the next device here, or multiple Screen objects can
+			// end up owning the same framebuffer.
+			fCardFD = _OpenGraphicsDevice(fDeviceNumber);
+			if (fCardFD < 0)
+				return fCardFD;
+
+			status_t status = _OpenAccelerant(fCardFD);
+			if (status != B_OK) {
+				close(fCardFD);
+				fCardFD = -1;
+				return status;
+			}
+			return B_OK;
+		}
+
 		for (int32 i = 0; fCardFD != B_ENTRY_NOT_FOUND; i++) {
 			fCardFD = _OpenGraphicsDevice(i);
 			if (fCardFD < 0) {
@@ -206,6 +268,39 @@ AccelerantHWInterface::Initialize()
 		return fCardFD >= 0 ? B_OK : fCardFD;
 	}
 	return ret;
+}
+
+
+/*! Returns the number of enumerated graphics device nodes. */
+int32
+AccelerantHWInterface::CountGraphicsDevices()
+{
+	int32 deviceCount = 0;
+	char path[PATH_MAX];
+	while (true) {
+		int32 count = 0;
+		if (!_RecursiveScan("/dev/graphics/", deviceCount, count, path))
+			break;
+		deviceCount++;
+	}
+	return deviceCount;
+}
+
+status_t
+AccelerantHWInterface::GetGraphicsDevicePath(int32 deviceNumber, BString& path)
+{
+	if (deviceNumber < 0)
+		return B_BAD_VALUE;
+	if (use_fail_safe_video_mode())
+		return B_ENTRY_NOT_FOUND;
+
+	int32 count = 0;
+	char devicePath[PATH_MAX];
+	if (!_RecursiveScan("/dev/graphics/", deviceNumber, count, devicePath))
+		return B_ENTRY_NOT_FOUND;
+
+	path = devicePath;
+	return B_OK;
 }
 
 
@@ -247,15 +342,12 @@ AccelerantHWInterface::_RecursiveScan(const char* directory, int deviceNumber, i
 
 /*!	Opens a graphics device for read-write access.
 
-	The \a deviceNumber is relative to the number of graphics devices that can
-	be opened. One represents the first card that can be opened (not necessarily
-	the first one listed in the directory).
+	The \a deviceNumber is a zero-based index into graphics device nodes,
+	excluding the VESA and framebuffer fallback devices. The legacy search mode
+	continues to later indices when a device cannot be opened; indexed mode
+	opens only the requested node so each Screen owns a distinct interface.
 
-	Graphics drivers must be able to be opened more than once, so we really get
-	the first working entry.
-
-	\param deviceNumber Number identifying which graphics card to open
-	       (1 for first card).
+	\param deviceNumber Zero-based graphics device index.
 
 	\return The file descriptor of the opened graphics device.
 */
@@ -266,14 +358,17 @@ AccelerantHWInterface::_OpenGraphicsDevice(int deviceNumber)
 	int count = 0;
 	if (!use_fail_safe_video_mode()) {
 		char path[PATH_MAX];
-		if (_RecursiveScan("/dev/graphics/", deviceNumber, count, path))
+		if (_RecursiveScan("/dev/graphics/", deviceNumber, count, path)) {
 			device = open(path, B_READ_WRITE);
+			if (device >= 0)
+				fDevicePath = path;
+		}
 	}
 
 	// Open VESA or Framebuffer driver if we were not able to get a better one.
-	if (device == -1 && count < deviceNumber) {
+	if (device == -1 && count < deviceNumber && fDeviceNumber < 0) {
 		device = open("/dev/graphics/vesa", B_READ_WRITE);
-		if (device > 0) {
+		if (device >= 0) {
 			// store the device, so that we can access the planar blitter
 			fVGADevice = device;
 		} else {
@@ -352,10 +447,285 @@ AccelerantHWInterface::_OpenAccelerant(int device)
 			uninitAccelerant();
 
 		unload_add_on(fAccelerantImage);
+		fAccelerantImage = -1;
+		fAccelerantHook = NULL;
 		return B_ERROR;
 	}
 
+	if (fUseMultiOutput && !_HasIndependentOutputHooks()) {
+		Shutdown();
+		return B_NOT_SUPPORTED;
+	}
+
+	if (_HasIndependentOutputHooks()) {
+		// This interface owns the device-wide accelerant session. It remains
+		// as the enumerator; ScreenManager creates output wrappers that share
+		// this hook table instead of calling init_accelerant() a second time.
+		if (!fUseMultiOutput) {
+			fOutputID = B_MULTI_OUTPUT_INVALID_ID;
+			fUseMultiOutput = true;
+		}
+
+		if (fOutputID != B_MULTI_OUTPUT_INVALID_ID) {
+			bool foundOutput = false;
+			uint32 count = MultiOutputCount();
+			for (uint32 i = 0; i < count; i++) {
+				accelerant_output_info info;
+				if (GetMultiOutputInfo(i, &info) != B_OK)
+					continue;
+				if (info.output_id == fOutputID
+					&& info.connection_state == B_MULTI_OUTPUT_CONNECTION_CONNECTED
+					&& (info.capabilities
+						& (B_MULTI_OUTPUT_CAPABILITY_INDEPENDENT_MODE
+							| B_MULTI_OUTPUT_CAPABILITY_FRAME_BUFFER))
+						== (B_MULTI_OUTPUT_CAPABILITY_INDEPENDENT_MODE
+							| B_MULTI_OUTPUT_CAPABILITY_FRAME_BUFFER)) {
+					foundOutput = true;
+					break;
+				}
+			}
+			if (!foundOutput) {
+				Shutdown();
+				return B_ENTRY_NOT_FOUND;
+			}
+		}
+	}
+
 	return B_OK;
+}
+
+
+status_t
+AccelerantHWInterface::_CopyHooksFrom(AccelerantHWInterface* shared)
+{
+	if (shared == NULL || shared->fAccelerantImage < 0
+		|| !shared->_HasIndependentOutputHooks() || !fUseMultiOutput
+		|| fOutputID == B_MULTI_OUTPUT_INVALID_ID) {
+		return B_NOT_SUPPORTED;
+	}
+
+	// The accelerant image and init_accelerant() state are device-wide. Copy
+	// the immutable hook table, but keep this output's mode list, front/back
+	// buffers, and drawing state local to the wrapper.
+	fAccelerantImage = shared->fAccelerantImage;
+	fAccelerantHook = shared->fAccelerantHook;
+	fAccGetModeCount = shared->fAccGetModeCount;
+	fAccGetModeList = shared->fAccGetModeList;
+	fAccGetFrameBufferConfig = shared->fAccGetFrameBufferConfig;
+	fAccSetDisplayMode = shared->fAccSetDisplayMode;
+	fAccGetDisplayMode = shared->fAccGetDisplayMode;
+	fAccGetPixelClockLimits = shared->fAccGetPixelClockLimits;
+	fAccGetTimingConstraints = shared->fAccGetTimingConstraints;
+	fAccProposeDisplayMode = shared->fAccProposeDisplayMode;
+	fAccGetPreferredDisplayMode = shared->fAccGetPreferredDisplayMode;
+	fAccGetMonitorInfo = shared->fAccGetMonitorInfo;
+	fAccGetMultiOutputCount = shared->fAccGetMultiOutputCount;
+	fAccGetMultiOutputInfo = shared->fAccGetMultiOutputInfo;
+	fAccGetMultiOutputModeCount = shared->fAccGetMultiOutputModeCount;
+	fAccGetMultiOutputModeList = shared->fAccGetMultiOutputModeList;
+	fAccGetMultiOutputDisplayMode = shared->fAccGetMultiOutputDisplayMode;
+	fAccSetMultiOutputDisplayMode = shared->fAccSetMultiOutputDisplayMode;
+	fAccGetMultiOutputFrameBufferConfig
+		= shared->fAccGetMultiOutputFrameBufferConfig;
+	fAccGetMultiOutputEDIDInfo = shared->fAccGetMultiOutputEDIDInfo;
+	fAccGetMultiOutputGeneration = shared->fAccGetMultiOutputGeneration;
+	fAccPresentMultiOutput = shared->fAccPresentMultiOutput;
+	fAccSetMultiOutputCursorShape = shared->fAccSetMultiOutputCursorShape;
+	fAccMoveMultiOutputCursor = shared->fAccMoveMultiOutputCursor;
+	fAccShowMultiOutputCursor = shared->fAccShowMultiOutputCursor;
+	fAccGetEDIDInfo = shared->fAccGetEDIDInfo;
+	fAccSetCursorShape = shared->fAccSetCursorShape;
+	fAccSetCursorBitmap = shared->fAccSetCursorBitmap;
+	fAccMoveCursor = shared->fAccMoveCursor;
+	fAccShowCursor = shared->fAccShowCursor;
+	fAccDPMSCapabilities = shared->fAccDPMSCapabilities;
+	fAccDPMSMode = shared->fAccDPMSMode;
+	fAccSetDPMSMode = shared->fAccSetDPMSMode;
+	fAccSetBrightness = shared->fAccSetBrightness;
+	fAccGetBrightness = shared->fAccGetBrightness;
+	fAccOverlayCount = shared->fAccOverlayCount;
+	fAccOverlaySupportedSpaces = shared->fAccOverlaySupportedSpaces;
+	fAccOverlaySupportedFeatures = shared->fAccOverlaySupportedFeatures;
+	fAccAllocateOverlayBuffer = shared->fAccAllocateOverlayBuffer;
+	fAccReleaseOverlayBuffer = shared->fAccReleaseOverlayBuffer;
+	fAccGetOverlayConstraints = shared->fAccGetOverlayConstraints;
+	fAccAllocateOverlay = shared->fAccAllocateOverlay;
+	fAccReleaseOverlay = shared->fAccReleaseOverlay;
+	fAccConfigureOverlay = shared->fAccConfigureOverlay;
+	fOwnsAccelerant = false;
+
+	bool foundOutput = false;
+	uint32 count = shared->MultiOutputCount();
+	for (uint32 i = 0; i < count; i++) {
+		accelerant_output_info info;
+		if (shared->GetMultiOutputInfo(i, &info) != B_OK)
+			return B_BUSY;
+		if (info.output_id == fOutputID
+			&& info.connection_state == B_MULTI_OUTPUT_CONNECTION_CONNECTED
+			&& (info.capabilities
+				& (B_MULTI_OUTPUT_CAPABILITY_INDEPENDENT_MODE
+					| B_MULTI_OUTPUT_CAPABILITY_FRAME_BUFFER))
+				== (B_MULTI_OUTPUT_CAPABILITY_INDEPENDENT_MODE
+					| B_MULTI_OUTPUT_CAPABILITY_FRAME_BUFFER)) {
+			fOutputCapabilities = info.capabilities;
+			foundOutput = true;
+			break;
+		}
+	}
+	if (!foundOutput) {
+		fAccelerantImage = -1;
+		fAccelerantHook = NULL;
+		return B_ENTRY_NOT_FOUND;
+	}
+
+	return B_OK;
+}
+
+
+status_t
+AccelerantHWInterface::CheckOutputModeChanged(bool* changed)
+{
+	if (changed == NULL)
+		return B_BAD_VALUE;
+	*changed = false;
+
+	if (!fUseMultiOutput || fOutputID == B_MULTI_OUTPUT_INVALID_ID
+		|| fAccGetMultiOutputDisplayMode == NULL) {
+		return B_NOT_SUPPORTED;
+	}
+
+	AutoReadLocker _(this);
+	display_mode currentMode;
+	status_t status = fAccGetMultiOutputDisplayMode(fOutputID, &currentMode);
+	if (status != B_OK)
+		return status;
+	if (!_IsValidMode(currentMode))
+		return B_BAD_DATA;
+
+	if (fHasDisplayMode && currentMode == fDisplayMode) {
+		fHasObservedOutputMode = false;
+		return B_OK;
+	}
+	if (fHasObservedOutputMode
+		&& currentMode == fLastObservedOutputMode) {
+		return B_OK;
+	}
+
+	fLastObservedOutputMode = currentMode;
+	fHasObservedOutputMode = true;
+	*changed = true;
+	return B_OK;
+}
+
+
+bool
+AccelerantHWInterface::_HasIndependentOutputHooks() const
+{
+	return HasMultiOutputEnumeration()
+		&& fAccGetMultiOutputModeCount != NULL
+		&& fAccGetMultiOutputModeList != NULL
+		&& fAccGetMultiOutputDisplayMode != NULL
+		&& fAccSetMultiOutputDisplayMode != NULL
+		&& fAccGetMultiOutputFrameBufferConfig != NULL;
+}
+
+
+bool
+AccelerantHWInterface::HasMultiOutputEnumeration() const
+{
+	return fAccGetMultiOutputCount != NULL && fAccGetMultiOutputInfo != NULL;
+}
+
+
+uint32
+AccelerantHWInterface::MultiOutputCount()
+{
+	AutoReadLocker _(this);
+	if (!HasMultiOutputEnumeration())
+		return 1;
+
+	// Connector counts come from a driver module. Bound them before callers
+	// allocate arrays or iterate, and treat an implausible count as corrupt.
+	uint32 count = fAccGetMultiOutputCount();
+	return count <= 256 ? count : 0;
+}
+
+
+status_t
+AccelerantHWInterface::GetMultiOutputInfo(uint32 index,
+	accelerant_output_info* info)
+{
+	AutoReadLocker _(this);
+	if (info == NULL)
+		return B_BAD_VALUE;
+	if (!HasMultiOutputEnumeration())
+		return B_NOT_SUPPORTED;
+
+	// Enumeration is a snapshot of a topology that can change while a monitor
+	// is being unplugged. When the accelerant exposes a generation counter,
+	// require the query to stay within one generation; otherwise compare the
+	// count before and after so a disappearing index is never returned as a
+	// valid, current output record.
+	uint64 generationBefore = 0;
+	bool hasGeneration = fAccGetMultiOutputGeneration != NULL;
+	if (hasGeneration) {
+		status_t status = fAccGetMultiOutputGeneration(&generationBefore);
+		if (status != B_OK)
+			return status;
+	}
+
+	uint32 countBefore = fAccGetMultiOutputCount();
+	if (countBefore > 256)
+		return B_BAD_DATA;
+	if (index >= countBefore)
+		return B_BAD_INDEX;
+
+	accelerant_output_info output;
+	memset(&output, 0, sizeof(output));
+	output.size = sizeof(output);
+	output.version = B_MULTI_OUTPUT_INFO_VERSION;
+
+	status_t status = fAccGetMultiOutputInfo(index, &output);
+	if (status != B_OK)
+		return status;
+
+	if (output.size < offsetof(accelerant_output_info, reserved)
+		|| output.size > sizeof(output)
+		|| output.version != B_MULTI_OUTPUT_INFO_VERSION
+		|| output.output_id == B_MULTI_OUTPUT_INVALID_ID) {
+		return B_BAD_DATA;
+	}
+	if (output.connection_state > B_MULTI_OUTPUT_CONNECTION_DISCONNECTED)
+		return B_BAD_DATA;
+
+	uint32 countAfter = fAccGetMultiOutputCount();
+	if (countBefore != countAfter || index >= countAfter)
+		return B_BUSY;
+
+	if (hasGeneration) {
+		uint64 generationAfter = 0;
+		status = fAccGetMultiOutputGeneration(&generationAfter);
+		if (status != B_OK)
+			return status;
+		if (generationBefore != generationAfter)
+			return B_BUSY;
+	}
+
+	*info = output;
+	return B_OK;
+}
+
+
+status_t
+AccelerantHWInterface::GetMultiOutputGeneration(uint64* generation)
+{
+	AutoReadLocker _(this);
+	if (generation == NULL)
+		return B_BAD_VALUE;
+	if (fAccGetMultiOutputGeneration == NULL)
+		return B_NOT_SUPPORTED;
+
+	return fAccGetMultiOutputGeneration(generation);
 }
 
 
@@ -390,6 +760,40 @@ AccelerantHWInterface::_SetupDefaultHooks()
 	fAccGetMonitorInfo
 		= (get_monitor_info)fAccelerantHook(B_GET_MONITOR_INFO, NULL);
 	fAccGetEDIDInfo = (get_edid_info)fAccelerantHook(B_GET_EDID_INFO, NULL);
+
+	// Optional independent-output hooks. A multi-output device is only
+	// activated per connector when the complete mode/framebuffer contract is
+	// present; metadata-only hooks must not create duplicate screens.
+	fAccGetMultiOutputCount = (get_multi_output_count)fAccelerantHook(
+		B_GET_MULTI_OUTPUT_COUNT, NULL);
+	fAccGetMultiOutputInfo = (get_multi_output_info)fAccelerantHook(
+		B_GET_MULTI_OUTPUT_INFO, NULL);
+	fAccGetMultiOutputModeCount = (get_multi_output_mode_count)fAccelerantHook(
+		B_GET_MULTI_OUTPUT_MODE_COUNT, NULL);
+	fAccGetMultiOutputModeList = (get_multi_output_mode_list)fAccelerantHook(
+		B_GET_MULTI_OUTPUT_MODE_LIST, NULL);
+	fAccGetMultiOutputDisplayMode
+		= (get_multi_output_display_mode)fAccelerantHook(
+			B_GET_MULTI_OUTPUT_DISPLAY_MODE, NULL);
+	fAccSetMultiOutputDisplayMode
+		= (set_multi_output_display_mode)fAccelerantHook(
+			B_SET_MULTI_OUTPUT_DISPLAY_MODE, NULL);
+	fAccGetMultiOutputFrameBufferConfig
+		= (get_multi_output_frame_buffer_config)fAccelerantHook(
+			B_GET_MULTI_OUTPUT_FRAME_BUFFER_CONFIG, NULL);
+	fAccGetMultiOutputEDIDInfo = (get_multi_output_edid_info)fAccelerantHook(
+		B_GET_MULTI_OUTPUT_EDID_INFO, NULL);
+	fAccGetMultiOutputGeneration = (get_multi_output_generation)fAccelerantHook(
+		B_GET_MULTI_OUTPUT_GENERATION, NULL);
+	fAccPresentMultiOutput = (present_multi_output)fAccelerantHook(
+		B_PRESENT_MULTI_OUTPUT, NULL);
+	fAccSetMultiOutputCursorShape
+		= (set_multi_output_cursor_shape)fAccelerantHook(
+			B_SET_MULTI_OUTPUT_CURSOR_SHAPE, NULL);
+	fAccMoveMultiOutputCursor = (move_multi_output_cursor)fAccelerantHook(
+		B_MOVE_MULTI_OUTPUT_CURSOR, NULL);
+	fAccShowMultiOutputCursor = (show_multi_output_cursor)fAccelerantHook(
+		B_SHOW_MULTI_OUTPUT_CURSOR, NULL);
 
 	// cursor
 	fAccSetCursorShape
@@ -440,6 +844,14 @@ AccelerantHWInterface::_UpdateHooksAfterModeChange()
 status_t
 AccelerantHWInterface::Shutdown()
 {
+	// Output wrappers borrow the device-wide accelerant image and hook table.
+	// Only the persistent enumerator is allowed to uninitialize or unload it.
+	if (!fOwnsAccelerant) {
+		fAccelerantImage = -1;
+		fAccelerantHook = NULL;
+		return B_OK;
+	}
+
 	if (fAccelerantHook != NULL) {
 		uninit_accelerant uninitAccelerant
 			= (uninit_accelerant)fAccelerantHook(B_UNINIT_ACCELERANT, NULL);
@@ -524,9 +936,12 @@ AccelerantHWInterface::_SetFallbackMode(display_mode& newMode) const
 	// At first, we search the closest display mode from the list of
 	// supported modes - if that fails, we just take one
 
-	if (_FindBestMode(newMode, 0, newMode) == B_OK
-		&& fAccSetDisplayMode(&newMode) == B_OK) {
-		return B_OK;
+	if (_FindBestMode(newMode, 0, newMode) == B_OK) {
+		status_t status = fUseMultiOutput
+			? fAccSetMultiOutputDisplayMode(fOutputID, &newMode)
+			: fAccSetDisplayMode(&newMode);
+		if (status == B_OK)
+			return B_OK;
 	}
 
 	// That failed as well, this looks like a bug in the graphics
@@ -535,7 +950,10 @@ AccelerantHWInterface::_SetFallbackMode(display_mode& newMode) const
 
 	for (int32 i = 0; i < fModeCount; i++) {
 		newMode = fModeList[i];
-		if (fAccSetDisplayMode(&newMode) == B_OK)
+		status_t status = fUseMultiOutput
+			? fAccSetMultiOutputDisplayMode(fOutputID, &newMode)
+			: fAccSetDisplayMode(&newMode);
+		if (status == B_OK)
 			return B_OK;
 	}
 
@@ -553,13 +971,19 @@ AccelerantHWInterface::SetMode(const display_mode& mode)
 	// error.
 
 	// prevent from doing the unnecessary
-	if (fModeCount > 0 && fFrontBuffer.IsSet() && fDisplayMode == mode) {
+	if (fHasDisplayMode && fModeCount > 0 && fFrontBuffer.IsSet()
+		&& fDisplayMode == mode) {
 		// TODO: better comparison of display modes
 		return B_OK;
 	}
 
 	// some safety checks
-	// TODO: more of those!
+	// Palette hooks are device-wide, so indexed color spaces are not safe on
+	// independently configured outputs.
+	if (fUseMultiOutput
+		&& (mode.space == B_CMAP8 || mode.space == B_GRAY8)) {
+		return B_UNSUPPORTED;
+	}
 	if (!_IsValidMode(mode))
 		return B_BAD_VALUE;
 
@@ -572,14 +996,17 @@ AccelerantHWInterface::SetMode(const display_mode& mode)
 	display_mode newMode = mode;
 
 	status_t status = B_ERROR;
-	if (!use_fail_safe_video_mode() || !fInitialModeSwitch)
-		status = fAccSetDisplayMode(&newMode);
+	if (!use_fail_safe_video_mode() || !fInitialModeSwitch) {
+		status = fUseMultiOutput
+			? fAccSetMultiOutputDisplayMode(fOutputID, &newMode)
+			: fAccSetDisplayMode(&newMode);
+	}
 	if (status != B_OK) {
 		ATRACE(("setting display mode failed\n"));
 		if (!fInitialModeSwitch)
 			return status;
 
-		if (fModeList == NULL) {
+		if (fModeList == NULL || fModeCount <= 0) {
 			status = _UpdateModeList();
 			if (status != B_OK)
 				return status;
@@ -596,7 +1023,10 @@ AccelerantHWInterface::SetMode(const display_mode& mode)
 			// all.
 			// All we can do now is to ask the driver which mode we can
 			// use - this is always necessary for VESA mode, for example.
-			if (fAccGetDisplayMode(&newMode) != B_OK)
+			status = fUseMultiOutput
+				? fAccGetMultiOutputDisplayMode(fOutputID, &newMode)
+				: fAccGetDisplayMode(&newMode);
+			if (status != B_OK)
 				return B_ERROR;
 
 			// TODO: check if the mode returned is valid!
@@ -609,6 +1039,10 @@ AccelerantHWInterface::SetMode(const display_mode& mode)
 		}
 	}
 
+	// The driver mode has changed, but local framebuffer state is not
+	// valid until all output-specific buffers have been rebuilt below.
+	fHasDisplayMode = false;
+	fHasObservedOutputMode = false;
 	fDisplayMode = newMode;
 	fInitialModeSwitch = false;
 
@@ -622,14 +1056,18 @@ AccelerantHWInterface::SetMode(const display_mode& mode)
 
 	// Update the frame buffer used by the on-screen KDL
 #ifndef HAIKU_TARGET_PLATFORM_LIBBE_TEST
-	uint32 depth = (fFrameBufferConfig.bytes_per_row
-		/ fFrontBuffer->Width()) << 3;
-	if (fDisplayMode.space == B_RGB15)
-		depth = 15;
+	// The kernel debugger has a single global framebuffer. Updating it for
+	// every connector would make the last configured output steal the console.
+	if (!fUseMultiOutput) {
+		uint32 depth = (fFrameBufferConfig.bytes_per_row
+			/ fFrontBuffer->Width()) << 3;
+		if (fDisplayMode.space == B_RGB15)
+			depth = 15;
 
-	_kern_frame_buffer_update((addr_t)fFrameBufferConfig.frame_buffer,
-		fFrontBuffer->Width(), fFrontBuffer->Height(),
-		depth, fFrameBufferConfig.bytes_per_row);
+		_kern_frame_buffer_update((addr_t)fFrameBufferConfig.frame_buffer,
+			fFrontBuffer->Width(), fFrontBuffer->Height(),
+			depth, fFrameBufferConfig.bytes_per_row);
+	}
 #endif
 
 	_UpdateHooksAfterModeChange();
@@ -664,6 +1102,11 @@ AccelerantHWInterface::SetMode(const display_mode& mode)
 	else if (fDisplayMode.space == B_GRAY8)
 		_SetGrayscalePalette();
 
+	// Mark the cached mode valid only after the framebuffer and backbuffer
+	// have both been rebuilt successfully.
+	fHasDisplayMode = true;
+	fHasObservedOutputMode = false;
+
 	// notify all listeners about the mode change
 	_NotifyFrameBufferChanged();
 
@@ -684,18 +1127,55 @@ AccelerantHWInterface::GetMode(display_mode* mode)
 status_t
 AccelerantHWInterface::_UpdateModeList()
 {
-	fModeCount = fAccGetModeCount();
-	if (fModeCount <= 0)
-		return B_ERROR;
-
+	// Invalidate the old cache before querying: a disconnected output may now
+	// advertise zero modes, and retaining its old list would expose stale
+	// timings after a hot-unplug or mode-generation change.
 	delete[] fModeList;
-	fModeList = new(nothrow) display_mode[fModeCount];
-	if (!fModeList)
-		return B_NO_MEMORY;
+	fModeList = NULL;
+	fModeCount = 0;
 
-	if (fAccGetModeList(fModeList) != B_OK) {
+	uint32 modeCount = fUseMultiOutput
+		? fAccGetMultiOutputModeCount(fOutputID) : fAccGetModeCount();
+	// Mode counts are driver-provided. Keep allocation and downstream loops
+	// bounded even if an accelerant returns a corrupt value.
+	if (modeCount == 0 || modeCount > 4096)
+		return B_BAD_DATA;
+	fModeCount = (int32)modeCount;
+
+	fModeList = new(nothrow) display_mode[fModeCount];
+	if (!fModeList) {
+		fModeCount = 0;
+		return B_NO_MEMORY;
+	}
+
+	status_t status = fUseMultiOutput
+		? fAccGetMultiOutputModeList(fOutputID, fModeList)
+		: fAccGetModeList(fModeList);
+	if (status != B_OK) {
 		ATRACE(("unable to get mode list\n"));
-		return B_ERROR;
+		delete[] fModeList;
+		fModeList = NULL;
+		fModeCount = 0;
+		return status;
+	}
+
+	if (fUseMultiOutput) {
+		// Palette programming still uses device-wide legacy hooks. Exclude
+		// indexed modes until the accelerant exposes output-specific palettes.
+		int32 validCount = 0;
+		for (int32 i = 0; i < fModeCount; i++) {
+			if (fModeList[i].space == B_CMAP8
+				|| fModeList[i].space == B_GRAY8) {
+				continue;
+			}
+			fModeList[validCount++] = fModeList[i];
+		}
+		fModeCount = validCount;
+		if (fModeCount == 0) {
+			delete[] fModeList;
+			fModeList = NULL;
+			return B_NOT_SUPPORTED;
+		}
 	}
 
 	return B_OK;
@@ -705,9 +1185,16 @@ AccelerantHWInterface::_UpdateModeList()
 status_t
 AccelerantHWInterface::_UpdateFrameBufferConfig()
 {
-	if (fAccGetFrameBufferConfig(&fFrameBufferConfig) != B_OK) {
+	status_t status = fUseMultiOutput
+		? fAccGetMultiOutputFrameBufferConfig(fOutputID, &fFrameBufferConfig)
+		: fAccGetFrameBufferConfig(&fFrameBufferConfig);
+	if (status != B_OK) {
 		ATRACE(("unable to get frame buffer config\n"));
-		return B_ERROR;
+		return status;
+	}
+	if (fFrameBufferConfig.frame_buffer == NULL
+		|| fFrameBufferConfig.bytes_per_row == 0) {
+		return B_BAD_DATA;
 	}
 
 	fFrontBuffer->SetFrameBufferConfig(fFrameBufferConfig);
@@ -741,7 +1228,7 @@ AccelerantHWInterface::GetModeList(display_mode** _modes, uint32* _count)
 
 	status_t status = B_OK;
 
-	if (fModeList == NULL)
+	if (fModeList == NULL || fModeCount <= 0)
 		status = _UpdateModeList();
 
 	if (status >= B_OK) {
@@ -766,6 +1253,8 @@ AccelerantHWInterface::GetPixelClockLimits(display_mode *mode, uint32* _low,
 		return B_BAD_VALUE;
 
 	AutoReadLocker _(this);
+	if (fUseMultiOutput)
+		return B_UNSUPPORTED;
 	return fAccGetPixelClockLimits(mode, _low, _high);
 }
 
@@ -779,6 +1268,8 @@ AccelerantHWInterface::GetTimingConstraints(
 
 	AutoReadLocker _(this);
 
+	if (fUseMultiOutput)
+		return B_UNSUPPORTED;
 	if (fAccGetTimingConstraints)
 		return fAccGetTimingConstraints(constraints);
 
@@ -795,7 +1286,7 @@ AccelerantHWInterface::ProposeMode(display_mode* candidate,
 
 	AutoReadLocker _(this);
 
-	if (fAccProposeDisplayMode == NULL)
+	if (fUseMultiOutput || fAccProposeDisplayMode == NULL)
 		return B_UNSUPPORTED;
 
 	// avoid const issues
@@ -810,6 +1301,29 @@ AccelerantHWInterface::ProposeMode(display_mode* candidate,
 status_t
 AccelerantHWInterface::GetPreferredMode(display_mode* preferredMode)
 {
+	if (preferredMode == NULL)
+		return B_BAD_VALUE;
+
+	if (fUseMultiOutput) {
+		// The legacy preferred-mode hook is device-wide and may describe a
+		// different connector. Prefer this output's current mode; if it cannot
+		// be queried yet, use the first mode advertised for this output.
+		status_t status = fAccGetMultiOutputDisplayMode(fOutputID,
+			preferredMode);
+		if (status == B_OK && _IsValidMode(*preferredMode))
+			return B_OK;
+
+		if (fModeList == NULL) {
+			status = _UpdateModeList();
+			if (status != B_OK)
+				return status;
+		}
+		if (fModeCount <= 0)
+			return B_ERROR;
+		*preferredMode = fModeList[0];
+		return B_OK;
+	}
+
 	status_t status = B_NOT_SUPPORTED;
 
 	if (fAccGetPreferredDisplayMode != NULL) {
@@ -895,20 +1409,28 @@ AccelerantHWInterface::GetPreferredMode(display_mode* preferredMode)
 status_t
 AccelerantHWInterface::GetMonitorInfo(monitor_info* info)
 {
-	status_t status = B_NOT_SUPPORTED;
+	if (info == NULL)
+		return B_BAD_VALUE;
 
-	if (fAccGetMonitorInfo != NULL) {
+	status_t status = B_NOT_SUPPORTED;
+	if (!fUseMultiOutput && fAccGetMonitorInfo != NULL) {
 		status = fAccGetMonitorInfo(info);
 		if (status == B_OK)
 			return B_OK;
 	}
 
-	if (fAccGetEDIDInfo == NULL)
-		return status;
-
 	edid1_info edid;
 	uint32 version;
-	status = fAccGetEDIDInfo(&edid, sizeof(edid), &version);
+	if (fUseMultiOutput) {
+		if (fAccGetMultiOutputEDIDInfo == NULL)
+			return B_NOT_SUPPORTED;
+		status = fAccGetMultiOutputEDIDInfo(fOutputID, &edid, sizeof(edid),
+			&version);
+	} else {
+		if (fAccGetEDIDInfo == NULL)
+			return status;
+		status = fAccGetEDIDInfo(&edid, sizeof(edid), &version);
+	}
 	if (status < B_OK)
 		return status;
 	if (version != EDID_VERSION_1)
@@ -1007,6 +1529,10 @@ AccelerantHWInterface::SetDPMSMode(uint32 state)
 {
 	AutoWriteLocker _(this);
 
+	// Legacy DPMS is device-wide; do not blank every connector when one
+	// independent output is being configured.
+	if (fUseMultiOutput)
+		return B_UNSUPPORTED;
 	if (!fAccSetDPMSMode)
 		return B_UNSUPPORTED;
 
@@ -1019,6 +1545,8 @@ AccelerantHWInterface::DPMSMode()
 {
 	AutoReadLocker _(this);
 
+	if (fUseMultiOutput)
+		return B_UNSUPPORTED;
 	if (!fAccDPMSMode)
 		return B_UNSUPPORTED;
 
@@ -1031,6 +1559,8 @@ AccelerantHWInterface::DPMSCapabilities()
 {
 	AutoReadLocker _(this);
 
+	if (fUseMultiOutput)
+		return 0;
 	if (!fAccDPMSCapabilities)
 		return B_UNSUPPORTED;
 
@@ -1043,6 +1573,8 @@ AccelerantHWInterface::SetBrightness(float brightness)
 {
 	AutoReadLocker _(this);
 
+	if (fUseMultiOutput)
+		return B_UNSUPPORTED;
 	if (!fAccSetBrightness)
 		return B_UNSUPPORTED;
 
@@ -1055,6 +1587,8 @@ AccelerantHWInterface::GetBrightness(float* brightness)
 {
 	AutoReadLocker _(this);
 
+	if (fUseMultiOutput)
+		return B_UNSUPPORTED;
 	if (!fAccGetBrightness)
 		return B_UNSUPPORTED;
 
@@ -1099,6 +1633,8 @@ AccelerantHWInterface::GetDriverPath(BString& string)
 overlay_token
 AccelerantHWInterface::AcquireOverlayChannel()
 {
+	if (fUseMultiOutput)
+		return NULL;
 	if (fAccAllocateOverlay == NULL
 		|| fAccReleaseOverlay == NULL)
 		return NULL;
@@ -1126,6 +1662,8 @@ status_t
 AccelerantHWInterface::GetOverlayRestrictions(const Overlay* overlay,
 	overlay_restrictions* restrictions)
 {
+	if (fUseMultiOutput)
+		return B_NOT_SUPPORTED;
 	if (overlay == NULL || restrictions == NULL)
 		return B_BAD_VALUE;
 	if (fAccGetOverlayConstraints == NULL)
@@ -1154,6 +1692,8 @@ bool
 AccelerantHWInterface::CheckOverlayRestrictions(int32 width, int32 height,
 	color_space colorSpace)
 {
+	if (fUseMultiOutput)
+		return false;
 	if (fAccOverlaySupportedSpaces == NULL
 		|| fAccGetOverlayConstraints == NULL
 		|| fAccAllocateOverlayBuffer == NULL
@@ -1184,7 +1724,7 @@ const overlay_buffer*
 AccelerantHWInterface::AllocateOverlayBuffer(int32 width, int32 height,
 	color_space space)
 {
-	if (fAccAllocateOverlayBuffer == NULL)
+	if (fUseMultiOutput || fAccAllocateOverlayBuffer == NULL)
 		return NULL;
 
 	return fAccAllocateOverlayBuffer(space, width, height);
@@ -1194,7 +1734,7 @@ AccelerantHWInterface::AllocateOverlayBuffer(int32 width, int32 height,
 void
 AccelerantHWInterface::FreeOverlayBuffer(const overlay_buffer* buffer)
 {
-	if (buffer == NULL || fAccReleaseOverlayBuffer == NULL)
+	if (fUseMultiOutput || buffer == NULL || fAccReleaseOverlayBuffer == NULL)
 		return;
 
 	fAccReleaseOverlayBuffer(buffer);
@@ -1204,6 +1744,8 @@ AccelerantHWInterface::FreeOverlayBuffer(const overlay_buffer* buffer)
 void
 AccelerantHWInterface::ConfigureOverlay(Overlay* overlay)
 {
+	if (fUseMultiOutput || overlay == NULL || fAccConfigureOverlay == NULL)
+		return;
 	// TODO: this only needs to be done on mode changes!
 	overlay->SetColorSpace(fDisplayMode.space);
 
@@ -1215,6 +1757,8 @@ AccelerantHWInterface::ConfigureOverlay(Overlay* overlay)
 void
 AccelerantHWInterface::HideOverlay(Overlay* overlay)
 {
+	if (fUseMultiOutput || overlay == NULL || fAccConfigureOverlay == NULL)
+		return;
 	fAccConfigureOverlay(overlay->OverlayToken(), overlay->OverlayBuffer(),
 		NULL, NULL);
 }
@@ -1227,7 +1771,18 @@ void
 AccelerantHWInterface::SetCursor(ServerCursor* cursor)
 {
 	// cursor should never be NULL, but let us be safe!!
-	if (cursor == NULL || LockExclusiveAccess() == false)
+	if (cursor == NULL)
+		return;
+
+	// Hardware cursors are currently device-global on the legacy accelerant
+	// interface. Use the software cursor for independent outputs so each
+	// framebuffer gets a correctly clipped cursor in its own pixel space.
+	if (fUseMultiOutput) {
+		HWInterface::SetCursor(cursor);
+		return;
+	}
+
+	if (LockExclusiveAccess() == false)
 		return;
 
 	bool cursorSet = false;
@@ -1317,6 +1872,8 @@ void
 AccelerantHWInterface::SetCursorVisible(bool visible)
 {
 	HWInterface::SetCursorVisible(visible);
+	if (fUseMultiOutput)
+		return;
 
 	if (fHardwareCursorEnabled && LockExclusiveAccess()) {
 		if (fAccShowCursor != NULL)
@@ -1332,7 +1889,13 @@ AccelerantHWInterface::SetCursorVisible(bool visible)
 void
 AccelerantHWInterface::MoveCursorTo(float x, float y)
 {
+	// Desktop has already converted global logical coordinates to this
+	// output's physical pixel coordinates before calling MoveCursorTo().
+	// Keep the software cursor output-local and avoid the legacy device-wide
+	// hardware cursor hook.
 	HWInterface::MoveCursorTo(x, y);
+	if (fUseMultiOutput)
+		return;
 
 	if (fHardwareCursorEnabled && LockExclusiveAccess()) {
 		if (fAccMoveCursor != NULL)
@@ -1375,7 +1938,34 @@ AccelerantHWInterface::IsDoubleBuffered() const
 void
 AccelerantHWInterface::_CopyBackToFront(/*const*/ BRegion& region)
 {
-	return HWInterface::_CopyBackToFront(region);
+	HWInterface::_CopyBackToFront(region);
+
+	// Some independent-output backends require an explicit present/commit
+	// after CPU rendering. The damage region is already framebuffer-local.
+	// Use a private parameter array here: the shared accelerant scratch arrays
+	// can be in use by another drawing transaction on this interface.
+	if (!fUseMultiOutput || fAccPresentMultiOutput == NULL
+		|| (fOutputCapabilities & B_MULTI_OUTPUT_CAPABILITY_PRESENT) == 0)
+		return;
+
+	int32 rectCount = region.CountRects();
+	if (rectCount <= 0)
+		return;
+
+	fill_rect_params* rects = new(nothrow) fill_rect_params[rectCount];
+	if (rects == NULL)
+		return;
+
+	for (int32 i = 0; i < rectCount; i++) {
+		clipping_rect rect = region.RectAtInt(i);
+		rects[i].left = (uint16)rect.left;
+		rects[i].top = (uint16)rect.top;
+		rects[i].right = (uint16)rect.right;
+		rects[i].bottom = (uint16)rect.bottom;
+	}
+
+	fAccPresentMultiOutput(fOutputID, rects, rectCount);
+	delete[] rects;
 }
 
 

@@ -29,6 +29,7 @@
 
 
 class Window;
+class Screen;
 
 
 typedef	BObjectList<Window>	StackWindows;
@@ -109,6 +110,9 @@ public:
 			bool				ReloadDecor();
 
 			void				SetScreen(const ::Screen* screen);
+			// Temporarily bind the shared engine between drawing transactions
+			// without changing the window's logical screen assignment.
+			bool				BindDrawingEngineOutput(const ::Screen* screen);
 			const ::Screen*		Screen() const;
 
 			// setting and getting the "hard" clipping, you need to have
@@ -328,6 +332,8 @@ protected:
 			// different types of drawing
 			void				_TriggerContentRedraw(BRegion& dirty,
 									const BRegion& expose = BRegion());
+			bool				_SetDrawingEngineOutput(const ::Screen* screen,
+									DrawingEngine* engine = NULL);
 			void				_DrawBorder();
 
 			// handling update sessions

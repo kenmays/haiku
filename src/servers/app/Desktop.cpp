@@ -22,6 +22,7 @@
 #include "Desktop.h"
 
 #include <stdio.h>
+#include <math.h>
 #include <string.h>
 #include <syslog.h>
 
@@ -265,6 +266,8 @@ MouseFilter::Filter(BMessage* message, EventTarget** _target, int32* _viewToken,
 	BPoint where;
 	if (message->FindPoint("where", &where) != B_OK)
 		return B_DISPATCH_MESSAGE;
+
+	fDesktop->UpdateCursorPosition(where);
 
 	int32 buttons;
 	if (message->FindInt32("buttons", &buttons) != B_OK)
@@ -544,8 +547,10 @@ Desktop::Init()
 	if (fSettings->DefaultPlainFont() == *gFontManager->DefaultPlainFont()
 			&& !fSettings->DidLoadFontSettings()) {
 		float fontSize = fSettings->DefaultPlainFont().Size();
-		gScreenManager->Lock();
-		Screen* screen = gScreenManager->ScreenAt(0);
+		// ScreenManager also keeps a non-rendering accelerant enumerator for
+		// multi-output devices. Use the active virtual screen here rather than
+		// assuming its first manager entry is a display output.
+		Screen* screen = fVirtualScreen.ScreenAt(0);
 		if (screen != NULL) {
 			display_mode mode;
 			screen->GetMode(mode);
@@ -555,7 +560,6 @@ Desktop::Init()
 			else if (mode.virtual_width > 1920 && mode.virtual_height > 1080)
 				fontSize *= 1.5f;
 		}
-		gScreenManager->Unlock();
 
 		// modify settings without saving them
 		const_cast<ServerFont&>(fSettings->DefaultPlainFont()).SetSize(fontSize);
@@ -577,15 +581,25 @@ Desktop::Init()
 
 	fCursorManager.InitializeCursors(fSettings->DefaultBoldFont().Size() / 12.0f);
 
-	fVirtualScreen.HWInterface()->MoveCursorTo(
-		fVirtualScreen.Frame().Width() / 2,
-		fVirtualScreen.Frame().Height() / 2);
+
 
 #if TEST_MODE
 	gInputManager->AddStream(new InputServerStream);
 #endif
 
-	EventStream* stream = fVirtualScreen.HWInterface()->CreateEventStream();
+	// A per-device event stream cannot aggregate input across several
+	// graphics devices, and its coordinates are origin-relative. Keep it only
+	// for a single output at (0, 0); otherwise use the input server's global
+	// stream so pointer coordinates match the logical desktop.
+	EventStream* stream = NULL;
+	BRect firstScreenFrame = fVirtualScreen.ScreenFrameAt(0);
+	if (fVirtualScreen.CountScreens() == 1
+		&& firstScreenFrame.IsValid()
+		&& firstScreenFrame.left == 0.0f
+		&& firstScreenFrame.top == 0.0f
+		&& fVirtualScreen.HWInterface() != NULL) {
+		stream = fVirtualScreen.HWInterface()->CreateEventStream();
+	}
 	if (stream == NULL)
 		stream = gInputManager->GetStream();
 
@@ -599,9 +613,15 @@ Desktop::Init()
 	fEventDispatcher.SetMouseFilter(new MouseFilter(this));
 	fEventDispatcher.SetKeyboardFilter(new KeyboardFilter(this));
 
-	// draw the background
-
-	fScreenRegion = fVirtualScreen.Frame();
+	// Build the drawable desktop region from individual outputs. The bounds
+	// rectangle may include gaps between monitors and must not be used as a
+	// substitute for the union of output frames.
+	fScreenRegion.MakeEmpty();
+	for (int32 i = 0; i < fVirtualScreen.CountScreens(); i++) {
+		BRect frame = fVirtualScreen.ScreenFrameAt(i);
+		if (frame.IsValid())
+			fScreenRegion.Include(frame);
+	}
 
 	BRegion stillAvailableOnScreen;
 	_RebuildClippingForAllWindows(stillAvailableOnScreen);
@@ -610,7 +630,13 @@ Desktop::Init()
 	SetCursor(NULL);
 		// this will set the default cursor
 
-	fVirtualScreen.HWInterface()->SetCursorVisible(true);
+	BRect initialScreenFrame = fVirtualScreen.ScreenFrameAt(0);
+	if (initialScreenFrame.IsValid()) {
+		fLastMousePosition.Set(
+			(initialScreenFrame.left + initialScreenFrame.right) / 2,
+			(initialScreenFrame.top + initialScreenFrame.bottom) / 2);
+		UpdateCursorPosition(fLastMousePosition);
+	}
 
 	return B_OK;
 }
@@ -714,8 +740,13 @@ Desktop::SetCursor(ServerCursor* newCursor)
 
 	fCursor.SetTo(newCursor, false);
 
-	if (!fManagementCursor.IsSet())
-		HWInterface()->SetCursor(newCursor);
+	if (!fManagementCursor.IsSet()) {
+		for (int32 i = 0; i < fVirtualScreen.CountScreens(); i++) {
+			Screen* screen = fVirtualScreen.ScreenAt(i);
+			if (screen != NULL && screen->HWInterface() != NULL)
+				screen->HWInterface()->SetCursor(newCursor);
+		}
+	}
 }
 
 
@@ -736,7 +767,38 @@ Desktop::SetManagementCursor(ServerCursor* newCursor)
 
 	fManagementCursor.SetTo(newCursor, false);
 
-	HWInterface()->SetCursor(newCursor != NULL ? newCursor : fCursor.Get());
+	ServerCursor* cursor = newCursor != NULL ? newCursor : fCursor.Get();
+	for (int32 i = 0; i < fVirtualScreen.CountScreens(); i++) {
+		Screen* screen = fVirtualScreen.ScreenAt(i);
+		if (screen != NULL && screen->HWInterface() != NULL)
+			screen->HWInterface()->SetCursor(cursor);
+	}
+}
+
+
+void
+Desktop::UpdateCursorPosition(const BPoint& position)
+{
+	AutoReadLocker _(fScreenLock);
+	Screen* targetScreen = fVirtualScreen.ScreenAtPoint(position);
+
+	for (int32 i = 0; i < fVirtualScreen.CountScreens(); i++) {
+		Screen* screen = fVirtualScreen.ScreenAt(i);
+		if (screen == NULL || screen->HWInterface() == NULL)
+			continue;
+
+		if (screen != targetScreen) {
+			screen->HWInterface()->SetCursorVisible(false);
+			continue;
+		}
+
+		BPoint pixel;
+		if (fVirtualScreen.GlobalToScreenPixel(screen, position, pixel) == B_OK) {
+			screen->HWInterface()->MoveCursorTo(pixel.x, pixel.y);
+			screen->HWInterface()->SetCursorVisible(true);
+		} else
+			screen->HWInterface()->SetCursorVisible(false);
+	}
 }
 
 
@@ -765,6 +827,49 @@ Desktop::GetLastMouseState(BPoint* position, int32* buttons) const
 
 
 //	#pragma mark - Screen methods
+
+
+status_t
+Desktop::SetScreenScale(int32 id, float scale)
+{
+	AutoWriteLocker windowLocker(fWindowLock);
+	AutoWriteLocker screenLocker(fScreenLock);
+
+	Screen* screen = fVirtualScreen.ScreenByID(id);
+	if (screen == NULL)
+		return B_NAME_NOT_FOUND;
+
+	int32 index = -1;
+	for (int32 i = 0; i < fVirtualScreen.CountScreens(); i++) {
+		if (fVirtualScreen.ScreenAt(i) == screen) {
+			index = i;
+			break;
+		}
+	}
+	if (index < 0)
+		return B_ENTRY_NOT_FOUND;
+
+	status_t status = fVirtualScreen.SetScreenScale(index, scale);
+	if (status != B_OK)
+		return status;
+
+	// Persist the resulting logical frame. The mode remains a physical pixel
+	// mode; scale changes logical geometry only.
+	display_mode mode;
+	screen->GetMode(mode);
+	monitor_info info;
+	bool hasInfo = screen->GetMonitorInfo(info) == B_OK;
+	BRect frame = fVirtualScreen.ScreenFrameAt(index);
+	fWorkspaces[fCurrentWorkspace].CurrentScreenConfiguration().Set(id,
+		hasInfo ? &info : NULL, frame, mode);
+	fWorkspaces[fCurrentWorkspace].StoredScreenConfiguration().Set(id,
+		hasInfo ? &info : NULL, frame, mode);
+	StoreWorkspaceConfiguration(fCurrentWorkspace);
+
+	screenLocker.Unlock();
+	_ScreenChanged(screen);
+	return B_OK;
+}
 
 
 status_t
@@ -1530,6 +1635,10 @@ Desktop::MoveWindowBy(Window* window, float x, float y, int32 workspace)
 		return;
 	}
 
+	// Remember the source output before moving. A cross-output move cannot
+	// safely blit between unrelated framebuffers; it must be repainted.
+	const Screen* previousScreen = window->Screen();
+
 	// the dirty region starts with the visible area of the window being moved
 	BRegion newDirtyRegion(window->VisibleRegion());
 
@@ -1556,15 +1665,51 @@ Desktop::MoveWindowBy(Window* window, float x, float y, int32 workspace)
 	// moved into the dirty region (for now)
 	newDirtyRegion.Include(&window->VisibleRegion());
 
-	// NOTE: Having all windows locked should prevent any
-	// problems with locking the drawing engine here.
-	if (GetDrawingEngine()->LockParallelAccess()) {
-		GetDrawingEngine()->CopyRegion(&copyRegion, (int32)x, (int32)y);
-		GetDrawingEngine()->UnlockParallelAccess();
+	// A same-output move can use the window's output-bound drawing engine.
+	// Restrict the blit to that output's framebuffer; a window's visible region
+	// may span several outputs even though its current renderer targets one.
+	bool canBlit = false;
+	if (previousScreen != NULL && window->Screen() == previousScreen) {
+		for (int32 i = 0; i < fVirtualScreen.CountScreens(); i++) {
+			if (fVirtualScreen.ScreenAt(i) != previousScreen)
+				continue;
+
+			BRect frame = fVirtualScreen.ScreenFrameAt(i);
+			if (fVirtualScreen.ScreenScaleAt(i) == 1.0f
+				&& frame.IsValid()
+				&& frame.left == floorf(frame.left)
+				&& frame.top == floorf(frame.top)
+				&& (double)frame.left >= -2147483647.0
+				&& (double)frame.left <= 2147483647.0
+				&& (double)frame.top >= -2147483647.0
+				&& (double)frame.top <= 2147483647.0) {
+				BRegion outputBounds(frame);
+				copyRegion.IntersectWith(&outputBounds);
+
+				// Only blit source pixels whose translated destination also
+				// remains inside this output's framebuffer.
+				BRegion destinationSourceBounds(frame);
+				destinationSourceBounds.OffsetBy(-(int32)x, -(int32)y);
+				copyRegion.IntersectWith(&destinationSourceBounds);
+				canBlit = true;
+			}
+			break;
+		}
 	}
 
-	// in the dirty region, exclude the parts that we
-	// could move by blitting
+	bool copied = false;
+	if (canBlit && copyRegion.CountRects() > 0) {
+		DrawingEngine* engine = window->GetDrawingEngine();
+		if (engine != NULL && engine->LockParallelAccess()) {
+			engine->CopyRegion(&copyRegion, (int32)x, (int32)y);
+			engine->UnlockParallelAccess();
+			copied = true;
+		}
+	}
+	if (!copied)
+		copyRegion.MakeEmpty();
+
+	// Exclude only pixels that were actually moved by blitting.
 	copyRegion.OffsetBy((int32)x, (int32)y);
 	newDirtyRegion.Exclude(&copyRegion);
 
@@ -2227,9 +2372,20 @@ Desktop::MarkDirty(BRegion& dirtyRegion, BRegion& exposeRegion)
 	if (dirtyRegion.CountRects() == 0)
 		return;
 
+	// The virtual desktop's bounding frame can contain gaps between outputs.
+	// Clip a local copy to the union of output frames, preserving the caller's
+	// regions and preventing off-output damage from entering window updates.
+	BRegion screenDirty(dirtyRegion);
+	screenDirty.IntersectWith(&fScreenRegion);
+	if (screenDirty.CountRects() == 0)
+		return;
+
+	BRegion screenExpose(exposeRegion);
+	screenExpose.IntersectWith(&fScreenRegion);
+
 	if (LockAllWindows()) {
-		// send redraw messages to all windows intersecting the dirty region
-		_TriggerWindowRedrawing(dirtyRegion, exposeRegion);
+		// send redraw messages to all windows intersecting drawable screen area
+		_TriggerWindowRedrawing(screenDirty, screenExpose);
 
 		UnlockAllWindows();
 	}
@@ -2239,7 +2395,8 @@ Desktop::MarkDirty(BRegion& dirtyRegion, BRegion& exposeRegion)
 void
 Desktop::Redraw()
 {
-	BRegion dirty(fVirtualScreen.Frame());
+	// Redraw only real output rectangles; Frame() is merely their bounding box.
+	BRegion dirty(fScreenRegion);
 	MarkDirty(dirty);
 }
 
@@ -3477,8 +3634,21 @@ Desktop::_DetermineScreenFor(BRect frame)
 {
 	AutoReadLocker _(fScreenLock);
 
-	// TODO: choose the screen depending on where most of the area is
-	return fVirtualScreen.ScreenAt(0);
+	if (!frame.IsValid())
+		return fVirtualScreen.ScreenAt(0);
+
+	// Prefer the output covered by the largest portion of the window. The
+	// scene model owns this geometry policy so it can be tested independently.
+	Screen* screen = fVirtualScreen.ScreenForFrame(frame);
+	if (screen != NULL)
+		return screen;
+
+	// If the window is wholly outside all outputs, use its center as a
+	// deterministic hint before falling back to the primary/first screen.
+	BPoint center(frame.left / 2.0f + frame.right / 2.0f,
+		frame.top / 2.0f + frame.bottom / 2.0f);
+	screen = fVirtualScreen.ScreenAtPoint(center);
+	return screen != NULL ? screen : fVirtualScreen.ScreenAt(0);
 }
 
 
@@ -3538,11 +3708,30 @@ Desktop::_SetBackground(BRegion& background)
 	dirtyBackground.IntersectWith(&background);
 	fBackgroundRegion = background;
 	if (dirtyBackground.Frame().IsValid()) {
-		if (GetDrawingEngine()->LockParallelAccess()) {
-			GetDrawingEngine()->FillRegion(dirtyBackground,
-				fWorkspaces[fCurrentWorkspace].Color());
+		const rgb_color color = fWorkspaces[fCurrentWorkspace].Color();
 
-			GetDrawingEngine()->UnlockParallelAccess();
+		// Background damage is in global desktop coordinates, while each
+		// DrawingEngine renders into its own output-local framebuffer.
+		// Clip and translate independently so gaps between outputs are never
+		// treated as drawable pixels and one output cannot receive another's
+		// damage coordinates.
+		for (int32 i = 0; i < fVirtualScreen.CountScreens(); i++) {
+			Screen* screen = fVirtualScreen.ScreenAt(i);
+			if (screen == NULL)
+				continue;
+
+			BRegion screenDirty;
+			if (fVirtualScreen.ClipRegionToScreen(screen, dirtyBackground,
+					screenDirty) != B_OK || screenDirty.CountRects() == 0) {
+				continue;
+			}
+
+			DrawingEngine* engine = screen->GetDrawingEngine();
+			if (engine == NULL || !engine->LockParallelAccess())
+				continue;
+
+			engine->FillRegion(screenDirty, color);
+			engine->UnlockParallelAccess();
 		}
 	}
 }
@@ -3625,6 +3814,67 @@ Desktop::_ResumeDirectFrameBufferAccess()
 
 
 void
+Desktop::ScreenRemoved(Screen* screen)
+{
+	// ScreenManager serializes removal. Detach scene references before it
+	// destroys the Screen and its hardware interface.
+	AutoWriteLocker windowLocker(fWindowLock);
+	AutoWriteLocker screenLocker(fScreenLock);
+
+	status_t status = fVirtualScreen.RemoveScreen(screen);
+	if (status != B_OK)
+		return;
+
+	screenLocker.Unlock();
+
+	// A removed Screen is about to be destroyed by ScreenManager. Rebind every
+	// window that still references it, including hidden windows and windows in
+	// other workspaces, before the callback returns and releases that object.
+	// Otherwise a later redraw or mode notification can dereference a stale
+	// Screen pointer. Choose the replacement using the current scene geometry.
+	for (Window* window = fAllWindows.FirstWindow(); window != NULL;
+			window = window->NextWindow(kAllWindowList)) {
+		if (window->Screen() == screen)
+			window->SetScreen(_DetermineScreenFor(window->Frame()));
+	}
+
+	if (fVirtualScreen.CountScreens() > 0) {
+		// Rebuild clipping, background and input bounds against a live output.
+		_ScreenChanged(fVirtualScreen.ScreenAt(0));
+		return;
+	}
+
+	// A machine can temporarily have no usable output during device teardown.
+	fVirtualScreen.UpdateFrame();
+	fScreenRegion.MakeEmpty();
+	fBackgroundRegion.MakeEmpty();
+	gInputManager->UpdateScreenBounds(BRect(0, 0, -1, -1));
+	BRegion available;
+	_RebuildClippingForAllWindows(available);
+}
+
+
+bool
+Desktop::ScreenAdded(Screen* screen)
+{
+	// Hotplug callbacks arrive on the screen-manager thread. Serialize the
+	// virtual-screen update with normal window and screen configuration work.
+	AutoWriteLocker windowLocker(fWindowLock);
+	AutoWriteLocker screenLocker(fScreenLock);
+
+	status_t status = fVirtualScreen.AddScreen(screen,
+		fWorkspaces[fCurrentWorkspace].StoredScreenConfiguration(),
+		fWorkspaces[fCurrentWorkspace].CurrentScreenConfiguration());
+	if (status != B_OK)
+		return false;
+
+	screenLocker.Unlock();
+	_ScreenChanged(screen);
+	return true;
+}
+
+
+void
 Desktop::ScreenChanged(Screen* screen)
 {
 	AutoWriteLocker windowLocker(fWindowLock);
@@ -3642,13 +3892,55 @@ Desktop::_ScreenChanged(Screen* screen)
 {
 	ASSERT_MULTI_WRITE_LOCKED(fWindowLock);
 
-	// the entire screen is dirty, because we're actually
-	// operating on an all new buffer in memory
-	BRegion dirty(screen->Frame());
+	// A mode change invalidates the full logical desktop, not just the
+	// changed output. Build the region from individual output frames so gaps
+	// between monitors are not treated as drawable screen space.
+	// Refresh the changed output's logical size from its newly active mode,
+	// while preserving its configured desktop origin.
+	for (int32 i = 0; i < fVirtualScreen.CountScreens(); i++) {
+		if (fVirtualScreen.ScreenAt(i) != screen)
+			continue;
 
-	// update our cached screen region
-	fScreenRegion.Set(screen->Frame());
-	gInputManager->UpdateScreenBounds(screen->Frame());
+		BRect frame = screen->Frame();
+		BRect oldFrame = fVirtualScreen.ScreenFrameAt(i);
+		float scale = fVirtualScreen.ScreenScaleAt(i);
+		if (scale > 0.0f && scale != 1.0f) {
+			// BRect::Width()/Height() are coordinate deltas, while display
+			// modes describe pixel counts. Convert the inclusive pixel bounds
+			// to inclusive logical bounds to avoid accumulating a fractional
+			// extra row/column at non-1x scales.
+			frame.right = frame.left + (frame.Width() + 1.0f) / scale - 1.0f;
+			frame.bottom = frame.top + (frame.Height() + 1.0f) / scale - 1.0f;
+		}
+		frame.OffsetTo(oldFrame.left, oldFrame.top);
+		fVirtualScreen.SetScreenFrame(i, frame);
+		break;
+	}
+
+	fVirtualScreen.UpdateFrame();
+	fScreenRegion.MakeEmpty();
+	BRect changedScreenFrame;
+	for (int32 i = 0; i < fVirtualScreen.CountScreens(); i++) {
+		BRect frame = fVirtualScreen.ScreenFrameAt(i);
+		if (!frame.IsValid())
+			continue;
+
+		fScreenRegion.Include(frame);
+		if (fVirtualScreen.ScreenAt(i) == screen)
+			changedScreenFrame = frame;
+	}
+
+	// Keep the legacy behavior if the screen isn't represented in the
+	// virtual-screen list yet (for example during early initialization).
+	if (fScreenRegion.CountRects() == 0) {
+		changedScreenFrame = screen->Frame();
+		fScreenRegion.Include(changedScreenFrame);
+	}
+	if (!changedScreenFrame.IsValid())
+		changedScreenFrame = screen->Frame();
+
+	BRegion dirty(fScreenRegion);
+	gInputManager->UpdateScreenBounds(fVirtualScreen.Frame());
 
 	BRegion background;
 	_RebuildClippingForAllWindows(background);
@@ -3661,19 +3953,19 @@ Desktop::_ScreenChanged(Screen* screen)
 	dirty.Exclude(&background);
 	_TriggerWindowRedrawing(dirty, dirty);
 
-	// send B_SCREEN_CHANGED to windows on that screen
+	// send B_SCREEN_CHANGED to windows on the changed output
 	BMessage update(B_SCREEN_CHANGED);
 	update.AddInt64("when", real_time_clock_usecs());
-	update.AddRect("frame", screen->Frame());
+	update.AddRect("frame", changedScreenFrame);
 	update.AddInt32("mode", screen->ColorSpace());
-
-	fVirtualScreen.UpdateFrame();
 
 	for (Window* window = fAllWindows.FirstWindow(); window != NULL;
 			window = window->NextWindow(kAllWindowList)) {
 		if (window->Screen() == screen)
 			window->ServerWindow()->ScreenChanged(&update);
 	}
+
+	UpdateCursorPosition(fLastMousePosition);
 }
 
 

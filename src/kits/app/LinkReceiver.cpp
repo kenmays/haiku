@@ -123,6 +123,71 @@ LinkReceiver::GetNextMessage(int32 &code, bigtime_t timeout)
 }
 
 
+status_t
+LinkReceiver::CopyCurrentMessage(char** _buffer, int32* _size) const
+{
+	if (_buffer == NULL || _size == NULL)
+		return B_BAD_VALUE;
+
+	*_buffer = NULL;
+	*_size = 0;
+	if (fRecvBuffer == NULL || fReplySize < (int32)sizeof(message_header)
+		|| fRecvStart < 0 || fRecvStart > fDataSize
+		|| fReplySize > fDataSize - fRecvStart) {
+		return B_BAD_VALUE;
+	}
+
+	// A selected message normally comes from GetNextMessage(), but validate
+	// the header again here because this API is the trust boundary for replay
+	// snapshots and must not copy a malformed or partially selected message.
+	message_header header;
+	memcpy(&header, fRecvBuffer + fRecvStart, sizeof(header));
+	if (header.size != fReplySize || header.size < (int32)sizeof(header)
+		|| header.size > (int32)kMaxBufferSize) {
+		return B_BAD_VALUE;
+	}
+
+	char* copy = (char*)malloc(fReplySize);
+	if (copy == NULL)
+		return B_NO_MEMORY;
+
+	memcpy(copy, fRecvBuffer + fRecvStart, fReplySize);
+	*_buffer = copy;
+	*_size = fReplySize;
+	return B_OK;
+}
+
+
+status_t
+LinkReceiver::SetToMessage(const void* buffer, int32 size)
+{
+	if (buffer == NULL || size < (int32)sizeof(message_header)
+		|| size > (int32)kMaxBufferSize) {
+		return B_BAD_VALUE;
+	}
+
+	message_header header;
+	memcpy(&header, buffer, sizeof(header));
+	if (header.size != size)
+		return B_BAD_VALUE;
+
+	char* copy = (char*)malloc(size);
+	if (copy == NULL)
+		return B_NO_MEMORY;
+	memcpy(copy, buffer, size);
+
+	free(fRecvBuffer);
+	fRecvBuffer = copy;
+	fRecvBufferSize = size;
+	fDataSize = size;
+	fRecvStart = 0;
+	fRecvPosition = sizeof(message_header);
+	fReplySize = size;
+	fReadError = B_OK;
+	return B_OK;
+}
+
+
 bool
 LinkReceiver::HasMessages() const
 {

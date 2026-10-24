@@ -12,9 +12,14 @@
 #include <AutoDeleter.h>
 #include <Looper.h>
 #include <ObjectList.h>
+#include <Node.h>
+
+#include <vector>
+
 
 
 class BMessage;
+class BMessageRunner;
 
 class DrawingEngine;
 class HWInterface;
@@ -29,7 +34,7 @@ class ScreenOwner {
 	public:
 		virtual ~ScreenOwner() {};
 		virtual void	ScreenRemoved(Screen* screen) = 0;
-		virtual void	ScreenAdded(Screen* screen) = 0;
+		virtual bool	ScreenAdded(Screen* screen) { return false; }
 		virtual void	ScreenChanged(Screen* screen) = 0;
 
 		virtual bool	ReleaseScreen(Screen* screen) = 0;
@@ -48,6 +53,8 @@ class ScreenManager : public BLooper {
 							int32 wishCount, const char* target, bool force,
 							ScreenList& list);
 		void			ReleaseScreens(ScreenList& list);
+		void			ReleaseScreen(Screen* screen);
+		status_t		RemoveScreen(Screen* screen);
 
 		void			ScreenChanged(Screen* screen);
 
@@ -57,14 +64,23 @@ class ScreenManager : public BLooper {
 		struct screen_item {
 			ObjectDeleter<Screen>	screen;
 			ScreenOwner*			owner;
+			bool				removing;
+			uint64				outputGeneration;
+			bool				hasOutputGeneration;
 			ObjectDeleter<HWInterfaceListener>
 									listener;
 		};
 
 		void			_ScanDrivers();
+		void			_ScanMultiOutputs();
+		void			_WatchGraphicsDirectories(const char* path);
 		screen_item*	_AddHWInterface(HWInterface* interface);
 
-		BObjectList<screen_item, true>	fScreenList;
+		int32				fNextScreenID;
+		int32				fKnownGraphicsDeviceCount;
+		std::vector<node_ref>		fWatchedDirectories;
+			BObjectList<screen_item, true>	fScreenList;
+			BMessageRunner*				fScanRunner;
 };
 
 extern ScreenManager *gScreenManager;

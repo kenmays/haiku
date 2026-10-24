@@ -198,7 +198,13 @@ public:
 	virtual	BRect			CopyRect(BRect rect, int32 xOffset,
 								int32 yOffset) const;
 
+			// Offsets global drawing coordinates into one output's framebuffer.
+			// Damage and copy invalidation are translated by the same offset.
 			void			SetRendererOffset(int32 offsetX, int32 offsetY);
+			void			SetRendererFractionalOffset(float offsetX,
+								float offsetY);
+			void			SetRendererScale(float scale);
+			float			RendererScale() const { return fRendererScale; }
 
 private:
 	friend class DrawTransaction;
@@ -211,6 +217,11 @@ private:
 							fPainter;
 			HWInterface*	fGraphicsCard;
 			bool			fCopyToFront;
+			int32			fRendererOffsetX;
+			int32			fRendererOffsetY;
+			float			fRendererFractionalOffsetX;
+			float			fRendererFractionalOffsetY;
+			float			fRendererScale;
 };
 
 #endif // DRAWING_ENGINE_H_

@@ -30,6 +30,11 @@
 
 #include <syslog.h>
 #include <new>
+#include <math.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <memory>
+#include <utility>
 
 #include <AppDefs.h>
 #include <Autolock.h>
@@ -71,9 +76,11 @@
 #include "RenderingBuffer.h"
 #include "ServerApp.h"
 #include "ServerBitmap.h"
+#include "Screen.h"
 #include "ServerPicture.h"
 #include "ServerProtocol.h"
 #include "Window.h"
+#include "VirtualScreen.h"
 #include "WorkspacesView.h"
 
 
@@ -2475,9 +2482,258 @@ fDesktop->LockSingleWindow();
 	The desktop clipping must be read locked when entering this method.
 	Requires a valid fCurrentView.
 */
+// Only commands with replay-safe payloads are listed here. Line and text
+// commands commit their logical pen update on the first successful output;
+// text endpoints are converted back from physical-output scale. Pictures/layers
+// and reply-producing commands stay on the canonical single-output path.
+static bool
+is_replay_safe_drawing_command(int32 code)
+{
+	switch (code) {
+		case AS_STROKE_LINE:
+		case AS_STROKE_LINE_GRADIENT:
+		case AS_DRAW_STRING:
+		case AS_DRAW_STRING_WITH_DELTA:
+		case AS_DRAW_STRING_WITH_OFFSETS:
+		case AS_VIEW_INVERT_RECT:
+		case AS_STROKE_RECT:
+		case AS_FILL_RECT:
+		case AS_STROKE_RECT_GRADIENT:
+		case AS_FILL_RECT_GRADIENT:
+		case AS_VIEW_DRAW_BITMAP:
+		case AS_STROKE_ARC:
+		case AS_FILL_ARC:
+		case AS_STROKE_ARC_GRADIENT:
+		case AS_FILL_ARC_GRADIENT:
+		case AS_STROKE_BEZIER:
+		case AS_FILL_BEZIER:
+		case AS_STROKE_BEZIER_GRADIENT:
+		case AS_FILL_BEZIER_GRADIENT:
+		case AS_STROKE_ELLIPSE:
+		case AS_FILL_ELLIPSE:
+		case AS_STROKE_ELLIPSE_GRADIENT:
+		case AS_FILL_ELLIPSE_GRADIENT:
+		case AS_STROKE_ROUNDRECT:
+		case AS_FILL_ROUNDRECT:
+		case AS_STROKE_ROUNDRECT_GRADIENT:
+		case AS_FILL_ROUNDRECT_GRADIENT:
+		case AS_STROKE_TRIANGLE:
+		case AS_FILL_TRIANGLE:
+		case AS_STROKE_TRIANGLE_GRADIENT:
+		case AS_FILL_TRIANGLE_GRADIENT:
+		case AS_STROKE_POLYGON:
+		case AS_FILL_POLYGON:
+		case AS_STROKE_POLYGON_GRADIENT:
+		case AS_FILL_POLYGON_GRADIENT:
+		case AS_STROKE_SHAPE:
+		case AS_FILL_SHAPE:
+		case AS_STROKE_SHAPE_GRADIENT:
+		case AS_FILL_SHAPE_GRADIENT:
+		case AS_FILL_REGION:
+		case AS_FILL_REGION_GRADIENT:
+		case AS_STROKE_LINEARRAY:
+			return true;
+		default:
+			return false;
+	}
+}
+
+
 void
 ServerWindow::_DispatchViewDrawingMessage(int32 code,
-	BPrivate::LinkReceiver &link)
+	BPrivate::LinkReceiver& link)
+{
+	const VirtualScreen& virtualScreen = fDesktop->VirtualScreen();
+	if (!is_replay_safe_drawing_command(code) || link.NeedsReply()
+		|| fIsDirectlyAccessing || fCurrentView == NULL
+		|| fCurrentView->Picture() != NULL
+		|| virtualScreen.CountScreens() < 2) {
+		_DispatchViewDrawingMessageSingleOutput(code, link);
+		return;
+	}
+
+	_UpdateCurrentDrawingRegion();
+	if (fCurrentDrawingRegion.CountRects() <= 0) {
+		_DispatchViewDrawingMessageSingleOutput(code, link);
+		return;
+	}
+
+	std::vector<OutputRenderTarget> targets;
+	status_t planStatus = virtualScreen.BuildRenderPlan(
+		fCurrentDrawingRegion, targets);
+	if (planStatus != B_OK) {
+		// An output may be disappearing or changing mode. Do not silently
+		// render this command on only the surviving output; schedule a normal
+		// redraw after the scene can produce a complete render plan.
+		BRegion dirty(fCurrentDrawingRegion);
+		fWindow->MarkContentDirtyAsync(dirty);
+		return;
+	}
+	if (targets.size() < 2) {
+		_DispatchViewDrawingMessageSingleOutput(code, link);
+		return;
+	}
+
+	// Do not partially fan out if any intersected output cannot be represented
+	// by the current renderer or framebuffer. The single-output path remains
+	// the compatibility fallback until every opcode has replay-safe semantics.
+	int32 intersectingScreens = 0;
+	for (int32 i = 0; i < virtualScreen.CountScreens(); i++) {
+		BRegion intersection(fCurrentDrawingRegion);
+		BRegion outputBounds(virtualScreen.ScreenFrameAt(i));
+		intersection.IntersectWith(&outputBounds);
+		if (intersection.CountRects() > 0)
+			intersectingScreens++;
+	}
+	if ((size_t)intersectingScreens != targets.size()) {
+		_DispatchViewDrawingMessageSingleOutput(code, link);
+		return;
+	}
+
+	const ::Screen* originalScreen = fWindow->Screen();
+	if (originalScreen == NULL) {
+		BRegion dirty(fCurrentDrawingRegion);
+		fWindow->MarkContentDirtyAsync(dirty);
+		return;
+	}
+
+	char* message = NULL;
+	int32 messageSize = 0;
+	if (link.CopyCurrentMessage(&message, &messageSize) != B_OK) {
+		BRegion dirty(fCurrentDrawingRegion);
+		fWindow->MarkContentDirtyAsync(dirty);
+		return;
+	}
+	std::unique_ptr<char, decltype(&free)> messageOwner(message, free);
+
+	std::vector<std::unique_ptr<BPrivate::LinkReceiver>> replayReceivers;
+	bool replayReady = true;
+	try {
+		replayReceivers.reserve(targets.size());
+		for (size_t i = 0; i < targets.size(); i++) {
+			std::unique_ptr<BPrivate::LinkReceiver> replay(
+				new(nothrow) BPrivate::LinkReceiver(-1));
+			if (replay == NULL
+				|| replay->SetToMessage(messageOwner.get(), messageSize) != B_OK) {
+				replayReady = false;
+				break;
+			}
+			replayReceivers.push_back(std::move(replay));
+		}
+	} catch (...) {
+		replayReady = false;
+	}
+	if (!replayReady) {
+		BRegion dirty(fCurrentDrawingRegion);
+		fWindow->MarkContentDirtyAsync(dirty);
+		return;
+	}
+
+	// Check that each target can be bound before drawing to any of them. This
+	// avoids the common partial-update case where one engine lock fails after
+	// earlier outputs have already been painted.
+	bool canBindAll = true;
+	for (size_t i = 0; i < targets.size(); i++) {
+		if (!virtualScreen.IsRenderTargetCurrent(targets[i])) {
+			canBindAll = false;
+			break;
+		}
+		Screen* screen = virtualScreen.ScreenByID(targets[i].screenID);
+		if (screen == NULL || !fWindow->BindDrawingEngineOutput(screen)) {
+			canBindAll = false;
+			break;
+		}
+	}
+	bool restored = fWindow->BindDrawingEngineOutput(originalScreen);
+	if (!restored)
+		restored = fWindow->BindDrawingEngineOutput(originalScreen);
+	if (!restored) {
+		BRegion dirty(fCurrentDrawingRegion);
+		fWindow->MarkContentDirtyAsync(dirty);
+		debug_printf("ServerWindow %s: failed to restore drawing output after preflight\n",
+			Title());
+		return;
+	}
+	if (!canBindAll) {
+		BRegion dirty(fCurrentDrawingRegion);
+		fWindow->MarkContentDirtyAsync(dirty);
+		return;
+	}
+
+	bool renderedAny = false;
+	bool allTargetsRendered = true;
+	try {
+		for (size_t i = 0; i < targets.size(); i++) {
+			const OutputRenderTarget& target = targets[i];
+			if (!virtualScreen.IsRenderTargetCurrent(target)) {
+				allTargetsRendered = false;
+				break;
+			}
+
+			Screen* screen = virtualScreen.ScreenByID(target.screenID);
+			if (screen == NULL) {
+				allTargetsRendered = false;
+				continue;
+			}
+
+			if (!fWindow->BindDrawingEngineOutput(screen)) {
+				allTargetsRendered = false;
+				continue;
+			}
+
+			if (_DispatchViewDrawingMessageSingleOutput(code,
+					*replayReceivers[i], !renderedAny)) {
+				renderedAny = true;
+			} else {
+				allTargetsRendered = false;
+			}
+		}
+
+	} catch (...) {
+		// Do not let a second allocation failure prevent output restoration.
+		try {
+			BRegion dirty(fCurrentDrawingRegion);
+			fWindow->MarkContentDirtyAsync(dirty);
+		} catch (...) {
+		}
+		bool recovered = fWindow->BindDrawingEngineOutput(originalScreen);
+		if (!recovered)
+			recovered = fWindow->BindDrawingEngineOutput(originalScreen);
+		if (!recovered) {
+			debug_printf("ServerWindow %s: failed to restore drawing output after exception\n",
+				Title());
+		}
+		debug_printf("ServerWindow %s: aborted multi-output drawing batch\n",
+			Title());
+		return;
+	}
+	// Restore the engine binding without changing the window's logical output.
+	restored = fWindow->BindDrawingEngineOutput(originalScreen);
+	if (!restored)
+		restored = fWindow->BindDrawingEngineOutput(originalScreen);
+	if (!restored) {
+		debug_printf("ServerWindow %s: failed to restore drawing output after fan-out\n",
+			Title());
+		return;
+	}
+
+	if (!allTargetsRendered) {
+		// A partially rendered command cannot safely be replayed on completed
+		// outputs (invert/alpha operations are destination-dependent). Request
+		// a normal client redraw instead of applying the command twice.
+		BRegion dirty(fCurrentDrawingRegion);
+		fWindow->MarkContentDirtyAsync(dirty);
+		return;
+	}
+
+	if (!renderedAny)
+		_DispatchViewDrawingMessageSingleOutput(code, link);
+}
+
+
+bool
+ServerWindow::_DispatchViewDrawingMessageSingleOutput(int32 code,
+	BPrivate::LinkReceiver &link, bool updateLogicalState)
 {
 	if (!fCurrentView->IsVisible() || !fWindow->IsVisible()) {
 		if (link.NeedsReply()) {
@@ -2487,7 +2743,7 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			fLink.StartMessage(B_ERROR);
 			fLink.Flush();
 		}
-		return;
+		return false;
 	}
 
 	DrawingEngine* drawingEngine = fWindow->GetDrawingEngine();
@@ -2499,7 +2755,7 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			fLink.StartMessage(B_ERROR);
 			fLink.Flush();
 		}
-		return;
+		return false;
 	}
 
 	_UpdateCurrentDrawingRegion();
@@ -2517,21 +2773,54 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			fLink.StartMessage(B_ERROR);
 			fLink.Flush();
 		}
-		return;
+		return false;
 	}
 
-	drawingEngine->LockParallelAccess();
-	// NOTE: the region is not copied, Painter keeps a pointer,
-	// that's why you need to use the clipping only for as long
-	// as you have it locked
-	drawingEngine->ConstrainClippingRegion(&fCurrentDrawingRegion);
+	if (!drawingEngine->LockParallelAccess()) {
+		// An output can disappear or become unavailable between redraws. Do
+		// not touch Painter's borrowed clipping region unless its engine lock
+		// was actually acquired.
+		if (link.NeedsReply()) {
+			fLink.StartMessage(B_ERROR);
+			fLink.Flush();
+		}
+		return false;
+	}
 
+	// Painter borrows the clipping region until the drawing transaction ends.
+	// Build a pointer-free output plan and select the target matching this
+	// window's current engine binding. This keeps the legacy single-engine
+	// path bounded to its output while providing one shared target-selection
+	// implementation for the multi-output dispatcher.
+	BRegion outputDrawingRegion;
+	const BRegion* drawingRegion = &outputDrawingRegion;
+	const ::Screen* output = fWindow->Screen();
+	OutputRenderTarget renderTarget;
+	bool hasCurrentRenderTarget = false;
+	if (output != NULL) {
+		status_t targetStatus = fDesktop->VirtualScreen().BuildRenderTarget(
+			output, fCurrentDrawingRegion, renderTarget);
+		if (targetStatus == B_OK
+			&& fDesktop->VirtualScreen().IsRenderTargetCurrent(renderTarget)) {
+			outputDrawingRegion = renderTarget.globalClip;
+			hasCurrentRenderTarget = true;
+		}
+	}
+	// An absent, invalid, or concurrently detached output leaves an empty
+	// clip. Never fall back to the global region for a stale binding. Build
+	// only the current target here; allocating/copying every output's regions
+	// for each primitive is needlessly expensive.
+	drawingEngine->ConstrainClippingRegion(drawingRegion);
+
+	bool commandProcessed = true;
 	switch (code) {
 		case AS_STROKE_LINE:
 		{
 			ViewStrokeLineInfo info;
-			if (link.Read<ViewStrokeLineInfo>(&info) != B_OK)
+			if (link.Read<ViewStrokeLineInfo>(&info) != B_OK) {
+				commandProcessed = false;
 				break;
+			}
 
 			DTRACE(("ServerWindow %s: Message AS_STROKE_LINE: View: %s -> "
 				"BPoint(%.1f, %.1f) - BPoint(%.1f, %.1f)\n", Title(),
@@ -2553,18 +2842,23 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			// for DrawString(), also there needs to be a decision, if the pen
 			// location is in View coordinates (I think it should be) or in
 			// screen coordinates.
-			fCurrentView->CurrentState()->SetPenLocation(penPos);
+			if (updateLogicalState)
+				fCurrentView->CurrentState()->SetPenLocation(penPos);
 			break;
 		}
 		case AS_STROKE_LINE_GRADIENT:
 		{
 			ViewStrokeLineInfo info;
-			if (link.Read<ViewStrokeLineInfo>(&info) != B_OK)
+			if (link.Read<ViewStrokeLineInfo>(&info) != B_OK) {
+				commandProcessed = false;
 				break;
+			}
 
 			BGradient* gradient;
-			if (link.ReadGradient(&gradient) != B_OK)
+			if (link.ReadGradient(&gradient) != B_OK) {
+				commandProcessed = false;
 				break;
+			}
 
 			ObjectDeleter<BGradient> gradientDeleter(gradient);
 
@@ -2588,14 +2882,17 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			// for DrawString(), also there needs to be a decision, if the pen
 			// location is in View coordinates (I think it should be) or in
 			// screen coordinates.
-			fCurrentView->CurrentState()->SetPenLocation(penPos);
+			if (updateLogicalState)
+				fCurrentView->CurrentState()->SetPenLocation(penPos);
 			break;
 		}
 		case AS_VIEW_INVERT_RECT:
 		{
 			BRect rect;
-			if (link.Read<BRect>(&rect) != B_OK)
+			if (link.Read<BRect>(&rect) != B_OK) {
+				commandProcessed = false;
 				break;
+			}
 
 			DTRACE(("ServerWindow %s: Message AS_INVERT_RECT: View: %s -> "
 				"BRect(%.1f, %.1f, %.1f, %.1f)\n", Title(),
@@ -2609,8 +2906,10 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 		case AS_STROKE_RECT:
 		{
 			BRect rect;
-			if (link.Read<BRect>(&rect) != B_OK)
+			if (link.Read<BRect>(&rect) != B_OK) {
+				commandProcessed = false;
 				break;
+			}
 
 			DTRACE(("ServerWindow %s: Message AS_STROKE_RECT: View: %s -> "
 				"BRect(%.1f, %.1f, %.1f, %.1f)\n", Title(),
@@ -2624,8 +2923,10 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 		case AS_FILL_RECT:
 		{
 			BRect rect;
-			if (link.Read<BRect>(&rect) != B_OK)
+			if (link.Read<BRect>(&rect) != B_OK) {
+				commandProcessed = false;
 				break;
+			}
 
 			DTRACE(("ServerWindow %s: Message AS_FILL_RECT: View: %s -> "
 				"BRect(%.1f, %.1f, %.1f, %.1f)\n", Title(),
@@ -2639,10 +2940,12 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 		case AS_STROKE_RECT_GRADIENT:
 		{
 			BRect rect;
-			link.Read<BRect>(&rect);
+			if (link.Read<BRect>(&rect) != B_OK) { commandProcessed = false; break; }
 			BGradient* gradient;
-			if (link.ReadGradient(&gradient) != B_OK)
+			if (link.ReadGradient(&gradient) != B_OK) {
+				commandProcessed = false;
 				break;
+			}
 
 			GTRACE(("ServerWindow %s: Message AS_STROKE_RECT_GRADIENT: View: %s "
 				"-> BRect(%.1f, %.1f, %.1f, %.1f)\n", Title(),
@@ -2660,10 +2963,12 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 		case AS_FILL_RECT_GRADIENT:
 		{
 			BRect rect;
-			link.Read<BRect>(&rect);
+			if (link.Read<BRect>(&rect) != B_OK) { commandProcessed = false; break; }
 			BGradient* gradient;
-			if (link.ReadGradient(&gradient) != B_OK)
+			if (link.ReadGradient(&gradient) != B_OK) {
+				commandProcessed = false;
 				break;
+			}
 
 			GTRACE(("ServerWindow %s: Message AS_FILL_RECT_GRADIENT: View: %s "
 				"-> BRect(%.1f, %.1f, %.1f, %.1f)\n", Title(),
@@ -2681,8 +2986,10 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 		case AS_VIEW_DRAW_BITMAP:
 		{
 			ViewDrawBitmapInfo info;
-			if (link.Read<ViewDrawBitmapInfo>(&info) != B_OK)
+			if (link.Read<ViewDrawBitmapInfo>(&info) != B_OK) {
+				commandProcessed = false;
 				break;
+			}
 
 #if 0
 			if (strcmp(fServerApp->SignatureLeaf(), "x-vnd.videolan-vlc") == 0)
@@ -2721,10 +3028,10 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			float angle, span;
 			BRect r;
 
-			link.Read<BRect>(&r);
-			link.Read<float>(&angle);
-			if (link.Read<float>(&span) != B_OK)
+			if (link.Read<BRect>(&r) != B_OK || link.Read<float>(&angle) != B_OK || link.Read<float>(&span) != B_OK) {
+				commandProcessed = false;
 				break;
+			}
 
 			fCurrentView->PenToScreenTransform().Apply(&r);
 			drawingEngine->DrawArc(r, angle, span, code == AS_FILL_ARC);
@@ -2738,12 +3045,12 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 
 			float angle, span;
 			BRect r;
-			link.Read<BRect>(&r);
-			link.Read<float>(&angle);
-			link.Read<float>(&span);
+			if (link.Read<BRect>(&r) != B_OK || link.Read<float>(&angle) != B_OK || link.Read<float>(&span) != B_OK) { commandProcessed = false; break; }
 			BGradient* gradient;
-			if (link.ReadGradient(&gradient) != B_OK)
+			if (link.ReadGradient(&gradient) != B_OK) {
+				commandProcessed = false;
 				break;
+			}
 			const SimpleTransform transform =
 				fCurrentView->PenToScreenTransform();
 			transform.Apply(&r);
@@ -2761,13 +3068,11 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			const SimpleTransform transform =
 				fCurrentView->PenToScreenTransform();
 			BPoint pts[4];
-			status_t status;
 			for (int32 i = 0; i < 4; i++) {
-				status = link.Read<BPoint>(&(pts[i]));
+				if (link.Read<BPoint>(&(pts[i])) != B_OK) { commandProcessed = false; break; }
 				transform.Apply(&pts[i]);
 			}
-			if (status != B_OK)
-				break;
+			if (!commandProcessed) break;
 
 			drawingEngine->DrawBezier(pts, code == AS_FILL_BEZIER);
 			break;
@@ -2782,12 +3087,15 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 				fCurrentView->PenToScreenTransform();
 			BPoint pts[4];
 			for (int32 i = 0; i < 4; i++) {
-				link.Read<BPoint>(&(pts[i]));
+				if (link.Read<BPoint>(&(pts[i])) != B_OK) { commandProcessed = false; break; }
 				transform.Apply(&pts[i]);
 			}
+			if (!commandProcessed) break;
 			BGradient* gradient;
-			if (link.ReadGradient(&gradient) != B_OK)
+			if (link.ReadGradient(&gradient) != B_OK) {
+				commandProcessed = false;
 				break;
+			}
 			transform.Apply(gradient);
 			drawingEngine->DrawBezier(pts, code == AS_FILL_BEZIER_GRADIENT, *gradient);
 			delete gradient;
@@ -2800,8 +3108,10 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 				Title()));
 
 			BRect rect;
-			if (link.Read<BRect>(&rect) != B_OK)
+			if (link.Read<BRect>(&rect) != B_OK) {
+				commandProcessed = false;
 				break;
+			}
 
 			fCurrentView->PenToScreenTransform().Apply(&rect);
 			drawingEngine->DrawEllipse(rect, code == AS_FILL_ELLIPSE);
@@ -2814,10 +3124,12 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 				Title()));
 
 			BRect rect;
-			link.Read<BRect>(&rect);
+			if (link.Read<BRect>(&rect) != B_OK) { commandProcessed = false; break; }
 			BGradient* gradient;
-			if (link.ReadGradient(&gradient) != B_OK)
+			if (link.ReadGradient(&gradient) != B_OK) {
+				commandProcessed = false;
 				break;
+			}
 			const SimpleTransform transform =
 				fCurrentView->PenToScreenTransform();
 			transform.Apply(&rect);
@@ -2835,10 +3147,10 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			BRect rect;
 			float xRadius;
 			float yRadius;
-			link.Read<BRect>(&rect);
-			link.Read<float>(&xRadius);
-			if (link.Read<float>(&yRadius) != B_OK)
+			if (link.Read<BRect>(&rect) != B_OK || link.Read<float>(&xRadius) != B_OK || link.Read<float>(&yRadius) != B_OK) {
+				commandProcessed = false;
 				break;
+			}
 
 			fCurrentView->PenToScreenTransform().Apply(&rect);
 			float scale = fCurrentView->CurrentState()->CombinedScale();
@@ -2854,12 +3166,12 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 
 			BRect rect;
 			float xrad,yrad;
-			link.Read<BRect>(&rect);
-			link.Read<float>(&xrad);
-			link.Read<float>(&yrad);
+			if (link.Read<BRect>(&rect) != B_OK || link.Read<float>(&xrad) != B_OK || link.Read<float>(&yrad) != B_OK) { commandProcessed = false; break; }
 			BGradient* gradient;
-			if (link.ReadGradient(&gradient) != B_OK)
+			if (link.ReadGradient(&gradient) != B_OK) {
+				commandProcessed = false;
 				break;
+			}
 			const SimpleTransform transform =
 				fCurrentView->PenToScreenTransform();
 			transform.Apply(&rect);
@@ -2881,12 +3193,15 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			BRect rect;
 
 			for (int32 i = 0; i < 3; i++) {
-				link.Read<BPoint>(&(pts[i]));
+				if (link.Read<BPoint>(&(pts[i])) != B_OK) { commandProcessed = false; break; }
 				transform.Apply(&pts[i]);
 			}
+			if (!commandProcessed) break;
 
-			if (link.Read<BRect>(&rect) != B_OK)
+			if (link.Read<BRect>(&rect) != B_OK) {
+				commandProcessed = false;
 				break;
+			}
 
 			transform.Apply(&rect);
 			drawingEngine->DrawTriangle(pts, rect, code == AS_FILL_TRIANGLE);
@@ -2903,13 +3218,16 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			BPoint pts[3];
 			BRect rect;
 			for (int32 i = 0; i < 3; i++) {
-				link.Read<BPoint>(&(pts[i]));
+				if (link.Read<BPoint>(&(pts[i])) != B_OK) { commandProcessed = false; break; }
 				transform.Apply(&pts[i]);
 			}
-			link.Read<BRect>(&rect);
+			if (!commandProcessed) break;
+			if (link.Read<BRect>(&rect) != B_OK) { commandProcessed = false; break; }
 			BGradient* gradient;
-			if (link.ReadGradient(&gradient) != B_OK)
+			if (link.ReadGradient(&gradient) != B_OK) {
+				commandProcessed = false;
 				break;
+			}
 			transform.Apply(&rect);
 			transform.Apply(gradient);
 			drawingEngine->DrawTriangle(pts, rect, code == AS_FILL_TRIANGLE_GRADIENT, *gradient);
@@ -2925,22 +3243,24 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			BRect polyFrame;
 			bool isClosed = true;
 			int32 pointCount;
-
-			link.Read<BRect>(&polyFrame);
-			if (code == AS_STROKE_POLYGON)
-				link.Read<bool>(&isClosed);
-			link.Read<int32>(&pointCount);
+			if (link.Read<BRect>(&polyFrame) != B_OK || (code == AS_STROKE_POLYGON && link.Read<bool>(&isClosed) != B_OK) || link.Read<int32>(&pointCount) != B_OK || pointCount <= 0 || (uint64)pointCount * sizeof(BPoint) > SIZE_MAX) { commandProcessed = false; break; }
 
 			const SimpleTransform transform =
 				fCurrentView->PenToScreenTransform();
 			BPoint* pointList = new(nothrow) BPoint[pointCount];
-			if (link.Read(pointList, pointCount * sizeof(BPoint)) >= B_OK) {
+			if (pointList == NULL) {
+				commandProcessed = false;
+				break;
+			}
+			if (link.Read(pointList, (size_t)pointCount * sizeof(BPoint)) >= B_OK) {
 				for (int32 i = 0; i < pointCount; i++)
 					transform.Apply(&pointList[i]);
 				transform.Apply(&polyFrame);
 
 				drawingEngine->DrawPolygon(pointList, pointCount, polyFrame,
 					code == AS_FILL_POLYGON, isClosed && pointCount > 2);
+			} else {
+				commandProcessed = false;
 			}
 			delete[] pointList;
 			break;
@@ -2954,14 +3274,15 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			BRect polyFrame;
 			bool isClosed = true;
 			int32 pointCount;
-			link.Read<BRect>(&polyFrame);
-			if (code == AS_STROKE_POLYGON_GRADIENT)
-				link.Read<bool>(&isClosed);
-			link.Read<int32>(&pointCount);
+			if (link.Read<BRect>(&polyFrame) != B_OK || (code == AS_STROKE_POLYGON_GRADIENT && link.Read<bool>(&isClosed) != B_OK) || link.Read<int32>(&pointCount) != B_OK || pointCount <= 0 || (uint64)pointCount * sizeof(BPoint) > SIZE_MAX) { commandProcessed = false; break; }
 
 			const SimpleTransform transform =
 				fCurrentView->PenToScreenTransform();
 			BPoint* pointList = new(nothrow) BPoint[pointCount];
+			if (pointList == NULL) {
+				commandProcessed = false;
+				break;
+			}
 			BGradient* gradient;
 			if (link.Read(pointList, pointCount * sizeof(BPoint)) == B_OK
 				&& link.ReadGradient(&gradient) == B_OK) {
@@ -2974,6 +3295,8 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 					polyFrame, code == AS_FILL_POLYGON_GRADIENT, isClosed && pointCount > 2,
 					*gradient);
 				delete gradient;
+			} else {
+				commandProcessed = false;
 			}
 			delete[] pointList;
 			break;
@@ -2987,15 +3310,13 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			BRect shapeFrame;
 			int32 opCount;
 			int32 ptCount;
-
-			link.Read<BRect>(&shapeFrame);
-			link.Read<int32>(&opCount);
-			link.Read<int32>(&ptCount);
-
+			if (link.Read<BRect>(&shapeFrame) != B_OK || link.Read<int32>(&opCount) != B_OK || link.Read<int32>(&ptCount) != B_OK || opCount < 0 || ptCount < 0 || (uint64)opCount * sizeof(uint32) > SIZE_MAX || (uint64)ptCount * sizeof(BPoint) > SIZE_MAX) { commandProcessed = false; break; }
 			uint32* opList = new(nothrow) uint32[opCount];
 			BPoint* ptList = new(nothrow) BPoint[ptCount];
-			if (link.Read(opList, opCount * sizeof(uint32)) >= B_OK &&
-				link.Read(ptList, ptCount * sizeof(BPoint)) >= B_OK) {
+			if (opList == NULL || ptList == NULL) {
+				commandProcessed = false;
+			} else if (link.Read(opList, (size_t)opCount * sizeof(uint32)) >= B_OK
+				&& link.Read(ptList, (size_t)ptCount * sizeof(BPoint)) >= B_OK) {
 
 				// this might seem a bit weird, but under R5, the shapes
 				// are always offset by the current pen location
@@ -3011,6 +3332,8 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 				drawingEngine->DrawShape(shapeFrame, opCount, opList, ptCount,
 					ptList, code == AS_FILL_SHAPE, screenOffset,
 					fCurrentView->Scale());
+			} else {
+				commandProcessed = false;
 			}
 
 			delete[] opList;
@@ -3026,16 +3349,18 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			BRect shapeFrame;
 			int32 opCount;
 			int32 ptCount;
-
-			link.Read<BRect>(&shapeFrame);
-			link.Read<int32>(&opCount);
-			link.Read<int32>(&ptCount);
-
+			if (link.Read<BRect>(&shapeFrame) != B_OK || link.Read<int32>(&opCount) != B_OK || link.Read<int32>(&ptCount) != B_OK || opCount < 0 || ptCount < 0 || (uint64)opCount * sizeof(uint32) > SIZE_MAX || (uint64)ptCount * sizeof(BPoint) > SIZE_MAX) { commandProcessed = false; break; }
 			uint32* opList = new(nothrow) uint32[opCount];
 			BPoint* ptList = new(nothrow) BPoint[ptCount];
+			if (opList == NULL || ptList == NULL) {
+				delete[] opList;
+				delete[] ptList;
+				commandProcessed = false;
+				break;
+			}
 			BGradient* gradient;
-			if (link.Read(opList, opCount * sizeof(uint32)) == B_OK
-				&& link.Read(ptList, ptCount * sizeof(BPoint)) == B_OK
+			if (link.Read(opList, (size_t)opCount * sizeof(uint32)) == B_OK
+				&& link.Read(ptList, (size_t)ptCount * sizeof(BPoint)) == B_OK
 				&& link.ReadGradient(&gradient) == B_OK) {
 
 				// this might seem a bit weird, but under R5, the shapes
@@ -3053,6 +3378,8 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 					ptCount, ptList, code == AS_FILL_SHAPE_GRADIENT, *gradient, screenOffset,
 					fCurrentView->Scale());
 				delete gradient;
+			} else {
+				commandProcessed = false;
 			}
 
 			delete[] opList;
@@ -3064,8 +3391,10 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			DTRACE(("ServerWindow %s: Message AS_FILL_REGION\n", Title()));
 
 			BRegion region;
-			if (link.ReadRegion(&region) < B_OK)
+			if (link.ReadRegion(&region) < B_OK) {
+				commandProcessed = false;
 				break;
+			}
 
 			fCurrentView->PenToScreenTransform().Apply(&region);
 			drawingEngine->FillRegion(region);
@@ -3078,11 +3407,12 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 				Title()));
 
 			BRegion region;
-			link.ReadRegion(&region);
-
+			if (link.ReadRegion(&region) < B_OK) { commandProcessed = false; break; }
 			BGradient* gradient;
-			if (link.ReadGradient(&gradient) != B_OK)
+			if (link.ReadGradient(&gradient) != B_OK) {
+				commandProcessed = false;
 				break;
+			}
 
 			const SimpleTransform transform =
 				fCurrentView->PenToScreenTransform();
@@ -3102,8 +3432,10 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			// 2) LineArrayData
 
 			int32 lineCount;
-			if (link.Read<int32>(&lineCount) != B_OK || lineCount <= 0)
+			if (link.Read<int32>(&lineCount) != B_OK || lineCount <= 0 || (uint64)lineCount * sizeof(ViewLineArrayInfo) > SIZE_MAX) {
+				commandProcessed = false;
 				break;
+			}
 
 			// To speed things up, try to use a stack allocation and only
 			// fall back to the heap if there are enough lines...
@@ -3122,6 +3454,7 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			if (link.Read(lineData, dataSize) != B_OK) {
 				if (lineData != lineDataStackBuffer)
 					delete[] lineData;
+				commandProcessed = false;
 				break;
 			}
 
@@ -3143,15 +3476,18 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 		{
 			ViewDrawStringInfo info;
 			if (link.Read<ViewDrawStringInfo>(&info) != B_OK
-				|| info.stringLength <= 0) {
+				|| info.stringLength <= 0 || info.stringLength > INT32_MAX - 64) {
+				commandProcessed = false;
 				break;
 			}
 
 			// NOTE: Careful, the + 1 is for termination!
 			BStackOrHeapArray<char, 4096> string(
 				(info.stringLength + 1 + 63) / 64 * 64);
-			if (!string.IsValid())
+			if (!string.IsValid()) {
+				commandProcessed = false;
 				break;
+			}
 
 			escapement_delta* delta = NULL;
 			if (code == AS_DRAW_STRING_WITH_DELTA) {
@@ -3159,8 +3495,10 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 				delta = &info.delta;
 			}
 
-			if (link.Read(string, info.stringLength) != B_OK)
+			if (link.Read(string, info.stringLength) != B_OK) {
+				commandProcessed = false;
 				break;
+			}
 
 			// Terminate the string, if nothing else, it's important
 			// for the DTRACE call below...
@@ -3173,35 +3511,56 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			BPoint penLocation = drawingEngine->DrawString(string,
 				info.stringLength, info.location, delta);
 
+			// DrawingEngine returns the endpoint after the output transform.
+			// Remove only the physical-output scale before converting back to
+			// view coordinates so the public pen position remains logical.
+			float outputScale = drawingEngine->RendererScale();
+			if (outputScale > 0.0f && outputScale != 1.0f) {
+				penLocation.x /= outputScale;
+				penLocation.y /= outputScale;
+			}
 			fCurrentView->ScreenToPenTransform().Apply(&penLocation);
-			fCurrentView->CurrentState()->SetPenLocation(penLocation);
+			if (updateLogicalState)
+				fCurrentView->CurrentState()->SetPenLocation(penLocation);
 
 			break;
 		}
 		case AS_DRAW_STRING_WITH_OFFSETS:
 		{
 			int32 stringLength;
-			if (link.Read<int32>(&stringLength) != B_OK || stringLength <= 0)
+			if (link.Read<int32>(&stringLength) != B_OK || stringLength <= 0 || stringLength > INT32_MAX - 64) {
+				commandProcessed = false;
 				break;
+			}
 
 			int32 glyphCount;
-			if (link.Read<int32>(&glyphCount) != B_OK || glyphCount <= 0)
+			if (link.Read<int32>(&glyphCount) != B_OK || glyphCount <= 0 || (uint64)glyphCount * sizeof(BPoint) > SIZE_MAX) {
+				commandProcessed = false;
 				break;
+			}
 
 			// NOTE: Careful, the + 1 is for termination!
 			BStackOrHeapArray<char, 512> string(
 				(stringLength + 1 + 63) / 64 * 64);
 			BStackOrHeapArray<BPoint, 512> locations(glyphCount);
-			if (!string.IsValid() || !locations.IsValid())
+			if (!string.IsValid() || !locations.IsValid()) {
+				commandProcessed = false;
 				break;
+			}
 
-			if (link.Read(string, stringLength) != B_OK)
+			if (link.Read(string, stringLength) != B_OK) {
+				commandProcessed = false;
 				break;
+			}
 			// Count UTF8 glyphs and make sure we have enough locations
-			if ((int32)UTF8CountChars(string, stringLength) > glyphCount)
+			if ((int32)UTF8CountChars(string, stringLength) > glyphCount) {
+				commandProcessed = false;
 				break;
-			if (link.Read(locations, glyphCount * sizeof(BPoint)) != B_OK)
+			}
+			if (link.Read(locations, (size_t)glyphCount * sizeof(BPoint)) != B_OK) {
+				commandProcessed = false;
 				break;
+			}
 			// Terminate the string, if nothing else, it's important
 			// for the DTRACE call below...
 			string[stringLength] = '\0';
@@ -3217,8 +3576,14 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			BPoint penLocation = drawingEngine->DrawString(string,
 				stringLength, locations);
 
+			float outputScale = drawingEngine->RendererScale();
+			if (outputScale > 0.0f && outputScale != 1.0f) {
+				penLocation.x /= outputScale;
+				penLocation.y /= outputScale;
+			}
 			fCurrentView->ScreenToPenTransform().Apply(&penLocation);
-			fCurrentView->CurrentState()->SetPenLocation(penLocation);
+			if (updateLogicalState)
+				fCurrentView->CurrentState()->SetPenLocation(penLocation);
 
 			break;
 		}
@@ -3226,8 +3591,7 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 		case AS_VIEW_DRAW_PICTURE:
 		{
 			int32 token;
-			link.Read<int32>(&token);
-
+			if (link.Read<int32>(&token) != B_OK) { commandProcessed = false; break; }
 			BPoint where;
 			if (link.Read<BPoint>(&where) == B_OK) {
 				BReference<ServerPicture> picture(App()->GetPicture(token), true);
@@ -3271,7 +3635,12 @@ ServerWindow::_DispatchViewDrawingMessage(int32 code,
 			break;
 	}
 
+	// A hot-unplug or mode/scale change during dispatch invalidates the
+	// success result. The caller will schedule a normal redraw for recovery.
+	bool outputStillCurrent = hasCurrentRenderTarget
+		&& fDesktop->VirtualScreen().IsRenderTargetCurrent(renderTarget);
 	drawingEngine->UnlockParallelAccess();
+	return outputStillCurrent && commandProcessed;
 }
 
 

@@ -15,6 +15,7 @@
 
 #include <AutoDeleter.h>
 #include <image.h>
+#include <String.h>
 #include <video_overlay.h>
 
 
@@ -24,8 +25,25 @@ class RenderingBuffer;
 
 class AccelerantHWInterface : public HWInterface {
 public:
-								AccelerantHWInterface();
+								AccelerantHWInterface(int32 deviceNumber = -1,
+									const char* devicePath = NULL,
+									uint64 outputID = 0,
+									bool useMultiOutput = false,
+									AccelerantHWInterface* sharedAccelerant = NULL);
 	virtual						~AccelerantHWInterface();
+
+			static	int32			CountGraphicsDevices();
+			static	status_t		GetGraphicsDevicePath(int32 deviceNumber,
+										BString& path);
+			const char*			DevicePath() const { return fDevicePath.String(); }
+			bool				UsesMultiOutput() const { return fUseMultiOutput; }
+			uint64				OutputID() const { return fOutputID; }
+			bool				HasMultiOutputEnumeration() const;
+			uint32				MultiOutputCount();
+			status_t			GetMultiOutputInfo(uint32 index,
+									accelerant_output_info* info);
+			status_t			GetMultiOutputGeneration(uint64* generation);
+			status_t			CheckOutputModeChanged(bool* changed);
 
 	virtual	status_t			Initialize();
 	virtual	status_t			Shutdown();
@@ -93,9 +111,11 @@ protected:
 
 private:
 			int					_OpenGraphicsDevice(int deviceNumber);
-			bool				_RecursiveScan(const char* directory, int deviceNumber,
+			static bool		_RecursiveScan(const char* directory, int deviceNumber,
 									int& count, char* _path);
 			status_t			_OpenAccelerant(int device);
+			status_t			_CopyHooksFrom(AccelerantHWInterface* shared);
+			bool				_HasIndependentOutputHooks() const;
 			status_t			_SetupDefaultHooks();
 			void				_UpdateHooksAfterModeChange();
 			status_t			_UpdateModeList();
@@ -112,6 +132,13 @@ private:
 			void				_SetGrayscalePalette();
 
 private:
+			int32				fDeviceNumber;
+			BString				fDevicePath;
+			uint64				fOutputID;
+			uint32				fOutputCapabilities;
+			bool				fUseMultiOutput;
+			AccelerantHWInterface* fSharedAccelerant;
+			bool				fOwnsAccelerant;
 			int					fCardFD;
 			image_id			fAccelerantImage;
 			GetAccelerantHook	fAccelerantHook;
@@ -131,6 +158,19 @@ private:
 			propose_display_mode	fAccProposeDisplayMode;
 			get_preferred_display_mode fAccGetPreferredDisplayMode;
 			get_monitor_info		fAccGetMonitorInfo;
+			get_multi_output_count	fAccGetMultiOutputCount;
+			get_multi_output_info	fAccGetMultiOutputInfo;
+			get_multi_output_mode_count fAccGetMultiOutputModeCount;
+			get_multi_output_mode_list fAccGetMultiOutputModeList;
+			get_multi_output_display_mode fAccGetMultiOutputDisplayMode;
+			set_multi_output_display_mode fAccSetMultiOutputDisplayMode;
+			get_multi_output_frame_buffer_config fAccGetMultiOutputFrameBufferConfig;
+			get_multi_output_edid_info fAccGetMultiOutputEDIDInfo;
+			get_multi_output_generation	fAccGetMultiOutputGeneration;
+			present_multi_output	fAccPresentMultiOutput;
+			set_multi_output_cursor_shape fAccSetMultiOutputCursorShape;
+			move_multi_output_cursor fAccMoveMultiOutputCursor;
+			show_multi_output_cursor fAccShowMultiOutputCursor;
 			get_edid_info			fAccGetEDIDInfo;
 			set_cursor_shape		fAccSetCursorShape;
 			set_cursor_bitmap		fAccSetCursorBitmap;
@@ -168,6 +208,9 @@ private:
 
 			display_mode		fDisplayMode;
 			bool				fInitialModeSwitch;
+			bool				fHasDisplayMode;
+			display_mode		fLastObservedOutputMode;
+			bool				fHasObservedOutputMode;
 
 			sem_id				fRetraceSemaphore;
 

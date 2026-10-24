@@ -174,6 +174,7 @@ AccelerantHWInterface::AccelerantHWInterface(int32 deviceNumber,
 	fFrontBuffer(new (nothrow) AccelerantBuffer()),
 
 	fInitialModeSwitch(true),
+	fHasDisplayMode(false),
 
 	fRetraceSemaphore(-1),
 
@@ -580,6 +581,32 @@ AccelerantHWInterface::_CopyHooksFrom(AccelerantHWInterface* shared)
 }
 
 
+status_t
+AccelerantHWInterface::CheckOutputModeChanged(bool* changed)
+{
+	if (changed == NULL)
+		return B_BAD_VALUE;
+	*changed = false;
+
+	if (!fUseMultiOutput || fOutputID == B_MULTI_OUTPUT_INVALID_ID
+		|| fAccGetMultiOutputDisplayMode == NULL) {
+		return B_NOT_SUPPORTED;
+	}
+
+	AutoReadLocker _(this);
+	if (!fHasDisplayMode)
+		return B_OK;
+
+	display_mode currentMode;
+	status_t status = fAccGetMultiOutputDisplayMode(fOutputID, &currentMode);
+	if (status != B_OK)
+		return status;
+
+	*changed = currentMode != fDisplayMode;
+	return B_OK;
+}
+
+
 bool
 AccelerantHWInterface::_HasIndependentOutputHooks() const
 {
@@ -933,7 +960,8 @@ AccelerantHWInterface::SetMode(const display_mode& mode)
 	// error.
 
 	// prevent from doing the unnecessary
-	if (fModeCount > 0 && fFrontBuffer.IsSet() && fDisplayMode == mode) {
+	if (fHasDisplayMode && fModeCount > 0 && fFrontBuffer.IsSet()
+		&& fDisplayMode == mode) {
 		// TODO: better comparison of display modes
 		return B_OK;
 	}
@@ -1058,6 +1086,10 @@ AccelerantHWInterface::SetMode(const display_mode& mode)
 		_SetSystemPalette();
 	else if (fDisplayMode.space == B_GRAY8)
 		_SetGrayscalePalette();
+
+	// Mark the cached mode valid only after the framebuffer and backbuffer
+	// have both been rebuilt successfully.
+	fHasDisplayMode = true;
 
 	// notify all listeners about the mode change
 	_NotifyFrameBufferChanged();

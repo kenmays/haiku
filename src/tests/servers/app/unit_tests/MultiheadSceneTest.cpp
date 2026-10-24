@@ -22,6 +22,7 @@ class MultiheadSceneTest : public CppUnit::TestFixture {
 	CPPUNIT_TEST(NegativeOriginMapsToLocalPixels);
 	CPPUNIT_TEST(FractionalOutputOriginsMapToLocalPixels);
 	CPPUNIT_TEST(GenerationTracksOutputChanges);
+	CPPUNIT_TEST(OutputRemovalAndReconnectionPreservesStableIdentity);
 	CPPUNIT_TEST(InvalidOutputUpdatesAreRejectedAtomically);
 	CPPUNIT_TEST(DisabledOutputsAreExcludedFromLayoutAndDamage);
 	CPPUNIT_TEST(OffscreenDamageDoesNotCollapseOntoFramebufferEdges);
@@ -91,6 +92,33 @@ public:
 		CPPUNIT_ASSERT_EQUAL((status_t)B_OK, scene.RemoveOutput(10));
 		CPPUNIT_ASSERT(scene.Generation() != generation);
 	}
+
+	void OutputRemovalAndReconnectionPreservesStableIdentity()
+	{
+		MultiheadScene scene;
+		CPPUNIT_ASSERT_EQUAL((status_t)B_OK,
+			scene.AddOutput(42, BRect(-100, 0, -1, 99), 1.0f));
+		uint64 generation = scene.Generation();
+
+		CPPUNIT_ASSERT_EQUAL((status_t)B_OK, scene.RemoveOutput(42));
+		CPPUNIT_ASSERT(scene.Generation() != generation);
+		CPPUNIT_ASSERT_EQUAL((int32)-1,
+			scene.OutputAtPoint(BPoint(-20, 20)));
+		CPPUNIT_ASSERT(scene.OutputByID(42) == NULL);
+
+		generation = scene.Generation();
+		CPPUNIT_ASSERT_EQUAL((status_t)B_OK,
+			scene.AddOutput(42, BRect(0, 0, 199, 99), 2.0f));
+		CPPUNIT_ASSERT(scene.Generation() != generation);
+		CPPUNIT_ASSERT_EQUAL((int32)42,
+			scene.OutputAtPoint(BPoint(50, 50)));
+
+		BPoint pixel;
+		CPPUNIT_ASSERT_EQUAL((status_t)B_OK,
+			scene.GlobalToOutputPixel(42, BPoint(10, 10), pixel));
+		CPPUNIT_ASSERT(pixel == BPoint(20, 20));
+	}
+
 
 	// Malformed driver/layout data must not mutate a published scene or
 	// invalidate render plans that still refer to its valid generation.

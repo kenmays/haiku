@@ -3,6 +3,9 @@
  * Distributed under the terms of the MIT License.
  */
 #include "../amdgpu_vfct.h"
+#include "../amdgpu_vfct_provider.h"
+
+#include <ACPI.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -116,6 +119,35 @@ MakeTable()
 }
 
 
+static std::vector<uint8> sProviderTable;
+static int sGetTableCalls = 0;
+static int sPutTableCalls = 0;
+static bool sFailGetTable = false;
+
+
+static status_t
+FakeGetTable(const char* signature, uint32 instance, void** tableHeader)
+{
+	sGetTableCalls++;
+	if (signature == NULL || strcmp(signature, "VFCT") != 0
+		|| instance != 1 || tableHeader == NULL || sFailGetTable) {
+		return B_ENTRY_NOT_FOUND;
+	}
+	*tableHeader = &sProviderTable[0];
+	return B_OK;
+}
+
+
+static status_t
+FakePutTable(void* tableHeader)
+{
+	if (sProviderTable.empty() || tableHeader != &sProviderTable[0])
+		return B_BAD_VALUE;
+	sPutTableCalls++;
+	return B_OK;
+}
+
+
 static bool
 Check(bool condition, const char* name)
 {
@@ -150,6 +182,52 @@ main()
 	success &= Check(amdgpu_parse_vfct_table(&table[0], table.size(),
 		&renumbered, &info) == B_OK && !info.bus_matches,
 		"POST bus mismatch accepted for matching device/function");
+
+	/*
+	 * Exercise the provider's ownership contract: the ACPI table reference
+	 * must be released after success, capacity failure, and parse failure.
+	 */
+	sProviderTable = MakeTable();
+	acpi_table_module_info fakeACPI;
+	memset(&fakeACPI, 0, sizeof(fakeACPI));
+	fakeACPI.get_table = FakeGetTable;
+	fakeACPI.put_table = FakePutTable;
+	std::vector<uint8> copiedBIOS(512, 0);
+	size_t copiedBIOSSize = 0;
+	int putsBefore = sPutTableCalls;
+	success &= Check(amdgpu_get_vbios_from_vfct(&fakeACPI, &device,
+		&copiedBIOS[0], copiedBIOS.size(), &copiedBIOSSize, &info) == B_OK,
+		"ACPI VFCT provider copies validated BIOS");
+	success &= Check(copiedBIOSSize == 512
+		&& memcmp(&copiedBIOS[0], &sProviderTable[76 + 28 + 512 + 28],
+			512) == 0, "provider copies the selected image before release");
+	success &= Check(sPutTableCalls == putsBefore + 1,
+		"provider releases ACPI table after success");
+
+	uint8 smallBIOS[16];
+	putsBefore = sPutTableCalls;
+	success &= Check(amdgpu_get_vbios_from_vfct(&fakeACPI, &device,
+		smallBIOS, sizeof(smallBIOS), &copiedBIOSSize, &info)
+		== B_BUFFER_OVERFLOW && copiedBIOSSize == 512,
+		"provider reports required capacity");
+	success &= Check(sPutTableCalls == putsBefore + 1,
+		"provider releases ACPI table after capacity failure");
+
+	sProviderTable[45] ^= 1;
+	putsBefore = sPutTableCalls;
+	success &= Check(amdgpu_get_vbios_from_vfct(&fakeACPI, &device,
+		&copiedBIOS[0], copiedBIOS.size(), &copiedBIOSSize, &info)
+		== B_BAD_VALUE, "provider rejects corrupt ACPI table");
+	success &= Check(sPutTableCalls == putsBefore + 1,
+		"provider releases ACPI table after parse failure");
+	sProviderTable[45] ^= 1;
+
+	fakeACPI.put_table = NULL;
+	int getsBefore = sGetTableCalls;
+	success &= Check(amdgpu_get_vbios_from_vfct(&fakeACPI, &device,
+		&copiedBIOS[0], copiedBIOS.size(), &copiedBIOSSize, &info)
+		== B_NOT_SUPPORTED && sGetTableCalls == getsBefore,
+		"provider refuses unpaired ACPI table access");
 
 	amdgpu_vfct_device absent = {2, 4, 1, 0x1002, 0x73bf};
 	success &= Check(amdgpu_parse_vfct_table(&table[0], table.size(),

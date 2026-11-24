@@ -13,6 +13,7 @@ KernelAddon amdgpu :
 	amdgpu_vbios.cpp
 	amdgpu_vfct_provider.cpp
 	amdgpu_vfct_module.cpp
+	amdgpu_firmware_context.cpp
 ;
 
 SubInclude HAIKU_TOP src add-ons kernel drivers graphics amdgpu tests ;

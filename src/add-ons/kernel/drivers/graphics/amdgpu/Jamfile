@@ -9,6 +9,9 @@ KernelAddon amdgpu :
 	device_resources.cpp
 	amdgpu_discovery.cpp
 	amdgpu_discovery_source.cpp
+	amdgpu_vfct.cpp
+	amdgpu_vbios.cpp
+	amdgpu_vfct_provider.cpp
 ;
 
 SubInclude HAIKU_TOP src add-ons kernel drivers graphics amdgpu tests ;

@@ -139,6 +139,9 @@ main()
 		&& strcmp(context.node_name, "graphics/amdgpu_020301") == 0,
 		"initialization binds metadata and stable BDF node name without claim");
 	void* cookie = NULL;
+	success &= Check(!amdgpu_device_context_is_node_ready(&context)
+		&& amdgpu_device_context_set_node_ready(&context) == B_NOT_ALLOWED,
+		"node cannot become ready before PCI ownership is established");
 	success &= Check(amdgpu_device_context_open(&context, &cookie)
 		== B_NOT_SUPPORTED && cookie == NULL,
 		"discovered but uninitialized node cannot be opened");

@@ -19,9 +19,27 @@ The PCI scan is bounded to 4096 functions and retained records to 64 devices.
 The exact-ID table is synchronized against upstream Linux and should be
 refreshed when that PCI match table changes.
 
-**This is not yet a functioning graphics driver.** It does not reserve devices,
-map BARs, alter PCI command bits, install interrupts, load firmware, allocate
-VRAM/GTT, submit commands, or publish a graphics device node.
+**This is not yet a functioning graphics driver.** It does not yet activate
+PCI ownership, alter PCI command bits, install interrupts, load firmware,
+allocate VRAM/GTT, submit commands, or publish a graphics device node.
+
+The new `device_resources.cpp` module provides explicit, currently dormant
+lifecycle helpers:
+
+- initialize per-device resource state before use;
+- reserve a PCI function through Haiku's PCI bus manager;
+- map a caller-selected, validated type-0 memory BAR with
+  `map_physical_memory()`, page alignment, overflow checks, and uncached
+  memory attributes;
+- unmap each area and release the PCI reservation in reverse order.
+
+The caller must select the BAR only after the matching ASIC/IP block layout
+is known. No BAR is selected automatically. Failed unmaps prevent release of
+the PCI reservation, so the driver cannot silently relinquish a device while
+its MMIO mapping remains live. These helpers are not invoked by `init_driver()`
+yet: activating them before a working device node, hardware initialization,
+and teardown path exists would steal devices from the existing Radeon
+drivers without providing a usable replacement.
 
 AMDGPU is the intended preferred owner for AMDGPU-supported devices once its
 probe, initialization, teardown, and accelerant paths are complete. It must
@@ -81,8 +99,8 @@ of existing Haiku Radeon drivers unless a deliberate migration is designed.
 
 ## Development sequence
 
-1. Buildable, non-binding PCI discovery (current stage).
-2. PCI resource reservation, mapping and lifetime management.
+1. Buildable, non-binding PCI discovery and dormant resource helpers (current stage).
+2. Bind resources to a real device node and add complete initialization/teardown.
 3. Expand and verify ASIC/IP discovery tables, including revision and subsystem quirks.
 4. Firmware parser and secure firmware loading.
 5. Display-only modesetting and framebuffer scanout.

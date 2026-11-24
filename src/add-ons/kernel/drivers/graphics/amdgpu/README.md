@@ -68,9 +68,9 @@ is selected automatically. BAR mapping verifies the reserved PCI function
 matches the supplied device record, checks the endpoint header and BAR type,
 requires a non-prefetchable BAR, a page-aligned physical base and page-multiple
 size, rejects address overflow or an address that cannot be represented by
-`phys_addr_t`, and maps with uncached attributes. Failed unmaps prevent release of the PCI
-reservation, so the driver cannot silently relinquish a device while its
-MMIO mapping remains live.
+`phys_addr_t`, and maps with uncached attributes. Failed unmaps prevent release
+of the PCI reservation, so the driver cannot silently relinquish a device
+while its MMIO mapping remains live.
 
 These helpers are not invoked by `init_driver()` yet: activating them before
 a working device node, hardware initialization, and teardown path exists

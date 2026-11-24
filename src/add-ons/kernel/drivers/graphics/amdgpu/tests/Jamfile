@@ -30,3 +30,8 @@ SimpleTest amdgpu_device_context_test :
 	amdgpu_device_context_test.cpp
 	../amdgpu_device_context.cpp
 ;
+
+SimpleTest amdgpu_init_sequence_test :
+	amdgpu_init_sequence_test.cpp
+	../amdgpu_init_sequence.cpp
+;

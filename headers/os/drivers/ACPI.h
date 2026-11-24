@@ -300,6 +300,22 @@ struct acpi_module_info {
 };
 
 
+/*
+ * Reference-counted ACPI table access. get_table() acquires an ACPICA table
+ * reference; the caller must call put_table() exactly once after its final
+ * access to the returned pointer. This is a separate module so the existing
+ * acpi_module_info ABI remains unchanged.
+ */
+#define B_ACPI_TABLE_MODULE_NAME "bus_managers/acpi/tables/v1"
+
+typedef struct acpi_table_module_info {
+	module_info info;
+	status_t (*get_table)(const char* signature, uint32 instance,
+		void** tableHeader);
+	status_t (*put_table)(void* tableHeader);
+} acpi_table_module_info;
+
+
 /* Sleep states */
 
 enum {

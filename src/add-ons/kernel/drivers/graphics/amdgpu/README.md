@@ -92,10 +92,11 @@ revision are returned as metadata, not used as a substitute for the mandatory
 PCI identity match.
 
 The `amdgpu_vfct_test` target covers multi-entry selection, exact and
-renumbered-bus matching, absent devices, ACPI checksum failure, invalid VBIOS
-offsets, truncated images, and a mismatch between the VFCT identity and the
-embedded PCIR IDs. The tests are registered but have not been run in a Haiku
-build environment. The parser accepts caller-owned bytes and performs no ACPI
+renumbered-bus matching, absent devices, PCI candidate identity translation,
+rejection of invalid vendors/unrecognized records/bridge functions, ACPI
+checksum failure, invalid VBIOS offsets, truncated images, and a mismatch
+between the VFCT identity and the embedded PCIR IDs. The tests are registered
+but have not been run in a Haiku build environment. The parser accepts caller-owned bytes and performs no ACPI
 call, allocation, PCI access, or MMIO.
 
 Haiku's existing `acpi_module_info::get_table()` calls ACPICA
@@ -118,9 +119,8 @@ non-AMD functions, unrecognized records, and PCI bridges.
 it performs that translation and then acquires/releases the ACPI table module
 around the bounded copy. The caller still owns the destination buffer and must
 not treat returned VBIOS metadata as authorization to execute firmware or
-initialize hardware. The convenience
-entry point in `amdgpu_vfct_module.cpp` loads and releases the table module;
-the lower-level provider remains independently testable. The provider does
+initialize hardware. The lower-level provider remains independently
+testable. The provider does
 not reserve or initialize the GPU, map a ROM BAR, or retain a pointer into the
 ACPI table.
 

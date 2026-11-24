@@ -27,6 +27,26 @@ struct amdgpu_ip_block {
 	uint64 base_addresses[AMDGPU_IP_DISCOVERY_MAX_BASE_ADDRESSES];
 };
 
+enum amdgpu_discovery_source_kind {
+	AMDGPU_DISCOVERY_SOURCE_FIRMWARE = 1,
+	AMDGPU_DISCOVERY_SOURCE_OPTION_ROM = 2
+};
+
+/*
+ * Read exactly size bytes beginning at offset into buffer. A successful
+ * callback must fill the entire buffer; short reads must return an error.
+ * The source size is the bounded readable extent, not an inferred device BAR.
+ */
+typedef status_t (*amdgpu_discovery_read_at)(void* cookie, uint32 offset,
+	void* buffer, size_t size);
+
+struct amdgpu_discovery_source {
+	amdgpu_discovery_source_kind kind;
+	amdgpu_discovery_read_at read_at;
+	void* cookie;
+	size_t size;
+};
+
 struct amdgpu_ip_discovery_info {
 	uint16 version;
 	uint16 die_count;

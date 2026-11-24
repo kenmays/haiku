@@ -6,7 +6,10 @@ The existing drivers remain unchanged.
 ## Current status: PCI discovery foundation
 
 The driver enumerates AMD (vendor 0x1002) display-class PCI functions and
-retains a bounded set of endpoint identity records. For type-0 endpoints it
+retains a bounded set of endpoint identity records. A deliberately partial,
+curated PCI-ID table labels selected Tahiti, Bonaire, Hawaii, Polaris 10,
+Vega 10/20, Navi 10/21 and Navi 31 devices. Unknown IDs remain unknown; the
+table is not an enablement whitelist and does not imply support. For type-0 endpoints it
 records BAR size/type metadata, including 64-bit BAR slot pairing and
 prefetchability.
 
@@ -64,7 +67,7 @@ of existing Haiku Radeon drivers unless a deliberate migration is designed.
 
 1. Buildable, non-binding PCI discovery (current stage).
 2. PCI resource reservation, mapping and lifetime management.
-3. ASIC/IP discovery and generation tables.
+3. Expand and verify ASIC/IP discovery tables, including revision and subsystem quirks.
 4. Firmware parser and secure firmware loading.
 5. Display-only modesetting and framebuffer scanout.
 6. VRAM/GTT/GART and GPUVM.

@@ -44,8 +44,10 @@ amdgpu_parse_ip_discovery_table(const void* data, size_t dataSize,
 	}
 
 	const uint8* bytes = (const uint8*)data;
-	if (ReadLE32(bytes) != AMDGPU_IP_DISCOVERY_SIGNATURE)
+	if (ReadLE32(bytes) != AMDGPU_IP_DISCOVERY_SIGNATURE
+		|| ReadLE32(bytes + 8) != 0 /* IP_DISCOVERY table ID */) {
 		return B_BAD_VALUE;
+	}
 
 	uint16 version = ReadLE16(bytes + 4);
 	uint16 tableSize = ReadLE16(bytes + 6);

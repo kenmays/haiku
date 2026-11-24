@@ -225,6 +225,33 @@ framebuffer access. The current PCI-only stage must pass `false`; the flag
 must not be advertised before framebuffer mapping, cache/coherency, and
 scanout synchronization are implemented and tested.
 
+
+### Per-device lifecycle coordinator
+
+`amdgpu_device_context.h/.cpp` now binds one enumerated PCI function to its
+resource bookkeeping and firmware context. The lifecycle states are
+`UNINITIALIZED`, `DISCOVERED`, and `CLAIMED`. Initialization validates and
+copies the candidate identity, initializes the dormant resource structure,
+and creates the VBIOS context; it does not reserve the function or map a BAR.
+Claiming is a separate explicit operation. Release tears down resources first
+and resets firmware state only after resource release succeeds. If unmapping
+or unreserving fails, the object is retained intact so cleanup can be retried.
+
+`init_driver()` now constructs these per-function contexts for the bounded
+PCI candidate list and unwinds already initialized contexts if a later
+candidate fails. `uninit_driver()` releases contexts in reverse order before
+dropping the PCI module reference. The driver still returns no published
+devices and does not call the explicit claim operation. This is lifecycle
+integration only, not device-node registration or GPU activation.
+
+The `amdgpu_device_context_test` target injects resource and firmware
+operations to verify discovery initialization is non-binding, failed claims
+do not advance state, explicit claims advance state, failed release preserves
+ownership bookkeeping for retry, successful release clears the object, and
+non-AMD candidates are rejected. Build with
+`jam amdgpu_device_context_test`; the test has been registered but not run
+in this environment.
+
 ## Architecture
 
 The implementation is organized around AMD IP blocks, not Linux kernel
@@ -274,7 +301,7 @@ of existing Haiku Radeon drivers unless a deliberate migration is designed.
 1. Buildable, non-binding PCI discovery and dormant resource helpers.
 2. Bounded discovery-binary and IP-table parsers (implemented; not yet hardware-wired).
 3. Integrate firmware/ROM providers and validate real binary fixtures (bounded source reader, reference-safe ACPI VFCT provider, and caller-owned per-device VBIOS state machine implemented; real firmware fixtures remain).
-4. Bind resources and the firmware context to a real device node; add complete initialization/teardown and unwind paths.
+4. Add a real device node and accelerant; the per-function context and reverse-order cleanup coordinator are implemented, but node binding and active hardware initialization remain deferred.
 5. Expand and verify ASIC/IP discovery tables, including revision and subsystem quirks.
 6. Firmware parser and secure firmware loading.
 7. Display-only modesetting and framebuffer scanout.

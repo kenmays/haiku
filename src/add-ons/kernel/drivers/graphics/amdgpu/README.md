@@ -59,6 +59,44 @@ source reader does not parse arbitrary ROM layouts, map a PCI BAR, probe
 registers, or access hardware. Hardware-register discovery remains deferred
 until an ASIC-specific safe access method is defined.
 
+### Native Haiku provider audit
+
+The current Haiku interfaces were checked before adding a hardware-backed
+provider:
+
+- The legacy PCI bus-manager interface in `headers/os/drivers/PCI.h`
+  exposes `pci_info.u.h0.rom_base`, `rom_base_pci`, and `rom_size`
+  metadata for type-0 functions, plus PCI configuration-space read/write
+  callbacks. It does **not** expose a callback that reads or extracts an
+  expansion-ROM image. The newer per-device interface in
+  `headers/os/drivers/bus/PCI.h` likewise has no ROM-read operation.
+- The PCI bus manager's ROM metadata is not proof that the ROM BAR is enabled,
+  mapped, readable, or safe to touch. Enabling a ROM BAR requires a controlled
+  configuration-space transaction and restoration of its prior state; the
+  driver must also account for device ownership, address translation, image
+  extent, and mapping lifetime. The AMDGPU driver therefore does not toggle
+  the ROM-enable bit or map a ROM BAR as part of discovery.
+- Haiku's `headers/os/drivers/ACPI.h` exposes `acpi_module_info::get_table()`
+  for ACPI tables. The ACPI implementation delegates this to ACPICA's
+  `AcpiGetTable()`. This is suitable for ACPI-defined tables, but it is not
+  a generic firmware-file service and does not provide the AMDGPU discovery
+  binary or a VBIOS image by itself.
+- The private ACPI header describes ACPI table structures and signatures;
+  it does not establish a supported kernel API for retrieving arbitrary
+  firmware blobs from EFI/UEFI variables or the bootloader.
+
+Consequently there is currently no verified native Haiku API in these
+interfaces that can directly populate an AMDGPU discovery source. The generic
+bounded reader remains the integration point, but no production firmware or
+option-ROM provider is registered. A future provider must be separately
+designed and reviewed: it must return a stable, bounded byte extent and exact
+read semantics, and must own the complete lifetime of any mapped or copied
+source. An option-ROM provider additionally needs an explicit policy for ROM
+BAR enable/restore, address translation, image-chain scanning, checksum and
+ATOMBIOS validation, and failure cleanup. Until those contracts exist, the
+safe behavior is to leave hardware discovery dormant rather than infer a
+source from `rom_base` or ACPI metadata.
+
 **This is not yet a functioning graphics driver.** It does not yet activate
 PCI ownership, alter PCI command bits, install interrupts, load firmware,
 allocate VRAM/GTT, submit commands, or publish a graphics device node.

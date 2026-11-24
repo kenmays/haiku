@@ -124,8 +124,10 @@ amdgpu_map_mmio_bar(const amdgpu_pci_device* device,
 		return B_BAD_DATA;
 
 	const uint32 size = device->mmio_bar_size[bar];
-	if (size < B_PAGE_SIZE || (size % B_PAGE_SIZE) != 0)
+	if (size < B_PAGE_SIZE || (size % B_PAGE_SIZE) != 0
+		|| (size & (size - 1)) != 0) {
 		return B_BAD_DATA;
+	}
 
 	uint64 physicalAddress = device->pci.u.h0.base_registers_pci[bar]
 		& PCI_address_memory_32_mask;

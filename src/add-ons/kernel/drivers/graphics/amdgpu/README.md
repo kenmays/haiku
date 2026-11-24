@@ -33,8 +33,18 @@ based on Linux's public `drivers/gpu/drm/amd/include/discovery.h` layout:
 
 Both APIs use caller-provided storage and perform no allocation or MMIO.
 They validate offsets, lengths, counts, and record boundaries before reading
-variable-length records. The parser is not yet wired to hardware discovery or
-firmware loading.
+variable-length records. Empty/duplicate die descriptors and overlapping table
+directory ranges are rejected. Binary versions are restricted to v1 and v2;
+unknown versions are not guessed.
+
+The `tests` subdirectory contains a `SimpleTest` fixture executable covering
+valid v1/v2 binaries, v4 64-bit addresses, multi-die parsing, output-capacity
+limits, truncated input, checksum corruption, unsupported binary versions,
+invalid directory offsets, overlapping table ranges, and die-ID mismatches.
+Run `jam amdgpu_discovery_test` in a Haiku build tree to build the test target,
+then execute the resulting test binary. These tests are added but have not
+yet been run in this environment. The parser is not yet wired to hardware
+discovery or firmware loading.
 
 **This is not yet a functioning graphics driver.** It does not yet activate
 PCI ownership, alter PCI command bits, install interrupts, load firmware,

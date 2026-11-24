@@ -63,8 +63,9 @@ until an ASIC-specific safe access method is defined.
 image chain. It validates each image's 0x55aa signature, PCIR pointer and
 structure bounds, nonzero 512-byte image length, image extent, per-image
 8-bit checksum, and last-image indicator. It walks chained images without
-reading beyond the supplied buffer and selects the first image with an
-ATOM/MOTA ROM header. The ATOM header size, format/content revisions, master
+reading beyond the supplied buffer and selects the first image whose PCIR vendor ID is AMD (0x1002) and has
+an ATOM/MOTA ROM header. It returns the PCI vendor/device IDs with the image
+metadata. The ATOM header size, format/content revisions, master
 data-table pointer, and master data-table extent are checked before returning
 offset metadata. The parser does not read PCI configuration space, enable or
 map a ROM BAR, allocate memory, or execute ATOM command tables. A valid ROM

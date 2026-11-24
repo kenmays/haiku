@@ -34,7 +34,8 @@ FinishChecksum(std::vector<uint8>& image)
 
 
 static std::vector<uint8>
-MakeImage(bool atom, uint8 indicator, uint8 codeType = 0)
+MakeImage(bool atom, uint8 indicator, uint8 codeType = 0,
+	uint16 vendorID = 0x1002)
 {
 	std::vector<uint8> image(512, 0);
 	image[0] = 0x55;
@@ -43,7 +44,7 @@ MakeImage(bool atom, uint8 indicator, uint8 codeType = 0)
 
 	uint8* pcir = &image[0x1c];
 	memcpy(pcir, "PCIR", 4);
-	WriteLE16(pcir + 4, 0x1002);
+	WriteLE16(pcir + 4, vendorID);
 	WriteLE16(pcir + 6, 0x73bf);
 	WriteLE16(pcir + 10, 0x18);
 	WriteLE16(pcir + 16, 1);
@@ -99,6 +100,11 @@ main()
 	std::vector<uint8> noAtom = MakeImage(false, 0x80, 3);
 	success &= Check(amdgpu_parse_vbios_image(&noAtom[0], noAtom.size(),
 		&info) == B_ENTRY_NOT_FOUND, "valid non-ATOM ROM chain");
+
+	std::vector<uint8> foreignAtom = MakeImage(true, 0x80, 0, 0x1234);
+	success &= Check(amdgpu_parse_vbios_image(&foreignAtom[0],
+		foreignAtom.size(), &info) == B_ENTRY_NOT_FOUND,
+		"non-AMD ATOM image is not accepted as AMD VBIOS");
 
 	std::vector<uint8> badChecksum = second;
 	badChecksum[0x200 - 1] ^= 1;

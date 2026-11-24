@@ -230,7 +230,7 @@ scanout synchronization are implemented and tested.
 
 `amdgpu_device_context.h/.cpp` now binds one enumerated PCI function to its
 resource bookkeeping and firmware context. The lifecycle states are
-`UNINITIALIZED`, `DISCOVERED`, and `CLAIMED`. Initialization validates and
+`UNINITIALIZED`, `DISCOVERED`, `CLAIMED`, `NODE_READY`, and `STOPPING`. Initialization validates and
 copies the candidate identity, initializes the dormant resource structure,
 and creates the VBIOS context; it does not reserve the function or map a BAR.
 Claiming is a separate explicit operation. Release tears down resources first
@@ -251,6 +251,39 @@ ownership bookkeeping for retry, successful release clears the object, and
 non-AMD candidates are rejected. Build with
 `jam amdgpu_device_context_test`; the test has been registered but not run
 in this environment.
+
+
+### Device-node registration and lifetime boundary
+
+The driver now has a gated legacy device-node hook path. Each discovered
+function receives a stable BDF-derived name
+(`graphics/amdgpu_BB D F`, without separators in the actual name), and the
+registry exposes a node only when its context has explicitly reached
+`AMDGPU_DEVICE_NODE_READY`. That transition is allowed only after an explicit
+PCI claim and must be called by a future ASIC-specific initialization path
+after the node's backing state is complete.
+
+The open hook takes a per-device reference under the registry lock and the
+device-context mutex. The close hook completes close-side work; the free hook
+drops the reference. Teardown is serialized against registry lookup, moves
+the context to a stopping state, and refuses to release resources while any
+open cookie remains. Resource-release failure restores the prior lifecycle
+state so cleanup can be retried. The registry uses a statically initialized
+kernel mutex, avoiding lock allocation during device discovery.
+
+The current driver does not mark any context node-ready, so
+`publish_devices()` returns no device list and `find_device()` returns no
+hooks for discovered-only candidates. The hooks deliberately return
+`B_NOT_SUPPORTED` for read, write, and control operations until a real
+accelerant-facing ABI is implemented. This prevents the foundation driver
+from binding to an AMD GPU and blocking the existing Radeon drivers before
+it can provide usable graphics functionality.
+
+The lifecycle test now checks stable BDF naming, rejection of opens before
+node readiness, the claim-to-ready transition, open reference acquisition,
+teardown refusal while a cookie is live, and successful release after the
+reference is dropped. The test is registered but has not been run in a Haiku
+build environment.
 
 ## Architecture
 

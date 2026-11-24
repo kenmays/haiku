@@ -257,7 +257,8 @@ in this environment.
 
 The driver now has a gated legacy device-node hook path. Each discovered
 function receives a stable BDF-derived name
-(`graphics/amdgpu_BB D F`, without separators in the actual name), and the
+(`graphics/amdgpu_<bus><device><function>`, with each value zero-padded to
+ two hexadecimal digits), and the
 registry exposes a node only when its context has explicitly reached
 `AMDGPU_DEVICE_NODE_READY`. That transition is allowed only after an explicit
 PCI claim and must be called by a future ASIC-specific initialization path

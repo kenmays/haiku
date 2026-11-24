@@ -27,6 +27,14 @@ InitializeResources(amdgpu_device_resources& resources)
 }
 
 
+void
+amdgpu_init_device_resources(amdgpu_device_resources* resources)
+{
+	if (resources != NULL)
+		InitializeResources(*resources);
+}
+
+
 status_t
 amdgpu_claim_device(pci_module_info* pci, const amdgpu_pci_device* device,
 	amdgpu_device_resources* resources)
@@ -35,10 +43,14 @@ amdgpu_claim_device(pci_module_info* pci, const amdgpu_pci_device* device,
 		|| pci->reserve_device == NULL || pci->unreserve_device == NULL) {
 		return B_BAD_VALUE;
 	}
+	// The caller must have initialized this state with
+	// amdgpu_init_device_resources() before the first claim.
 	if (resources->reserved)
 		return B_BUSY;
-
-	InitializeResources(*resources);
+	for (uint32 i = 0; i < 6; i++) {
+		if (resources->mmio_area[i] >= 0)
+			return B_BUSY;
+	}
 	resources->pci = device->pci;
 
 	status_t status = pci->reserve_device(device->pci.bus,

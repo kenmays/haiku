@@ -7,4 +7,5 @@ KernelAddon amdgpu :
 	driver.cpp
 	pci_device.cpp
 	device_resources.cpp
+	amdgpu_discovery.cpp
 ;

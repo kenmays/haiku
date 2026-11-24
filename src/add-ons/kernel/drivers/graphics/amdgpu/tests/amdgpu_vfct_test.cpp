@@ -102,7 +102,7 @@ MakeTable()
 	WriteLE32(&table[4], 0);
 	table[8] = 1;
 	memcpy(&table[10], "HAIKU ", 6);
-	memcpy(&table[16], "AMDGPUVFCT", 10);
+	memcpy(&table[16], "AMDGPUVF", 8);
 	WriteLE32(&table[0x34], 76);
 	WriteLE32(&table[0x38], 0);
 

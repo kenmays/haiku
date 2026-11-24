@@ -15,9 +15,19 @@ prefetchability.
 
 **This is not yet a functioning graphics driver.** It does not reserve devices,
 map BARs, alter PCI command bits, install interrupts, load firmware, allocate
-VRAM/GTT, submit commands, or publish a graphics device node. The PCI scan is
-bounded to 256 functions and retained records are bounded to 16 devices.
-Enumeration beyond those bounds is not claimed as supported.
+VRAM/GTT, submit commands, or publish a graphics device node.
+
+AMDGPU is the intended preferred owner for AMDGPU-supported devices once its
+probe, initialization, teardown, and accelerant paths are complete. It must
+not preempt existing Radeon drivers merely by matching vendor ID while it is
+still a non-binding discovery stub. Existing Radeon drivers remain the safe
+fallback for unimplemented generations and unsupported functions.
+
+The accelerant helper in `accelerant/display_mode_flags.h` adds
+`B_PARALLEL_ACCESS` only when the caller has verified safe concurrent
+framebuffer access. The current PCI-only stage must pass `false`; the flag
+must not be advertised before framebuffer mapping, cache/coherency, and
+scanout synchronization are implemented and tested.
 
 ## Architecture
 

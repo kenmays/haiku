@@ -8,6 +8,9 @@
 #include <SupportDefs.h>
 
 static const uint32 AMDGPU_IP_DISCOVERY_SIGNATURE = 0x53445049;
+static const uint32 AMDGPU_DISCOVERY_BINARY_SIGNATURE = 0x28211407;
+static const uint32 AMDGPU_DISCOVERY_MAX_TABLES = 64;
+static const uint32 AMDGPU_DISCOVERY_TABLE_IP = 0;
 static const uint32 AMDGPU_IP_DISCOVERY_MAX_DIES = 16;
 static const uint32 AMDGPU_IP_DISCOVERY_MAX_IPS = 256;
 static const uint32 AMDGPU_IP_DISCOVERY_MAX_BASE_ADDRESSES = 16;
@@ -42,6 +45,11 @@ struct amdgpu_ip_discovery_info {
  * B_BUFFER_OVERFLOW when the output array is too small.
  */
 status_t amdgpu_parse_ip_discovery_table(const void* data, size_t dataSize,
+	amdgpu_ip_block* blocks, uint32 blockCapacity,
+	amdgpu_ip_discovery_info* info);
+
+/* Validate an AMD discovery binary and parse its IP_DISCOVERY directory entry. */
+status_t amdgpu_parse_discovery_binary(const void* data, size_t dataSize,
 	amdgpu_ip_block* blocks, uint32 blockCapacity,
 	amdgpu_ip_discovery_info* info);
 

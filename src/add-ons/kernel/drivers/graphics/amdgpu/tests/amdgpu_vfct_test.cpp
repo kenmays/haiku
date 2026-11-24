@@ -242,6 +242,14 @@ main()
 	success &= Check(sPutTableCalls == putsBefore + 1,
 		"provider releases ACPI table after capacity failure");
 
+	putsBefore = sPutTableCalls;
+	success &= Check(amdgpu_query_vbios_size_from_vfct(&fakeACPI, &device,
+		&copiedBIOSSize, &info) == B_BUFFER_OVERFLOW
+		&& copiedBIOSSize == 512 && info.image_size == 512,
+		"provider supports a no-copy image-size query");
+	success &= Check(sPutTableCalls == putsBefore + 1,
+		"provider releases ACPI table after size query");
+
 	sProviderTable[45] ^= 1;
 	putsBefore = sPutTableCalls;
 	success &= Check(amdgpu_get_vbios_from_vfct(&fakeACPI, &device,

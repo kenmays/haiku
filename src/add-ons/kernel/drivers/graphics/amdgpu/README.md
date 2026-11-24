@@ -33,13 +33,21 @@ lifecycle helpers:
   memory attributes;
 - unmap each area and release the PCI reservation in reverse order.
 
-The caller must select the BAR only after the matching ASIC/IP block layout
-is known. No BAR is selected automatically. Failed unmaps prevent release of
-the PCI reservation, so the driver cannot silently relinquish a device while
-its MMIO mapping remains live. These helpers are not invoked by `init_driver()`
-yet: activating them before a working device node, hardware initialization,
-and teardown path exists would steal devices from the existing Radeon
-drivers without providing a usable replacement.
+The caller must zero-initialize the resource structure and call
+`amdgpu_init_device_resources()` before claiming a device. The caller must
+select the BAR only after the matching ASIC/IP block layout is known. No BAR
+is selected automatically. BAR mapping verifies the reserved PCI function
+matches the supplied device record, checks the endpoint header and BAR type,
+requires a page-aligned physical base and page-multiple size, rejects address
+overflow or an address that cannot be represented by `phys_addr_t`, and maps
+with uncached attributes. Failed unmaps prevent release of the PCI
+reservation, so the driver cannot silently relinquish a device while its
+MMIO mapping remains live.
+
+These helpers are not invoked by `init_driver()` yet: activating them before
+a working device node, hardware initialization, and teardown path exists
+would steal devices from the existing Radeon drivers without providing a
+usable replacement.
 
 AMDGPU is the intended preferred owner for AMDGPU-supported devices once its
 probe, initialization, teardown, and accelerant paths are complete. It must

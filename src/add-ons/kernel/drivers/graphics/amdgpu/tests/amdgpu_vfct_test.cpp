@@ -4,6 +4,7 @@
  */
 #include "../amdgpu_vfct.h"
 #include "../amdgpu_vfct_provider.h"
+#include "../pci_device.h"
 
 #include <ACPI.h>
 
@@ -182,6 +183,34 @@ main()
 	success &= Check(amdgpu_parse_vfct_table(&table[0], table.size(),
 		&renumbered, &info) == B_OK && !info.bus_matches,
 		"POST bus mismatch accepted for matching device/function");
+
+	/* Translate the retained PCI candidate without claiming the function. */
+	amdgpu_pci_device pciDevice;
+	memset(&pciDevice, 0, sizeof(pciDevice));
+	pciDevice.pci.vendor_id = 0x1002;
+	pciDevice.pci.device_id = 0x73bf;
+	pciDevice.pci.bus = 2;
+	pciDevice.pci.device = 3;
+	pciDevice.pci.function = 1;
+	pciDevice.pci.header_type = PCI_header_type_generic;
+	pciDevice.identification_flags = AMDGPU_PCI_ID_EXACT;
+	amdgpu_vfct_device translated;
+	success &= Check(amdgpu_vfct_device_from_pci_device(&pciDevice,
+		&translated) == B_OK && translated.bus == 2
+		&& translated.device == 3 && translated.function == 1
+		&& translated.vendor_id == 0x1002 && translated.device_id == 0x73bf,
+		"enumerated PCI candidate maps to exact VFCT identity");
+	pciDevice.pci.vendor_id = 0x1234;
+	success &= Check(amdgpu_vfct_device_from_pci_device(&pciDevice,
+		&translated) == B_BAD_VALUE, "non-AMD PCI candidate rejected");
+	pciDevice.pci.vendor_id = 0x1002;
+	pciDevice.identification_flags = 0;
+	success &= Check(amdgpu_vfct_device_from_pci_device(&pciDevice,
+		&translated) == B_BAD_VALUE, "unrecognized PCI candidate rejected");
+	pciDevice.identification_flags = AMDGPU_PCI_ID_EXACT;
+	pciDevice.pci.header_type = PCI_header_type_PCI_to_PCI_bridge;
+	success &= Check(amdgpu_vfct_device_from_pci_device(&pciDevice,
+		&translated) == B_BAD_VALUE, "PCI bridge function rejected");
 
 	/*
 	 * Exercise the provider's ownership contract: the ACPI table reference

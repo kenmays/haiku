@@ -3,7 +3,7 @@
 This directory is a new driver, separate from `radeon` and `radeon_hd`.
 The existing drivers remain unchanged.
 
-## Current status: PCI discovery foundation
+## Current status: PCI and IP discovery foundation
 
 The driver carries all 312 exact AMD vendor/device IDs present in the
 current upstream Linux `amdgpu_drv.c` PCI table in `pci_ids.h`, plus the
@@ -18,6 +18,20 @@ and prefetchability.
 The PCI scan is bounded to 4096 functions and retained records to 64 devices.
 The exact-ID table is synchronized against upstream Linux and should be
 refreshed when that PCI match table changes.
+
+`amdgpu_discovery.cpp` adds a hardware-independent parser for standalone AMD
+IP-discovery tables, based on the public table layout in Linux's
+`drivers/gpu/drm/amd/include/discovery.h`. It accepts table versions 1-4,
+decodes 32-bit and version-4 64-bit base addresses, and returns hardware ID,
+instance, IP revision, sub-revision, variant, and base-address metadata.
+The parser uses caller-provided storage and performs no allocation or MMIO.
+It validates the signature, version, declared table size, die count and
+offsets, duplicate die offsets, die ordering, IP count limits, per-record
+lengths, and base-address counts before reading variable-length records.
+The IP table format itself has no per-table CRC field; checksum validation
+belongs to the enclosing discovery-binary/table directory parser and is not
+claimed by this standalone parser. The parser is not yet wired to hardware
+discovery or firmware loading.
 
 **This is not yet a functioning graphics driver.** It does not yet activate
 PCI ownership, alter PCI command bits, install interrupts, load firmware,
@@ -109,14 +123,16 @@ of existing Haiku Radeon drivers unless a deliberate migration is designed.
 ## Development sequence
 
 1. Buildable, non-binding PCI discovery and dormant resource helpers (current stage).
-2. Bind resources to a real device node and add complete initialization/teardown.
-3. Expand and verify ASIC/IP discovery tables, including revision and subsystem quirks.
-4. Firmware parser and secure firmware loading.
-5. Display-only modesetting and framebuffer scanout.
-6. VRAM/GTT/GART and GPUVM.
-7. Interrupts, rings, fences, reset and SDMA.
-8. GC command submission and Mesa OpenGL integration.
-9. DCN/display hardening, video IP, power management and broader generations.
-10. Automated tests, hardware stress, suspend/resume and failure injection.
+2. Parse and validate enclosing discovery-binary headers/table directory and
+   integrate the IP-table parser with a generation-specific discovery source.
+3. Bind resources to a real device node and add complete initialization/teardown.
+4. Expand and verify ASIC/IP discovery tables, including revision and subsystem quirks.
+5. Firmware parser and secure firmware loading.
+6. Display-only modesetting and framebuffer scanout.
+7. VRAM/GTT/GART and GPUVM.
+8. Interrupts, rings, fences, reset and SDMA.
+9. GC command submission and Mesa OpenGL integration.
+10. DCN/display hardening, video IP, power management and broader generations.
+11. Automated tests, hardware stress, suspend/resume and failure injection.
 
 Each stage must build and pass tests before hardware functionality is enabled.

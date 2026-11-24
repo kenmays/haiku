@@ -105,6 +105,9 @@ amdgpu_parse_vfct_table(const void* data, size_t dataSize,
 		const uint32 revision = ReadLE32(entry + 20);
 		const uint32 imageLength = ReadLE32(entry + 24);
 
+		if (bus > 255 || pciDevice > 31 || function > 7)
+			return B_BAD_VALUE;
+
 		const size_t imageOffset = offset + kVFCTImageHeaderSize;
 		if (imageLength == 0
 			|| !RangeIsValid(imageOffset, imageLength, entriesEnd)) {

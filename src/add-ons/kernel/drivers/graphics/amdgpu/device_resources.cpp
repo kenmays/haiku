@@ -1,0 +1,167 @@
+/*
+ * Copyright 2026, Haiku, Inc. All rights reserved.
+ * Distributed under the terms of the MIT License.
+ *
+ * PCI ownership and MMIO lifetime helpers for the native Haiku AMDGPU driver.
+ * These helpers are deliberately not called by the discovery-only driver
+ * until a real device node and complete initialization/uninitialization path
+ * are available.
+ */
+#include <KernelExport.h>
+#include <OS.h>
+#include <PCI.h>
+#include <SupportDefs.h>
+#include <string.h>
+
+#include "device_resources.h"
+
+static const char* const kAMDGPUDriverName = "amdgpu";
+
+
+static void
+InitializeResources(amdgpu_device_resources& resources)
+{
+	memset(&resources, 0, sizeof(resources));
+	for (uint32 i = 0; i < 6; i++)
+		resources.mmio_area[i] = -1;
+}
+
+
+status_t
+amdgpu_claim_device(pci_module_info* pci, const amdgpu_pci_device* device,
+	amdgpu_device_resources* resources)
+{
+	if (pci == NULL || device == NULL || resources == NULL
+		|| pci->reserve_device == NULL || pci->unreserve_device == NULL) {
+		return B_BAD_VALUE;
+	}
+	if (resources->reserved)
+		return B_BUSY;
+
+	InitializeResources(*resources);
+	resources->pci = device->pci;
+
+	status_t status = pci->reserve_device(device->pci.bus,
+		device->pci.device, device->pci.function, kAMDGPUDriverName,
+		resources);
+	if (status != B_OK) {
+		InitializeResources(*resources);
+		return status;
+	}
+
+	resources->reserved = true;
+	return B_OK;
+}
+
+
+status_t
+amdgpu_map_mmio_bar(const amdgpu_pci_device* device,
+	amdgpu_device_resources* resources, uint8 bar)
+{
+	if (device == NULL || resources == NULL || !resources->reserved
+		|| bar >= 6) {
+		return B_BAD_VALUE;
+	}
+	if (resources->mmio_area[bar] >= 0)
+		return B_BUSY;
+	if ((device->mmio_bar_mask & (1u << bar)) == 0)
+		return B_BAD_VALUE;
+	if ((device->pci.header_type & PCI_header_type_mask)
+		!= PCI_header_type_generic) {
+		return B_NOT_SUPPORTED;
+	}
+
+	const uint8 flags = device->pci.u.h0.base_register_flags[bar];
+	if ((flags & PCI_address_space) != 0)
+		return B_BAD_VALUE;
+
+	const uint8 type = flags & PCI_address_type;
+	if (type != PCI_address_type_32 && type != PCI_address_type_32_low
+		&& type != PCI_address_type_64) {
+		return B_NOT_SUPPORTED;
+	}
+	if (type == PCI_address_type_64 && bar == 5)
+		return B_BAD_DATA;
+
+	const uint32 size = device->mmio_bar_size[bar];
+	if (size < B_PAGE_SIZE || (size % B_PAGE_SIZE) != 0)
+		return B_BAD_DATA;
+
+	uint64 physicalAddress = device->pci.u.h0.base_registers_pci[bar]
+		& PCI_address_memory_32_mask;
+	if (type == PCI_address_type_64) {
+		physicalAddress |= (uint64)
+			device->pci.u.h0.base_registers_pci[bar + 1] << 32;
+	}
+	if (physicalAddress == 0
+		|| (physicalAddress & (B_PAGE_SIZE - 1)) != 0
+		|| physicalAddress > (~(uint64)0) - size) {
+		return B_BAD_DATA;
+	}
+
+	void* mappedAddress = NULL;
+	area_id area = map_physical_memory("amdgpu-mmio",
+		(phys_addr_t)physicalAddress, size,
+		B_ANY_KERNEL_BLOCK_ADDRESS | B_UNCACHED_MEMORY,
+		B_READ_AREA | B_WRITE_AREA, &mappedAddress);
+	if (area < 0)
+		return (status_t)area;
+	if (mappedAddress == NULL) {
+		delete_area(area);
+		return B_NO_MEMORY;
+	}
+
+	resources->mmio_area[bar] = area;
+	resources->mmio[bar] = mappedAddress;
+	resources->mmio_physical[bar] = (phys_addr_t)physicalAddress;
+	resources->mmio_size[bar] = size;
+	return B_OK;
+}
+
+
+status_t
+amdgpu_unmap_mmio_bar(amdgpu_device_resources* resources, uint8 bar)
+{
+	if (resources == NULL || bar >= 6)
+		return B_BAD_VALUE;
+	if (resources->mmio_area[bar] < 0)
+		return B_OK;
+
+	status_t status = delete_area(resources->mmio_area[bar]);
+	if (status != B_OK)
+		return status;
+
+	resources->mmio_area[bar] = -1;
+	resources->mmio[bar] = NULL;
+	resources->mmio_physical[bar] = 0;
+	resources->mmio_size[bar] = 0;
+	return B_OK;
+}
+
+
+status_t
+amdgpu_release_device(pci_module_info* pci,
+	amdgpu_device_resources* resources)
+{
+	if (pci == NULL || resources == NULL)
+		return B_BAD_VALUE;
+
+	for (int32 bar = 5; bar >= 0; bar--) {
+		status_t status = amdgpu_unmap_mmio_bar(resources, (uint8)bar);
+		if (status != B_OK)
+			return status;
+	}
+
+	if (resources->reserved) {
+		if (pci->unreserve_device == NULL)
+			return B_NOT_SUPPORTED;
+		status_t status = pci->unreserve_device(resources->pci.bus,
+			resources->pci.device, resources->pci.function,
+			kAMDGPUDriverName, resources);
+		if (status != B_OK)
+			return status;
+	}
+
+	InitializeResources(*resources);
+	return B_OK;
+}

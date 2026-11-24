@@ -54,7 +54,9 @@ amdgpu_get_vbios_from_vfct(acpi_table_module_info* acpi,
 		status = amdgpu_parse_vfct_table(table, tableSize, device, &parsed);
 		if (status == B_OK) {
 			*biosSize = parsed.image_size;
-			if (biosBuffer == NULL || biosCapacity < parsed.image_size) {
+			if (biosBuffer == NULL) {
+				status = B_BAD_VALUE;
+			} else if (biosCapacity < parsed.image_size) {
 				status = B_BUFFER_OVERFLOW;
 			} else {
 				memcpy(biosBuffer, bytes + parsed.image_offset,

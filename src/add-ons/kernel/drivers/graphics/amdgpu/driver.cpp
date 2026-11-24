@@ -53,8 +53,8 @@ init_driver(void)
 		return status;
 	}
 
-	dprintf("amdgpu: retained %lu AMD display PCI record(s); hardware "
-		"bring-up remains disabled.\\n", sDeviceCount);
+	dprintf("amdgpu: retained %" B_PRIu32 " AMD display PCI record(s); hardware "
+		"bring-up remains disabled.\n", sDeviceCount);
 	return B_OK;
 }
 

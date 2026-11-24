@@ -9,6 +9,7 @@
  * operations will be added behind validated, generation-specific stages.
  */
 
+#include <Drivers.h>
 #include <KernelExport.h>
 #include <PCI.h>
 #include <SupportDefs.h>

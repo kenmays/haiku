@@ -262,6 +262,13 @@ main()
 		truncated.size(), &device, &info) == B_BAD_VALUE,
 		"truncated matching image rejected");
 
+	std::vector<uint8> badBDF = table;
+	WriteLE32(&badBDF[76 + 4], 32);
+	FinishACPIChecksum(badBDF);
+	success &= Check(amdgpu_parse_vfct_table(&badBDF[0],
+		badBDF.size(), &device, &info) == B_BAD_VALUE,
+		"invalid PCI device number in VFCT rejected");
+
 	std::vector<uint8> wrongROM = table;
 	/* Change the embedded ROM PCIR device ID without changing VFCT identity. */
 	const size_t secondROMOffset = 76 + 28 + 512 + 28;

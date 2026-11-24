@@ -38,16 +38,19 @@ amdgpu_parse_ip_discovery_table(const void* data, size_t dataSize,
 	amdgpu_ip_block* blocks, uint32 blockCapacity,
 	amdgpu_ip_discovery_info* info)
 {
-	if (data == NULL || info == NULL || (blockCapacity != 0 && blocks == NULL)
-		|| dataSize < kDiscoveryHeaderSize) {
+	if (info == NULL)
 		return B_BAD_VALUE;
-	}
 
 	info->version = 0;
 	info->die_count = 0;
 	info->ip_count = 0;
 	info->blocks = NULL;
 	info->block_capacity = 0;
+
+	if (data == NULL || (blockCapacity != 0 && blocks == NULL)
+		|| dataSize < kDiscoveryHeaderSize) {
+		return B_BAD_VALUE;
+	}
 
 	const uint8* bytes = (const uint8*)data;
 	if (ReadLE32(bytes) != AMDGPU_IP_DISCOVERY_SIGNATURE
@@ -194,6 +197,11 @@ amdgpu_parse_discovery_binary(const void* data, size_t dataSize,
 	info->ip_count = 0;
 	info->blocks = NULL;
 	info->block_capacity = 0;
+
+	if (data == NULL || (blockCapacity != 0 && blocks == NULL)
+		|| dataSize < 12) {
+		return B_BAD_VALUE;
+	}
 
 	const uint8* bytes = (const uint8*)data;
 	if (ReadLE32(bytes) != AMDGPU_DISCOVERY_BINARY_SIGNATURE)

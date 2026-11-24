@@ -80,6 +80,37 @@ MakeIPTable(uint16 version, bool address64)
 }
 
 static std::vector<uint8>
+MakeMultiDieIPTable()
+{
+	const uint32 tableSize = 112;
+	std::vector<uint8> table(tableSize, 0);
+	WriteLE32(&table[0], AMDGPU_IP_DISCOVERY_SIGNATURE);
+	WriteLE16(&table[4], 3);
+	WriteLE16(&table[6], tableSize);
+	WriteLE32(&table[8], AMDGPU_DISCOVERY_TABLE_IP);
+	WriteLE16(&table[12], 2);
+	WriteLE16(&table[14], 7);
+	WriteLE16(&table[16], 80);
+	WriteLE16(&table[18], 9);
+	WriteLE16(&table[20], 96);
+
+	WriteLE16(&table[80], 7);
+	WriteLE16(&table[82], 1);
+	WriteLE16(&table[84], 0x100);
+	table[87] = 1;
+	table[88] = 10;
+	WriteLE32(&table[92], 0x100000);
+
+	WriteLE16(&table[96], 9);
+	WriteLE16(&table[98], 1);
+	WriteLE16(&table[100], 0x200);
+	table[103] = 1;
+	table[104] = 11;
+	WriteLE32(&table[108], 0x200000);
+	return table;
+}
+
+static std::vector<uint8>
 MakeBinary(uint16 binaryVersion, bool address64 = false)
 {
 	std::vector<uint8> ipTable = MakeIPTable(address64 ? 4 : 3, address64);
@@ -119,6 +150,12 @@ main()
 	bool success = true;
 	amdgpu_ip_block blocks[4];
 	amdgpu_ip_discovery_info info;
+
+	std::vector<uint8> multiDie = MakeMultiDieIPTable();
+	success &= Check(amdgpu_parse_ip_discovery_table(&multiDie[0],
+		multiDie.size(), blocks, 4, &info) == B_OK, "multi-die IP table");
+	success &= Check(info.die_count == 2 && info.ip_count == 2
+		&& blocks[1].hardware_id == 0x200, "multi-die records decoded");
 
 	std::vector<uint8> binaryV1 = MakeBinary(1);
 	success &= Check(amdgpu_parse_discovery_binary(&binaryV1[0],
@@ -167,6 +204,17 @@ main()
 	success &= Check(amdgpu_parse_discovery_binary(&badDirectory[0],
 		badDirectory.size(), blocks, 4, &info) == B_BAD_VALUE,
 		"directory pointing into header rejected");
+
+	std::vector<uint8> overlappingTables(binaryV1);
+	uint32 firstTableOffset = ReadLE16(&overlappingTables[12]);
+	WriteLE16(&overlappingTables[20], firstTableOffset + 1);
+	WriteLE16(&overlappingTables[22], 0);
+	WriteLE16(&overlappingTables[24], 4);
+	WriteLE16(&overlappingTables[8], Checksum(&overlappingTables[10],
+		overlappingTables.size() - 10));
+	success &= Check(amdgpu_parse_discovery_binary(&overlappingTables[0],
+		overlappingTables.size(), blocks, 4, &info) == B_BAD_VALUE,
+		"overlapping table entries rejected");
 
 	std::vector<uint8> badDie(binaryV1);
 	uint32 tableOffset = ReadLE16(&badDie[12]);

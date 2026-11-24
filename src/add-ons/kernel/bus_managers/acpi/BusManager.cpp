@@ -853,8 +853,23 @@ reboot(void)
 status_t
 get_table(const char* signature, uint32 instance, void** tableHeader)
 {
-	return AcpiGetTable((char*)signature, instance,
+	if (signature == NULL || tableHeader == NULL)
+		return B_BAD_VALUE;
+
+	*tableHeader = NULL;
+	return AcpiGetTable((ACPI_STRING)signature, instance,
 		(ACPI_TABLE_HEADER**)tableHeader) == AE_OK ? B_OK : B_ERROR;
+}
+
+
+status_t
+put_table(void* tableHeader)
+{
+	if (tableHeader == NULL)
+		return B_BAD_VALUE;
+
+	AcpiPutTable((ACPI_TABLE_HEADER*)tableHeader);
+	return B_OK;
 }
 
 
@@ -870,6 +885,18 @@ write_bit_register(uint32 regid, uint32 val)
 {
 	return AcpiWriteBitRegister(regid, val);
 }
+
+
+
+struct acpi_table_module_info gACPITableModule = {
+	{
+		B_ACPI_TABLE_MODULE_NAME,
+		B_KEEP_LOADED,
+		acpi_std_ops
+	},
+	get_table,
+	put_table
+};
 
 
 struct acpi_module_info gACPIModule = {

@@ -43,6 +43,12 @@ amdgpu_parse_ip_discovery_table(const void* data, size_t dataSize,
 		return B_BAD_VALUE;
 	}
 
+	info->version = 0;
+	info->die_count = 0;
+	info->ip_count = 0;
+	info->blocks = NULL;
+	info->block_capacity = 0;
+
 	const uint8* bytes = (const uint8*)data;
 	if (ReadLE32(bytes) != AMDGPU_IP_DISCOVERY_SIGNATURE
 		|| ReadLE32(bytes + 8) != 0 /* IP_DISCOVERY table ID */) {
@@ -182,6 +188,12 @@ amdgpu_parse_discovery_binary(const void* data, size_t dataSize,
 		return B_BAD_VALUE;
 	}
 
+	info->version = 0;
+	info->die_count = 0;
+	info->ip_count = 0;
+	info->blocks = NULL;
+	info->block_capacity = 0;
+
 	const uint8* bytes = (const uint8*)data;
 	if (ReadLE32(bytes) != AMDGPU_DISCOVERY_BINARY_SIGNATURE)
 		return B_BAD_VALUE;
@@ -196,7 +208,7 @@ amdgpu_parse_discovery_binary(const void* data, size_t dataSize,
 	if (binarySize > dataSize || binarySize < 12)
 		return B_BAD_VALUE;
 
-	if (major <= 1) {
+	if (major == 1) {
 		if (binarySize < kBinaryHeaderV1Size)
 			return B_BAD_VALUE;
 		tableCount = 7;
@@ -238,6 +250,15 @@ amdgpu_parse_discovery_binary(const void* data, size_t dataSize,
 			|| tables[i].offset > binarySize
 			|| tables[i].size > binarySize - tables[i].offset) {
 			return B_BAD_VALUE;
+		}
+
+		uint32 tableEnd = tables[i].offset + tables[i].size;
+		for (uint32 j = 0; j < i; j++) {
+			if (tables[j].offset == 0)
+				continue;
+			uint32 otherEnd = tables[j].offset + tables[j].size;
+			if (tables[i].offset < otherEnd && tables[j].offset < tableEnd)
+				return B_BAD_VALUE;
 		}
 	}
 

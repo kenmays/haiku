@@ -28,9 +28,10 @@ lifecycle helpers:
 
 - initialize per-device resource state before use;
 - reserve a PCI function through Haiku's PCI bus manager;
-- map a caller-selected, validated type-0 memory BAR with
+- map a caller-selected, validated, non-prefetchable type-0 register BAR with
   `map_physical_memory()`, page alignment, overflow checks, and uncached
-  memory attributes;
+  memory attributes; prefetchable VRAM/framebuffer apertures are rejected and
+  require a separate write-combining mapping path;
 - unmap each area and release the PCI reservation in reverse order.
 
 The caller must zero-initialize the resource structure and call
@@ -38,9 +39,9 @@ The caller must zero-initialize the resource structure and call
 select the BAR only after the matching ASIC/IP block layout is known. No BAR
 is selected automatically. BAR mapping verifies the reserved PCI function
 matches the supplied device record, checks the endpoint header and BAR type,
-requires a page-aligned physical base and page-multiple size, rejects address
-overflow or an address that cannot be represented by `phys_addr_t`, and maps
-with uncached attributes. Failed unmaps prevent release of the PCI
+requires a non-prefetchable BAR, a page-aligned physical base and page-multiple
+size, rejects address overflow or an address that cannot be represented by
+`phys_addr_t`, and maps with uncached attributes. Failed unmaps prevent release of the PCI
 reservation, so the driver cannot silently relinquish a device while its
 MMIO mapping remains live.
 

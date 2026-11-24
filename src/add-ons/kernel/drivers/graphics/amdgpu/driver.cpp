@@ -64,7 +64,7 @@ init_driver(void)
 	}
 	dprintf("amdgpu: retained %" B_PRIu32 " AMD GPU function(s), "
 		"%" B_PRIu32 " exact PCI IDs, %" B_PRIu32
-		" IP-discovery class matches; no hardware initialized.\\n",
+		" IP-discovery class matches; no hardware initialized.\n",
 		sDeviceCount, exactIDs, ipDiscovery);
 	return B_OK;
 }

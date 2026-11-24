@@ -17,6 +17,8 @@ struct amdgpu_vbios_info {
 	uint32 pcir_offset;
 	uint32 atom_header_offset;
 	uint32 master_data_table_offset;
+	uint16 vendor_id;
+	uint16 device_id;
 	uint16 atom_header_size;
 	uint8 image_code_type;
 	uint8 image_indicator;

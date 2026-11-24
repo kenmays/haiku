@@ -161,7 +161,6 @@ init_driver(void)
 		return status;
 	}
 
-	memset(sDevices, 0, sizeof(sDevices));
 	memset(sDeviceNames, 0, sizeof(sDeviceNames));
 	sDeviceCount = 0;
 	uint32 exactIDs = 0;
@@ -216,7 +215,6 @@ uninit_driver(void)
 		put_module(B_PCI_MODULE_NAME);
 		sPCI = NULL;
 	}
-	memset(sDevices, 0, sizeof(sDevices));
 	memset(sDeviceNames, 0, sizeof(sDeviceNames));
 	mutex_unlock(&sRegistryLock);
 }

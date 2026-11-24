@@ -1,5 +1,8 @@
 SubDir HAIKU_TOP src add-ons kernel drivers graphics amdgpu tests ;
 
+UsePrivateHeaders graphics kernel ;
+UsePrivateKernelHeaders ;
+
 SimpleTest amdgpu_discovery_test :
 	amdgpu_discovery_test.cpp
 	../amdgpu_discovery.cpp

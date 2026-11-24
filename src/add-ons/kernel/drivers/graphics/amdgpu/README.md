@@ -110,7 +110,15 @@ lifetime, and `put_table()` calls ACPICA `AcpiPutTable()`.
 `amdgpu_vfct_provider.cpp` uses that paired interface. It keeps the VFCT
 reference while validating the table and copies the selected VBIOS image into
 caller-owned storage before releasing the reference on every post-acquisition
-path. A 16 MiB maximum table size bounds the provider's input. The convenience
+path. A 16 MiB maximum table size bounds the provider's input.
+`amdgpu_vfct_device_from_pci_device()` translates only a retained, recognized
+AMDGPU endpoint candidate into the VFCT BDF/vendor/device key; it rejects
+non-AMD functions, unrecognized records, and PCI bridges.
+`amdgpu_load_vbios_for_pci_device()` is the per-device convenience entry point:
+it performs that translation and then acquires/releases the ACPI table module
+around the bounded copy. The caller still owns the destination buffer and must
+not treat returned VBIOS metadata as authorization to execute firmware or
+initialize hardware. The convenience
 entry point in `amdgpu_vfct_module.cpp` loads and releases the table module;
 the lower-level provider remains independently testable. The provider does
 not reserve or initialize the GPU, map a ROM BAR, or retain a pointer into the

@@ -77,4 +77,16 @@ status_t amdgpu_parse_discovery_binary(const void* data, size_t dataSize,
 	amdgpu_ip_block* blocks, uint32 blockCapacity,
 	amdgpu_ip_discovery_info* info);
 
+
+/*
+ * Read and parse a discovery binary from a firmware/ROM provider. The caller
+ * supplies a scratch buffer at least as large as the declared binary. Reads
+ * are bounded by source->size and the 16-bit binary length. This function
+ * never maps BARs, probes hardware, allocates memory, or assumes a ROM layout.
+ */
+status_t amdgpu_read_discovery_source(
+	const amdgpu_discovery_source* source, void* scratch, size_t scratchSize,
+	amdgpu_ip_block* blocks, uint32 blockCapacity,
+	amdgpu_ip_discovery_info* info);
+
 #endif

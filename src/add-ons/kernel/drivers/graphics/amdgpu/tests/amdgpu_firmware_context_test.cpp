@@ -11,6 +11,7 @@
 static bool sMismatchIdentity = false;
 static const size_t kTestImageSize = 512;
 static size_t sLoadedImageSize = kTestImageSize;
+static status_t sQueryStatus = B_BUFFER_OVERFLOW;
 
 
 status_t
@@ -53,7 +54,7 @@ amdgpu_query_vbios_size_for_pci_device(const amdgpu_pci_device* device,
 		return B_BAD_VALUE;
 	*biosSize = kTestImageSize;
 	FillInfo(device, info);
-	return B_BUFFER_OVERFLOW;
+	return sQueryStatus;
 }
 
 
@@ -108,6 +109,16 @@ main()
 		&& context.state == AMDGPU_FIRMWARE_SIZE_KNOWN
 		&& context.required_size == kTestImageSize,
 		"size query advances context state");
+
+	sQueryStatus = B_ENTRY_NOT_FOUND;
+	success &= Check(amdgpu_firmware_context_query(&context)
+		== B_ENTRY_NOT_FOUND
+		&& context.state == AMDGPU_FIRMWARE_DEVICE_IDENTIFIED
+		&& context.required_size == 0,
+		"failed size refresh invalidates stale query state");
+	sQueryStatus = B_BUFFER_OVERFLOW;
+	success &= Check(amdgpu_firmware_context_query(&context) == B_OK,
+		"firmware context can recover after failed size refresh");
 
 	uint8 tooSmall[32];
 	success &= Check(amdgpu_firmware_context_load(&context, tooSmall,

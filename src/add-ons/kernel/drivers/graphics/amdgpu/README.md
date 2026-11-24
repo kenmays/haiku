@@ -1,28 +1,28 @@
 # Native AMDGPU driver for Haiku
 
 This directory is a new driver, separate from `radeon` and `radeon_hd`.
-The existing drivers remain unchanged and continue to own their current
-hardware support.
+The existing drivers remain unchanged.
 
-## Current status: foundation only
+## Current status: PCI discovery foundation
 
-The first implementation stage adds a build target and a conservative PCI
-enumeration probe for AMD display-class functions (PCI vendor 0x1002).
+The driver enumerates AMD (vendor 0x1002) display-class PCI functions and
+retains a bounded set of endpoint identity records. For type-0 endpoints it
+records BAR size/type metadata, including 64-bit BAR slot pairing and
+prefetchability.
 
-**It does not bind to a device or perform hardware initialization.** It does
-not map BARs, alter PCI command bits, install interrupts, load firmware,
-allocate VRAM/GTT, submit commands, or publish a graphics device node. This
-is intentional: publishing a device before safe resource ownership and full
-teardown exist could interfere with the existing Radeon drivers or leave
-hardware in an unsafe state.
+**This is not yet a functioning graphics driver.** It does not reserve devices,
+map BARs, alter PCI command bits, install interrupts, load firmware, allocate
+VRAM/GTT, submit commands, or publish a graphics device node. The PCI scan is
+bounded to 256 functions and retained records are bounded to 16 devices.
+Enumeration beyond those bounds is not claimed as supported.
 
 ## Architecture
 
-The port is organized around AMD IP blocks, not Linux kernel abstractions.
-Generation-specific SoC descriptions select versioned IP implementations.
-The native Haiku layer will own PCI resources, MMIO mappings, DMA constraints,
-interrupts, memory allocation, synchronization, device lifetime, and the
-accelerant-facing ABI.
+The implementation is organized around AMD IP blocks, not Linux kernel
+abstractions. Generation-specific SoC descriptions will select versioned IP
+implementations. The native Haiku layer owns PCI resources, MMIO mappings,
+DMA constraints, interrupts, memory allocation, synchronization, device
+lifetime, and the accelerant-facing ABI.
 
 Planned subsystems:
 
@@ -46,7 +46,7 @@ reference material only; they are not directly portable kernel dependencies.
 5. Validate firmware headers, lengths, versions and trust requirements before
    copying or submitting firmware.
 6. Do not enable bus mastering until DMA mappings and teardown are correct.
-7. Install interrupts only after the handler state is initialized; mask and
+7. Install interrupts only after handler state is initialized; mask and
    synchronize them before freeing state.
 8. Do not submit untrusted command buffers without validating packet streams,
    address ranges and engine permissions.
@@ -57,19 +57,20 @@ reference material only; they are not directly portable kernel dependencies.
 
 “All AMDGPU generations” is a project goal, not a claim that one code path or
 one PCI-ID table can support every ASIC. Support must be staged by IP revision
-and SoC family. Legacy pre-AMDGPU Radeon generations remain the responsibility
-of the existing Haiku Radeon drivers unless a deliberate migration is designed.
+and SoC family. Legacy pre-GCN Radeon generations remain the responsibility
+of existing Haiku Radeon drivers unless a deliberate migration is designed.
 
 ## Development sequence
 
-1. Buildable, non-binding PCI probe (this commit).
-2. Device records, resource validation and safe MMIO mapping.
-3. Firmware parser and ASIC/IP discovery.
-4. Display-only modesetting and framebuffer scanout.
-5. VRAM/GTT/GART and GPUVM.
-6. Interrupts, rings, fences, reset and SDMA.
-7. GC command submission and Mesa OpenGL integration.
-8. DCN/display hardening, video IP, power management and broader generations.
-9. Automated tests, hardware stress, suspend/resume and failure injection.
+1. Buildable, non-binding PCI discovery (current stage).
+2. PCI resource reservation, mapping and lifetime management.
+3. ASIC/IP discovery and generation tables.
+4. Firmware parser and secure firmware loading.
+5. Display-only modesetting and framebuffer scanout.
+6. VRAM/GTT/GART and GPUVM.
+7. Interrupts, rings, fences, reset and SDMA.
+8. GC command submission and Mesa OpenGL integration.
+9. DCN/display hardening, video IP, power management and broader generations.
+10. Automated tests, hardware stress, suspend/resume and failure injection.
 
-Each stage must build and pass its tests before the next stage is enabled.
+Each stage must build and pass tests before hardware functionality is enabled.

@@ -186,12 +186,12 @@ main()
 
 	std::vector<uint8> wrongROM = table;
 	/* Change the embedded ROM PCIR device ID without changing VFCT identity. */
-	WriteLE16(&wrongROM[76 + 28 + 0x1c + 6], 0x731f);
-	FinishROMChecksum(*(new std::vector<uint8>()));
+	const size_t secondROMOffset = 76 + 28 + 512 + 28;
+	WriteLE16(&wrongROM[secondROMOffset + 0x1c + 6], 0x731f);
 	/* Recompute the ROM checksum in-place. */
 	{
 		uint8 sum = 0;
-		uint8* rom = &wrongROM[76 + 28];
+		uint8* rom = &wrongROM[secondROMOffset];
 		for (size_t i = 0; i < 512; i++)
 			sum = (uint8)(sum + rom[i]);
 		rom[511] = (uint8)(rom[511] - sum);

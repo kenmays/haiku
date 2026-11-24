@@ -2,6 +2,7 @@
  * Copyright 2026, Haiku, Inc. All rights reserved.
  * Distributed under the terms of the MIT License.
  */
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -19,36 +20,59 @@ IsValidContext(const amdgpu_device_context* context)
 }
 
 
+static void
+ClearContextPayload(amdgpu_device_context* context)
+{
+	memset(&context->magic, 0,
+		sizeof(*context) - offsetof(amdgpu_device_context, magic));
+	context->lock_initialized = true;
+}
+
+
 status_t
 amdgpu_device_context_init(amdgpu_device_context* context,
 	const amdgpu_pci_device* device)
 {
 	if (context == NULL || device == NULL)
 		return B_BAD_VALUE;
-	if (context->magic == AMDGPU_DEVICE_CONTEXT_MAGIC)
-		return B_BUSY;
 
-	memset(context, 0, sizeof(*context));
+	if (context->lock_initialized) {
+		status_t status = mutex_lock(&context->lock);
+		if (status != B_OK)
+			return status;
+		if (context->magic == AMDGPU_DEVICE_CONTEXT_MAGIC) {
+			mutex_unlock(&context->lock);
+			return B_BUSY;
+		}
+		ClearContextPayload(context);
+	} else {
+		memset(context, 0, sizeof(*context));
+		mutex_init(&context->lock, "amdgpu device context");
+		context->lock_initialized = true;
+	}
+
 	status_t status = amdgpu_init_device_resources(&context->resources);
-	if (status != B_OK)
+	if (status != B_OK) {
+		ClearContextPayload(context);
+		mutex_unlock(&context->lock);
 		return status;
+	}
 
 	status = amdgpu_firmware_context_init(&context->firmware, device);
 	if (status != B_OK) {
-		memset(context, 0, sizeof(*context));
+		ClearContextPayload(context);
+		mutex_unlock(&context->lock);
 		return status;
 	}
 
 	context->pci_device = *device;
 	sprintf(context->node_name, "graphics/amdgpu_%02x%02x%02x",
 		device->pci.bus, device->pci.device, device->pci.function);
-	mutex_init(&context->lock, "amdgpu device context");
-	context->lock_initialized = true;
 	context->state = AMDGPU_DEVICE_DISCOVERED;
 	context->magic = AMDGPU_DEVICE_CONTEXT_MAGIC;
+	mutex_unlock(&context->lock);
 	return B_OK;
 }
-
 
 status_t
 amdgpu_device_context_claim(pci_module_info* pci,
@@ -200,11 +224,7 @@ amdgpu_device_context_release(pci_module_info* pci,
 		return status;
 	}
 
-	context->magic = 0;
-	context->state = AMDGPU_DEVICE_UNINITIALIZED;
-	context->lock_initialized = false;
+	ClearContextPayload(context);
 	mutex_unlock(&context->lock);
-	mutex_destroy(&context->lock);
-	memset(context, 0, sizeof(*context));
 	return B_OK;
 }

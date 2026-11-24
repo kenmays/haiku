@@ -103,6 +103,9 @@ amdgpu_map_mmio_bar(const amdgpu_pci_device* device,
 		return B_BUSY;
 	if ((device->mmio_bar_mask & (1u << bar)) == 0)
 		return B_BAD_VALUE;
+	// This helper is for register apertures, not prefetchable VRAM windows.
+	if ((device->prefetchable_bar_mask & (1u << bar)) != 0)
+		return B_NOT_SUPPORTED;
 	if ((device->pci.header_type & PCI_header_type_mask)
 		!= PCI_header_type_generic) {
 		return B_NOT_SUPPORTED;

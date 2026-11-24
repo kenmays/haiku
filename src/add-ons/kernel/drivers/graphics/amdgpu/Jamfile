@@ -1,0 +1,8 @@
+SubDir HAIKU_TOP src add-ons kernel drivers graphics amdgpu ;
+
+UsePrivateHeaders graphics kernel ;
+UsePrivateKernelHeaders ;
+
+KernelAddon amdgpu :
+	driver.cpp
+;

@@ -130,6 +130,7 @@ main()
 
 	amdgpu_device_context context;
 	memset(&context, 0, sizeof(context));
+	pci_module_info* pci = (pci_module_info*)1;
 	success &= Check(amdgpu_device_context_claim(NULL, &context)
 		== B_BAD_VALUE, "uninitialized device context rejected");
 	success &= Check(amdgpu_device_context_init(&context, &device) == B_OK
@@ -143,11 +144,11 @@ main()
 		"discovered but uninitialized node cannot be opened");
 
 	sClaimStatus = B_BUSY;
-	success &= Check(amdgpu_device_context_claim(NULL, &context) == B_BUSY
+	success &= Check(amdgpu_device_context_claim(pci, &context) == B_BUSY
 		&& context.state == AMDGPU_DEVICE_DISCOVERED,
 		"failed claim leaves device in discovered state");
 	sClaimStatus = B_OK;
-	success &= Check(amdgpu_device_context_claim(NULL, &context) == B_OK
+	success &= Check(amdgpu_device_context_claim(pci, &context) == B_OK
 		&& context.state == AMDGPU_DEVICE_CLAIMED
 		&& context.resources.reserved,
 		"explicit claim advances device state");

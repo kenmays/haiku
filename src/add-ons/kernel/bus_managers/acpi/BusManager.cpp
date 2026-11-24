@@ -888,11 +888,35 @@ write_bit_register(uint32 regid, uint32 val)
 
 
 
+static acpi_module_info* sACPITableBaseModule = NULL;
+
+
+static status_t
+acpi_table_std_ops(int32 op, ...)
+{
+	switch (op) {
+		case B_MODULE_INIT:
+			return get_module(B_ACPI_MODULE_NAME,
+				(module_info**)&sACPITableBaseModule);
+
+		case B_MODULE_UNINIT:
+			if (sACPITableBaseModule != NULL) {
+				put_module(B_ACPI_MODULE_NAME);
+				sACPITableBaseModule = NULL;
+			}
+			return B_OK;
+
+		default:
+			return B_ERROR;
+	}
+}
+
+
 struct acpi_table_module_info gACPITableModule = {
 	{
 		B_ACPI_TABLE_MODULE_NAME,
 		B_KEEP_LOADED,
-		acpi_std_ops
+		acpi_table_std_ops
 	},
 	get_table,
 	put_table

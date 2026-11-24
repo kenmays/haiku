@@ -9,11 +9,11 @@ SimpleTest amdgpu_discovery_test :
 SimpleTest amdgpu_vbios_test :
 	amdgpu_vbios_test.cpp
 	../amdgpu_vbios.cpp
-	../amdgpu_vfct_provider.cpp
 ;
 
 SimpleTest amdgpu_vfct_test :
 	amdgpu_vfct_test.cpp
 	../amdgpu_vfct.cpp
 	../amdgpu_vbios.cpp
+	../amdgpu_vfct_provider.cpp
 ;

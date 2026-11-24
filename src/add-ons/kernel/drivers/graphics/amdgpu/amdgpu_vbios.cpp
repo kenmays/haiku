@@ -95,7 +95,8 @@ amdgpu_parse_vbios_image(const void* data, size_t dataSize,
 			return B_BAD_VALUE;
 
 		const uint16 pcirRelativeOffset = ReadLE16(image + 0x18);
-		if (!RangeIsValid(pcirRelativeOffset, 0x16, dataSize - imageOffset))
+		if (pcirRelativeOffset < 0x1a
+			|| !RangeIsValid(pcirRelativeOffset, 0x16, dataSize - imageOffset))
 			return B_BAD_VALUE;
 
 		const uint8* pcir = image + pcirRelativeOffset;

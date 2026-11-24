@@ -59,6 +59,26 @@ source reader does not parse arbitrary ROM layouts, map a PCI BAR, probe
 registers, or access hardware. Hardware-register discovery remains deferred
 until an ASIC-specific safe access method is defined.
 
+`amdgpu_vbios.cpp` adds an offline parser for a caller-supplied PCI option-ROM
+image chain. It validates each image's 0x55aa signature, PCIR pointer and
+structure bounds, nonzero 512-byte image length, image extent, per-image
+8-bit checksum, and last-image indicator. It walks chained images without
+reading beyond the supplied buffer and selects the first image with an
+ATOM/MOTA ROM header. The ATOM header size, format/content revisions, master
+data-table pointer, and master data-table extent are checked before returning
+offset metadata. The parser does not read PCI configuration space, enable or
+map a ROM BAR, allocate memory, or execute ATOM command tables. A valid ROM
+chain without ATOMBIOS returns `B_ENTRY_NOT_FOUND`.
+
+The `amdgpu_vbios_test` target builds synthetic single- and multi-image ROM
+fixtures and covers valid ATOM selection, valid non-ATOM chains, bad checksums,
+invalid PCIR signatures, out-of-range image lengths, unterminated chains,
+and invalid ATOM header pointers. These tests are added but have not yet been
+run in a Haiku build environment. Synthetic fixtures validate parser
+behavior, not compatibility with the full range of vendor VBIOS images;
+real-world firmware samples and cross-checking against upstream Linux remain
+required before using this parser to initialize hardware.
+
 ### Native Haiku provider audit
 
 The current Haiku interfaces were checked before adding a hardware-backed

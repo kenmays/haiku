@@ -88,10 +88,12 @@ IsAMDGPUFunction(const pci_info& info)
 
 	// Linux amdgpu's table includes exact device IDs plus class-wide
 	// IP-discovery matches for VGA, other display, and processing accelerators.
-	if (info.class_base == PCI_display)
+	if (IsExactAMDGPUDeviceID(info.device_id))
 		return true;
-	return info.class_base == PCI_processing_accelerator
-		&& info.class_sub == 0x00;
+	return (info.class_base == PCI_display
+			&& (info.class_sub == 0x00 || info.class_sub == 0x80))
+		|| (info.class_base == PCI_processing_accelerator
+			&& info.class_sub == 0x00);
 }
 
 static void
@@ -154,9 +156,11 @@ amdgpu_enumerate(pci_module_info* pci, amdgpu_pci_device* devices,
 		device.pci = info;
 		if (IsExactAMDGPUDeviceID(info.device_id))
 			device.identification_flags |= AMDGPU_PCI_ID_EXACT;
-		if (info.class_base == PCI_display
-			|| (info.class_base == PCI_processing_accelerator
-				&& info.class_sub == 0x00)) {
+		if (!IsExactAMDGPUDeviceID(info.device_id)
+			&& ((info.class_base == PCI_display
+					&& (info.class_sub == 0x00 || info.class_sub == 0x80))
+				|| (info.class_base == PCI_processing_accelerator
+					&& info.class_sub == 0x00))) {
 			device.identification_flags |= AMDGPU_PCI_ID_IP_DISCOVERY;
 		}
 		device.generation = IdentifyASIC(info.device_id, info.revision,

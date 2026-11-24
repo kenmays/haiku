@@ -23,8 +23,8 @@ struct amdgpu_device_resources {
 	size_t mmio_size[6];
 };
 
-/* Call once before the first claim, and again only after a successful release. */
-void amdgpu_init_device_resources(amdgpu_device_resources* resources);
+/* Zero-initialize storage before first use. Reinitialize only after release. */
+status_t amdgpu_init_device_resources(amdgpu_device_resources* resources);
 status_t amdgpu_claim_device(pci_module_info* pci,
 	const amdgpu_pci_device* device, amdgpu_device_resources* resources);
 status_t amdgpu_map_mmio_bar(const amdgpu_pci_device* device,

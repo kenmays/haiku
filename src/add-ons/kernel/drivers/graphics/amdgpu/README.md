@@ -38,13 +38,25 @@ directory ranges are rejected. Binary versions are restricted to v1 and v2;
 unknown versions are not guessed.
 
 The `tests` subdirectory contains a `SimpleTest` fixture executable covering
-valid v1/v2 binaries, v4 64-bit addresses, multi-die parsing, output-capacity
-limits, truncated input, checksum corruption, unsupported binary versions,
-invalid directory offsets, overlapping table ranges, and die-ID mismatches.
+valid v1/v2 binaries, v4 64-bit addresses, multi-die parsing, firmware and
+option-ROM source callbacks, source and scratch bounds, output-capacity limits,
+truncated input, checksum corruption, unsupported binary versions, invalid
+directory offsets, overlapping table ranges, and die-ID mismatches.
 Run `jam amdgpu_discovery_test` in a Haiku build tree to build the test target,
 then execute the resulting test binary. These tests are added but have not
-yet been run in this environment. The parser is not yet wired to hardware
-discovery or firmware loading.
+yet been run in this environment. The parser is not yet wired to hardware discovery or firmware loading.
+
+`amdgpu_discovery_source.cpp` adds a bounded provider interface for firmware
+and option-ROM data. The provider supplies an exact-read callback, a readable
+extent, and a source kind; the reader first fetches the 12-byte binary header,
+checks the declared 16-bit length against both the source extent and caller's
+scratch capacity, then fetches only the remaining declared bytes and invokes
+the validated binary parser. Provider short reads must be reported as errors.
+The callback is deliberately the only source-specific operation: firmware
+lookup, ROM extraction, mapping, and lifetime remain the caller's job. The
+source reader does not parse arbitrary ROM layouts, map a PCI BAR, probe
+registers, or access hardware. Hardware-register discovery remains deferred
+until an ASIC-specific safe access method is defined.
 
 **This is not yet a functioning graphics driver.** It does not yet activate
 PCI ownership, alter PCI command bits, install interrupts, load firmware,
@@ -137,7 +149,7 @@ of existing Haiku Radeon drivers unless a deliberate migration is designed.
 
 1. Buildable, non-binding PCI discovery and dormant resource helpers.
 2. Bounded discovery-binary and IP-table parsers (implemented; not yet hardware-wired).
-3. Integrate a generation-specific discovery source and validate real firmware fixtures.
+3. Integrate firmware/ROM providers and validate real binary fixtures (bounded source reader implemented; provider wiring and real fixtures remain).
 4. Bind resources to a real device node and add complete initialization/teardown.
 5. Expand and verify ASIC/IP discovery tables, including revision and subsystem quirks.
 6. Firmware parser and secure firmware loading.

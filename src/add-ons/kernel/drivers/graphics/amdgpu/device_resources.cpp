@@ -92,6 +92,13 @@ amdgpu_map_mmio_bar(const amdgpu_pci_device* device,
 		|| !resources->reserved) {
 		return B_BAD_VALUE;
 	}
+	if (resources->pci.vendor_id != device->pci.vendor_id
+		|| resources->pci.device_id != device->pci.device_id
+		|| resources->pci.bus != device->pci.bus
+		|| resources->pci.device != device->pci.device
+		|| resources->pci.function != device->pci.function) {
+		return B_BAD_VALUE;
+	}
 	if (resources->mmio_area[bar] >= 0)
 		return B_BUSY;
 	if ((device->mmio_bar_mask & (1u << bar)) == 0)
@@ -141,7 +148,10 @@ amdgpu_map_mmio_bar(const amdgpu_pci_device* device,
 	if (area < 0)
 		return (status_t)area;
 	if (mappedAddress == NULL) {
-		delete_area(area);
+		// Preserve the area ID so release can still tear it down.
+		resources->mmio_area[bar] = area;
+		resources->mmio_physical[bar] = physicalAddressForMapping;
+		resources->mmio_size[bar] = size;
 		return B_NO_MEMORY;
 	}
 

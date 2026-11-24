@@ -5,7 +5,10 @@
 #ifndef AMDGPU_VFCT_H
 #define AMDGPU_VFCT_H
 
+#include <PCI.h>
 #include <SupportDefs.h>
+
+#include "pci_device.h"
 
 #include "amdgpu_vbios.h"
 
@@ -21,6 +24,13 @@ struct amdgpu_vfct_device {
 	uint16 vendor_id;
 	uint16 device_id;
 };
+
+/*
+ * Translate a previously enumerated AMDGPU PCI candidate into the identity
+ * used by VFCT matching. This does not reserve the function or touch config.
+ */
+status_t amdgpu_vfct_device_from_pci_device(const amdgpu_pci_device* pciDevice,
+	amdgpu_vfct_device* vfctDevice);
 
 struct amdgpu_vfct_info {
 	uint32 image_offset;

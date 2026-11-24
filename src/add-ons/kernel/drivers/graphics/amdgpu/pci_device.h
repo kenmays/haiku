@@ -8,8 +8,8 @@
 #include <PCI.h>
 #include <SupportDefs.h>
 
-static const uint32 AMDGPU_MAX_DEVICES = 16;
-static const uint32 AMDGPU_MAX_PCI_FUNCTIONS = 256;
+static const uint32 AMDGPU_MAX_DEVICES = 64;
+static const uint32 AMDGPU_MAX_PCI_FUNCTIONS = 4096;
 
 enum amdgpu_asic_family {
 	AMDGPU_ASIC_UNKNOWN = 0,
@@ -30,6 +30,11 @@ enum {
 	AMDGPU_GENERATION_RDNA1 = 2,
 	AMDGPU_GENERATION_RDNA2 = 3,
 	AMDGPU_GENERATION_RDNA3 = 4
+};
+
+enum {
+	AMDGPU_PCI_ID_EXACT = 1 << 0,
+	AMDGPU_PCI_ID_IP_DISCOVERY = 1 << 1
 };
 
 struct amdgpu_pci_device {

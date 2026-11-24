@@ -49,6 +49,9 @@ amdgpu_device_context_init(amdgpu_device_context* context,
 		memset(context, 0, sizeof(*context));
 		mutex_init(&context->lock, "amdgpu device context");
 		context->lock_initialized = true;
+		status_t lockStatus = mutex_lock(&context->lock);
+		if (lockStatus != B_OK)
+			return lockStatus;
 	}
 
 	status_t status = amdgpu_init_device_resources(&context->resources);

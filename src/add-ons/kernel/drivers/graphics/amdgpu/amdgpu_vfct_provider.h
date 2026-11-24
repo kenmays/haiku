@@ -31,9 +31,9 @@ status_t amdgpu_load_vbios_from_vfct(const amdgpu_vfct_device* device,
 	void* biosBuffer, size_t biosCapacity, size_t* biosSize,
 	amdgpu_vfct_info* info);
 
-#endif
-
 /* Convenience entry point using a candidate from amdgpu_enumerate(). */
 status_t amdgpu_load_vbios_for_pci_device(
 	const amdgpu_pci_device* pciDevice, void* biosBuffer,
 	size_t biosCapacity, size_t* biosSize, amdgpu_vfct_info* info);
+
+#endif

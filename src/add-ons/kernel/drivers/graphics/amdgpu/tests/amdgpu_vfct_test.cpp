@@ -222,6 +222,14 @@ main()
 		"provider releases ACPI table after parse failure");
 	sProviderTable[45] ^= 1;
 
+	sFailGetTable = true;
+	putsBefore = sPutTableCalls;
+	success &= Check(amdgpu_get_vbios_from_vfct(&fakeACPI, &device,
+		&copiedBIOS[0], copiedBIOS.size(), &copiedBIOSSize, &info)
+		== B_ENTRY_NOT_FOUND && sPutTableCalls == putsBefore,
+		"provider does not release a table it failed to acquire");
+	sFailGetTable = false;
+
 	fakeACPI.put_table = NULL;
 	int getsBefore = sGetTableCalls;
 	success &= Check(amdgpu_get_vbios_from_vfct(&fakeACPI, &device,

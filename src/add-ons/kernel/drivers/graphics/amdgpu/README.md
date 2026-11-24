@@ -93,7 +93,8 @@ PCI identity match.
 
 The `amdgpu_vfct_test` target covers multi-entry selection, exact and
 renumbered-bus matching, absent devices, PCI candidate identity translation,
-rejection of invalid vendors/unrecognized records/bridge functions, ACPI
+rejection of invalid vendors/unrecognized records/bridge functions, no-copy
+size queries and their reference cleanup, ACPI
 checksum failure, invalid VBIOS offsets, truncated images, and a mismatch
 between the VFCT identity and the embedded PCIR IDs. The tests are registered
 but have not been run in a Haiku build environment. The parser accepts caller-owned bytes and performs no ACPI
@@ -117,7 +118,10 @@ AMDGPU endpoint candidate into the VFCT BDF/vendor/device key; it rejects
 non-AMD functions, unrecognized records, and PCI bridges.
 `amdgpu_load_vbios_for_pci_device()` is the per-device convenience entry point:
 it performs that translation and then acquires/releases the ACPI table module
-around the bounded copy. The caller still owns the destination buffer and must
+around the bounded copy. A no-copy size-query API returns `B_BUFFER_OVERFLOW`
+with the required image size, allowing callers to allocate an exact caller-owned
+buffer and then fetch the image in a second, independently referenced call.
+The caller still owns the destination buffer and must
 not treat returned VBIOS metadata as authorization to execute firmware or
 initialize hardware. The lower-level provider remains independently
 testable. The provider does

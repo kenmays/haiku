@@ -93,6 +93,19 @@ amdgpu_device_context_set_node_ready(amdgpu_device_context* context)
 }
 
 
+bool
+amdgpu_device_context_is_node_ready(amdgpu_device_context* context)
+{
+	if (!IsValidContext(context))
+		return false;
+	if (mutex_lock(&context->lock) != B_OK)
+		return false;
+	bool ready = context->state == AMDGPU_DEVICE_NODE_READY;
+	mutex_unlock(&context->lock);
+	return ready;
+}
+
+
 status_t
 amdgpu_device_context_open(amdgpu_device_context* context, void** cookie)
 {

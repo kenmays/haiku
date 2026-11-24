@@ -290,7 +290,7 @@ struct acpi_module_info {
 	status_t	(*enter_sleep_state)(uint8 state);
 	status_t	(*reboot)(void);
 
-	/* Table Access */
+	/* Legacy table acquisition; new callers should use the paired table module. */
 	status_t	(*get_table)(const char *signature, uint32 instance,
 					void **tableHeader);
 

@@ -7,6 +7,7 @@
  */
 #include <string.h>
 #include "pci_device.h"
+#include "pci_ids.h"
 
 static uint8
 IdentifyASIC(uint16 deviceID, uint8 revision, uint16* family)
@@ -62,9 +63,35 @@ IdentifyASIC(uint16 deviceID, uint8 revision, uint16* family)
 
 
 static bool
-IsAMDDisplay(const pci_info& info)
+IsExactAMDGPUDeviceID(uint16 deviceID)
 {
-	return info.vendor_id == 0x1002 && info.class_base == PCI_display;
+	uint32 low = 0;
+	uint32 high = kAMDGPUExactDeviceIDCount;
+	while (low < high) {
+		uint32 middle = low + (high - low) / 2;
+		if (kAMDGPUExactDeviceIDs[middle] == deviceID)
+			return true;
+		if (kAMDGPUExactDeviceIDs[middle] < deviceID)
+			low = middle + 1;
+		else
+			high = middle;
+	}
+	return false;
+}
+
+
+static bool
+IsAMDGPUFunction(const pci_info& info)
+{
+	if (info.vendor_id != 0x1002)
+		return false;
+
+	// Linux amdgpu's table includes exact device IDs plus class-wide
+	// IP-discovery matches for VGA, other display, and processing accelerators.
+	if (info.class_base == PCI_display)
+		return true;
+	return info.class_base == PCI_processing_accelerator
+		&& info.class_sub == 0x00;
 }
 
 static void
@@ -115,7 +142,7 @@ amdgpu_enumerate(pci_module_info* pci, amdgpu_pci_device* devices,
 		status_t status = (status_t)pci->get_nth_pci_info(index, &info);
 		if (status != B_OK)
 			break;
-		if (!IsAMDDisplay(info))
+		if (!IsAMDGPUFunction(info))
 			continue;
 
 		found = true;
@@ -125,6 +152,13 @@ amdgpu_enumerate(pci_module_info* pci, amdgpu_pci_device* devices,
 		amdgpu_pci_device& device = devices[*count];
 		memset(&device, 0, sizeof(device));
 		device.pci = info;
+		if (IsExactAMDGPUDeviceID(info.device_id))
+			device.identification_flags |= AMDGPU_PCI_ID_EXACT;
+		if (info.class_base == PCI_display
+			|| (info.class_base == PCI_processing_accelerator
+				&& info.class_sub == 0x00)) {
+			device.identification_flags |= AMDGPU_PCI_ID_IP_DISCOVERY;
+		}
 		device.generation = IdentifyASIC(info.device_id, info.revision,
 			&device.asic_family);
 		ReadMemoryBARMetadata(info, device);

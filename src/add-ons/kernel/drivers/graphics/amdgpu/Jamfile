@@ -8,6 +8,7 @@ KernelAddon amdgpu :
 	pci_device.cpp
 	device_resources.cpp
 	amdgpu_discovery.cpp
+	amdgpu_discovery_source.cpp
 ;
 
 SubInclude HAIKU_TOP src add-ons kernel drivers graphics amdgpu tests ;

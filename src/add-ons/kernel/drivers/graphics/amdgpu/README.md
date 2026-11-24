@@ -258,7 +258,7 @@ in this environment.
 The driver now has a gated legacy device-node hook path. Each discovered
 function receives a stable BDF-derived name
 (`graphics/amdgpu_<bus><device><function>`, with each value zero-padded to
- two hexadecimal digits), and the
+two hexadecimal digits), and the
 registry exposes a node only when its context has explicitly reached
 `AMDGPU_DEVICE_NODE_READY`. That transition is allowed only after an explicit
 PCI claim and must be called by a future ASIC-specific initialization path
@@ -269,8 +269,10 @@ device-context mutex. The close hook completes close-side work; the free hook
 drops the reference. Teardown is serialized against registry lookup, moves
 the context to a stopping state, and refuses to release resources while any
 open cookie remains. Resource-release failure restores the prior lifecycle
-state so cleanup can be retried. The registry uses a statically initialized
-kernel mutex, avoiding lock allocation during device discovery.
+state so cleanup can be retried. A statically initialized registry mutex protects the name list; each
+context has its own kernel mutex for lifecycle and open-reference state. The
+per-device mutex is retained across payload resets so a reused static context
+does not reinitialize a live lock.
 
 The current driver does not mark any context node-ready, so
 `publish_devices()` returns no device list and `find_device()` returns no

@@ -65,8 +65,6 @@ amdgpu_load_vbios_for_pci_device(const amdgpu_pci_device* device,
 	if (device == NULL || biosBuffer == NULL || biosSize == NULL
 		|| info == NULL)
 		return B_BAD_VALUE;
-	if (biosCapacity < kTestImageSize)
-		return B_BUFFER_OVERFLOW;
 	if (biosCapacity < sLoadedImageSize)
 		return B_BUFFER_OVERFLOW;
 	memset(biosBuffer, 0xa5, sLoadedImageSize);

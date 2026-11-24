@@ -6,6 +6,34 @@
 
 #include <string.h>
 
+
+status_t
+amdgpu_vfct_device_from_pci_device(const amdgpu_pci_device* pciDevice,
+	amdgpu_vfct_device* vfctDevice)
+{
+	if (vfctDevice != NULL)
+		memset(vfctDevice, 0, sizeof(*vfctDevice));
+
+	if (pciDevice == NULL || vfctDevice == NULL)
+		return B_BAD_VALUE;
+
+	const pci_info& pci = pciDevice->pci;
+	if (pci.vendor_id != 0x1002 || pci.device_id == 0
+		|| pci.device > 31 || pci.function > 7
+		|| (pci.header_type & PCI_header_type_mask) != PCI_header_type_generic
+		|| (pciDevice->identification_flags
+			& (AMDGPU_PCI_ID_EXACT | AMDGPU_PCI_ID_IP_DISCOVERY)) == 0) {
+		return B_BAD_VALUE;
+	}
+
+	vfctDevice->bus = pci.bus;
+	vfctDevice->device = pci.device;
+	vfctDevice->function = pci.function;
+	vfctDevice->vendor_id = pci.vendor_id;
+	vfctDevice->device_id = pci.device_id;
+	return B_OK;
+}
+
 static uint16
 ReadLE16(const uint8* data)
 {

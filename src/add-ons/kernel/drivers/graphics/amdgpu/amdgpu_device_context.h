@@ -25,12 +25,13 @@ enum amdgpu_device_state {
 };
 
 struct amdgpu_device_context {
+	/* First member so the payload can be reset without clobbering the lock. */
+	mutex lock;
 	uint32 magic;
 	amdgpu_device_state state;
 	amdgpu_pci_device pci_device;
 	amdgpu_device_resources resources;
 	amdgpu_firmware_context firmware;
-	mutex lock;
 	bool lock_initialized;
 	uint32 open_count;
 	char node_name[64];

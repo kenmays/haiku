@@ -58,7 +58,9 @@ amdgpu_parse_ip_discovery_table(const void* data, size_t dataSize,
 	}
 
 	uint16 dieOffsets[AMDGPU_IP_DISCOVERY_MAX_DIES];
+	uint16 dieIDs[AMDGPU_IP_DISCOVERY_MAX_DIES];
 	for (uint32 i = 0; i < dieCount; i++) {
+		dieIDs[i] = ReadLE16(bytes + 14 + i * 4);
 		dieOffsets[i] = ReadLE16(bytes + 14 + i * 4 + 2);
 		if (dieOffsets[i] < kDiscoveryHeaderSize
 			|| dieOffsets[i] > tableSize - kDieHeaderSize) {
@@ -85,7 +87,7 @@ amdgpu_parse_ip_discovery_table(const void* data, size_t dataSize,
 
 		uint16 dieID = ReadLE16(bytes + dieOffset);
 		uint16 numIPs = ReadLE16(bytes + dieOffset + 2);
-		if (dieID != die || numIPs > AMDGPU_IP_DISCOVERY_MAX_IPS
+		if (dieID != dieIDs[die] || numIPs > AMDGPU_IP_DISCOVERY_MAX_IPS
 			|| totalIPs > AMDGPU_IP_DISCOVERY_MAX_IPS - numIPs) {
 			return B_BAD_VALUE;
 		}
@@ -176,7 +178,7 @@ amdgpu_parse_discovery_binary(const void* data, size_t dataSize,
 	static const uint32 kIPDiscoveryHeaderSize = 80;
 
 	if (data == NULL || info == NULL || (blockCapacity != 0 && blocks == NULL)
-		|| dataSize < kBinaryHeaderV1Size) {
+		|| dataSize < 12) {
 		return B_BAD_VALUE;
 	}
 
@@ -191,10 +193,12 @@ amdgpu_parse_discovery_binary(const void* data, size_t dataSize,
 	uint32 directoryOffset;
 	uint32 directoryEnd;
 
-	if (binarySize > dataSize || binarySize < kBinaryHeaderV1Size)
+	if (binarySize > dataSize || binarySize < 12)
 		return B_BAD_VALUE;
 
 	if (major <= 1) {
+		if (binarySize < kBinaryHeaderV1Size)
+			return B_BAD_VALUE;
 		tableCount = 7;
 		directoryOffset = 12;
 		directoryEnd = kBinaryHeaderV1Size;

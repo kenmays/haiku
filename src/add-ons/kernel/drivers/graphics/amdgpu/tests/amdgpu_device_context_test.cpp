@@ -6,6 +6,34 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <lock.h>
+
+
+void
+mutex_init(mutex* lock, const char* name)
+{
+	memset(lock, 0, sizeof(*lock));
+	lock->name = name;
+}
+
+
+void
+mutex_destroy(mutex*)
+{
+}
+
+
+status_t
+mutex_lock(mutex*)
+{
+	return B_OK;
+}
+
+
+void
+mutex_unlock(mutex*)
+{
+}
 
 static status_t sClaimStatus = B_OK;
 static status_t sReleaseStatus = B_OK;
@@ -106,8 +134,13 @@ main()
 		== B_BAD_VALUE, "uninitialized device context rejected");
 	success &= Check(amdgpu_device_context_init(&context, &device) == B_OK
 		&& context.state == AMDGPU_DEVICE_DISCOVERED
-		&& !context.resources.reserved,
-		"initialization binds metadata without claiming PCI");
+		&& !context.resources.reserved
+		&& strcmp(context.node_name, "graphics/amdgpu_020301") == 0,
+		"initialization binds metadata and stable BDF node name without claim");
+	void* cookie = NULL;
+	success &= Check(amdgpu_device_context_open(&context, &cookie)
+		== B_NOT_SUPPORTED && cookie == NULL,
+		"discovered but uninitialized node cannot be opened");
 
 	sClaimStatus = B_BUSY;
 	success &= Check(amdgpu_device_context_claim(NULL, &context) == B_BUSY
@@ -118,6 +151,19 @@ main()
 		&& context.state == AMDGPU_DEVICE_CLAIMED
 		&& context.resources.reserved,
 		"explicit claim advances device state");
+	success &= Check(amdgpu_device_context_set_node_ready(&context) == B_OK
+		&& context.state == AMDGPU_DEVICE_NODE_READY,
+		"node becomes ready only after claim and initialization");
+	success &= Check(amdgpu_device_context_open(&context, &cookie) == B_OK
+		&& cookie == &context && context.open_count == 1,
+		"open acquires a per-device lifetime reference");
+	success &= Check(amdgpu_device_context_release(
+		(pci_module_info*)1, &context) == B_BUSY,
+		"teardown refuses to release a live open cookie");
+	success &= Check(amdgpu_device_context_close(cookie) == B_OK
+		&& amdgpu_device_context_free(cookie) == B_OK
+		&& context.open_count == 0,
+		"close and free release the node lifetime reference");
 
 	sReleaseStatus = B_ERROR;
 	success &= Check(amdgpu_device_context_release(

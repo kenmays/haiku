@@ -53,8 +53,7 @@ device_open(const char* name, uint32, void** cookie)
 		return status;
 	for (uint32 i = 0; i < sDeviceCount; i++) {
 		amdgpu_device_context& device = sDevices[i];
-		if (device.state == AMDGPU_DEVICE_NODE_READY
-			&& strcmp(name, device.node_name) == 0) {
+		if (strcmp(name, device.node_name) == 0) {
 			status = amdgpu_device_context_open(&device, cookie);
 			mutex_unlock(&sRegistryLock);
 			return status;
@@ -232,7 +231,7 @@ publish_devices(void)
 
 	uint32 count = 0;
 	for (uint32 i = 0; i < sDeviceCount; i++) {
-		if (sDevices[i].state == AMDGPU_DEVICE_NODE_READY)
+		if (amdgpu_device_context_is_node_ready(&sDevices[i]))
 			sDeviceNames[count++] = sDevices[i].node_name;
 	}
 	sDeviceNames[count] = NULL;
@@ -252,8 +251,8 @@ find_device(const char* name)
 
 	device_hooks* hooks = NULL;
 	for (uint32 i = 0; i < sDeviceCount; i++) {
-		if (sDevices[i].state == AMDGPU_DEVICE_NODE_READY
-			&& strcmp(name, sDevices[i].node_name) == 0) {
+		if (strcmp(name, sDevices[i].node_name) == 0
+			&& amdgpu_device_context_is_node_ready(&sDevices[i])) {
 			hooks = &sDeviceHooks;
 			break;
 		}

@@ -5,4 +5,5 @@ UsePrivateKernelHeaders ;
 
 KernelAddon amdgpu :
 	driver.cpp
+	pci_device.cpp
 ;

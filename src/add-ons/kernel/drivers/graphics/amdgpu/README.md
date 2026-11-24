@@ -265,8 +265,8 @@ of existing Haiku Radeon drivers unless a deliberate migration is designed.
 
 1. Buildable, non-binding PCI discovery and dormant resource helpers.
 2. Bounded discovery-binary and IP-table parsers (implemented; not yet hardware-wired).
-3. Integrate firmware/ROM providers and validate real binary fixtures (bounded source reader and reference-safe ACPI VFCT provider implemented; real firmware fixtures remain).
-4. Bind resources to a real device node and add complete initialization/teardown.
+3. Integrate firmware/ROM providers and validate real binary fixtures (bounded source reader, reference-safe ACPI VFCT provider, and caller-owned per-device VBIOS state machine implemented; real firmware fixtures remain).
+4. Bind resources and the firmware context to a real device node; add complete initialization/teardown and unwind paths.
 5. Expand and verify ASIC/IP discovery tables, including revision and subsystem quirks.
 6. Firmware parser and secure firmware loading.
 7. Display-only modesetting and framebuffer scanout.

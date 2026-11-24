@@ -325,6 +325,7 @@ static struct acpi_root_info sACPIRootModule = {
 
 module_info* modules[] = {
 	(module_info*)&gACPIModule,
+	(module_info*)&gACPITableModule,
 	(module_info*)&sACPIRootModule,
 	(module_info*)&acpi_ns_dump_module,
 	(module_info*)&gACPIDeviceModule,

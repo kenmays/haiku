@@ -187,10 +187,8 @@ amdgpu_parse_discovery_binary(const void* data, size_t dataSize,
 	static const uint32 kIPDiscoveryTableID = 0;
 	static const uint32 kIPDiscoveryHeaderSize = 80;
 
-	if (data == NULL || info == NULL || (blockCapacity != 0 && blocks == NULL)
-		|| dataSize < 12) {
+	if (info == NULL)
 		return B_BAD_VALUE;
-	}
 
 	info->version = 0;
 	info->die_count = 0;

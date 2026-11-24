@@ -10,6 +10,7 @@
 #include "amdgpu_vfct.h"
 
 struct acpi_table_module_info;
+struct amdgpu_pci_device;
 
 /*
  * Fetch and validate VFCT VBIOS data while holding the ACPICA table
@@ -31,3 +32,8 @@ status_t amdgpu_load_vbios_from_vfct(const amdgpu_vfct_device* device,
 	amdgpu_vfct_info* info);
 
 #endif
+
+/* Convenience entry point using a candidate from amdgpu_enumerate(). */
+status_t amdgpu_load_vbios_for_pci_device(
+	const amdgpu_pci_device* pciDevice, void* biosBuffer,
+	size_t biosCapacity, size_t* biosSize, amdgpu_vfct_info* info);

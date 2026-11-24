@@ -10,6 +10,7 @@
 
 static bool sMismatchIdentity = false;
 static const size_t kTestImageSize = 512;
+static size_t sLoadedImageSize = kTestImageSize;
 
 
 status_t
@@ -66,9 +67,12 @@ amdgpu_load_vbios_for_pci_device(const amdgpu_pci_device* device,
 		return B_BAD_VALUE;
 	if (biosCapacity < kTestImageSize)
 		return B_BUFFER_OVERFLOW;
-	memset(biosBuffer, 0xa5, kTestImageSize);
-	*biosSize = kTestImageSize;
+	if (biosCapacity < sLoadedImageSize)
+		return B_BUFFER_OVERFLOW;
+	memset(biosBuffer, 0xa5, sLoadedImageSize);
+	*biosSize = sLoadedImageSize;
 	FillInfo(device, info);
+	info->image_size = sLoadedImageSize;
 	return B_OK;
 }
 
@@ -145,6 +149,20 @@ main()
 		&& image[0] == 0 && image[kTestImageSize - 1] == 0,
 		"changed identity between query and load rejected and image cleared");
 	sMismatchIdentity = false;
+
+	success &= Check(amdgpu_firmware_context_reset(&context) == B_OK
+		&& amdgpu_firmware_context_init(&context, &device) == B_OK
+		&& amdgpu_firmware_context_query(&context) == B_OK,
+		"reinitialize context for changed image-size test");
+	uint8 largerImage[1024];
+	memset(largerImage, 0x5a, sizeof(largerImage));
+	sLoadedImageSize = 768;
+	success &= Check(amdgpu_firmware_context_load(&context, largerImage,
+		sizeof(largerImage)) == B_BAD_DATA
+		&& largerImage[0] == 0 && largerImage[767] == 0
+		&& largerImage[768] == 0x5a,
+		"changed image size rejected and all copied bytes cleared");
+	sLoadedImageSize = kTestImageSize;
 
 	device.pci.vendor_id = 0x1234;
 	success &= Check(amdgpu_firmware_context_init(&context, &device)

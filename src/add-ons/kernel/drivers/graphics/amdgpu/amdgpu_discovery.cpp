@@ -143,3 +143,119 @@ amdgpu_parse_ip_discovery_table(const void* data, size_t dataSize,
 	info->block_capacity = blockCapacity;
 	return B_OK;
 }
+
+
+namespace {
+
+static uint16
+CalculateChecksum(const uint8* data, uint32 size)
+{
+	uint16 checksum = 0;
+	for (uint32 i = 0; i < size; i++)
+		checksum = (uint16)(checksum + data[i]);
+	return checksum;
+}
+
+struct discovery_table_info {
+	uint16 offset;
+	uint16 checksum;
+	uint16 size;
+};
+
+} // namespace
+
+status_t
+amdgpu_parse_discovery_binary(const void* data, size_t dataSize,
+	amdgpu_ip_block* blocks, uint32 blockCapacity,
+	amdgpu_ip_discovery_info* info)
+{
+	static const uint32 kBinaryHeaderV1Size = 12 + 7 * 8;
+	static const uint32 kBinaryHeaderV2FixedSize = 16;
+	static const uint32 kTableInfoSize = 8;
+	static const uint32 kIPDiscoveryTableID = 0;
+	static const uint32 kIPDiscoveryHeaderSize = 80;
+
+	if (data == NULL || info == NULL || (blockCapacity != 0 && blocks == NULL)
+		|| dataSize < kBinaryHeaderV1Size) {
+		return B_BAD_VALUE;
+	}
+
+	const uint8* bytes = (const uint8*)data;
+	if (ReadLE32(bytes) != AMDGPU_DISCOVERY_BINARY_SIGNATURE)
+		return B_BAD_VALUE;
+
+	uint16 major = ReadLE16(bytes + 4);
+	uint16 checksum = ReadLE16(bytes + 8);
+	uint16 binarySize = ReadLE16(bytes + 10);
+	uint32 tableCount;
+	uint32 directoryOffset;
+	uint32 directoryEnd;
+
+	if (binarySize > dataSize || binarySize < kBinaryHeaderV1Size)
+		return B_BAD_VALUE;
+
+	if (major <= 1) {
+		tableCount = 7;
+		directoryOffset = 12;
+		directoryEnd = kBinaryHeaderV1Size;
+	} else if (major == 2) {
+		if (binarySize < kBinaryHeaderV2FixedSize)
+			return B_BAD_VALUE;
+		tableCount = ReadLE16(bytes + 12);
+		directoryOffset = kBinaryHeaderV2FixedSize;
+		if (tableCount == 0 || tableCount > AMDGPU_DISCOVERY_MAX_TABLES
+			|| tableCount > (binarySize - directoryOffset) / kTableInfoSize) {
+			return B_BAD_VALUE;
+		}
+		directoryEnd = directoryOffset + tableCount * kTableInfoSize;
+	} else {
+		return B_BAD_VALUE;
+	}
+
+	if (directoryEnd > binarySize || directoryEnd < directoryOffset)
+		return B_BAD_VALUE;
+
+	// AMD's binary checksum is the 16-bit byte sum from immediately after
+	// binary_checksum through the end of binary_size bytes.
+	if (CalculateChecksum(bytes + 10, binarySize - 10) != checksum)
+		return B_BAD_VALUE;
+
+	discovery_table_info tables[AMDGPU_DISCOVERY_MAX_TABLES];
+	for (uint32 i = 0; i < tableCount; i++) {
+		const uint8* entry = bytes + directoryOffset + i * kTableInfoSize;
+		tables[i].offset = ReadLE16(entry);
+		tables[i].checksum = ReadLE16(entry + 2);
+		tables[i].size = ReadLE16(entry + 4);
+
+		if (tables[i].offset == 0 && tables[i].size == 0)
+			continue;
+		if (tables[i].offset == 0 || tables[i].size == 0
+			|| tables[i].offset < directoryEnd
+			|| tables[i].offset > binarySize
+			|| tables[i].size > binarySize - tables[i].offset) {
+			return B_BAD_VALUE;
+		}
+	}
+
+	if (kIPDiscoveryTableID >= tableCount)
+		return B_BAD_VALUE;
+
+	const discovery_table_info& ipTable = tables[kIPDiscoveryTableID];
+	if (ipTable.offset == 0 || ipTable.size < kIPDiscoveryHeaderSize)
+		return B_BAD_VALUE;
+
+	const uint8* table = bytes + ipTable.offset;
+	if (ReadLE32(table) != AMDGPU_IP_DISCOVERY_SIGNATURE
+		|| ReadLE32(table + 8) != kIPDiscoveryTableID) {
+		return B_BAD_VALUE;
+	}
+
+	uint16 innerSize = ReadLE16(table + 6);
+	if (innerSize < kIPDiscoveryHeaderSize || innerSize > ipTable.size
+		|| CalculateChecksum(table, innerSize) != ipTable.checksum) {
+		return B_BAD_VALUE;
+	}
+
+	return amdgpu_parse_ip_discovery_table(table, innerSize, blocks,
+		blockCapacity, info);
+}

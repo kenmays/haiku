@@ -288,6 +288,34 @@ teardown refusal while a cookie is live, and successful release after the
 reference is dropped. The test is registered but has not been run in a Haiku
 build environment.
 
+
+### Reversible ASIC initialization coordinator
+
+`amdgpu_init_sequence.h/.cpp` adds a hardware-independent bring-up coordinator
+for the next integration stage. It runs four explicit operations in order:
+PCI device claim, firmware load/validation, register-aperture mapping, and
+ASIC initialization. Each completed stage is recorded independently and has
+a corresponding teardown callback.
+
+If a stage fails, completed stages are unwound in strict reverse order.
+Rollback stops at the first cleanup failure so that lower-level resources are
+not released while a dependent upper-level resource may still be active. The
+sequence retains the remaining completion bits and reports both the original
+initialization error and the rollback error, allowing a caller to retry cleanup.
+The callback table is required to provide all acquisition and release
+operations; missing teardown callbacks are rejected before any operation runs.
+
+The coordinator is deliberately not called by `init_driver()` and does not
+supply ASIC-specific register programming. It is an integration primitive:
+future generation-specific code must provide audited operations, use validated
+IP/ASIC identity before MMIO, and mark a device node ready only after successful
+initialization and complete backing-state construction.
+
+The `amdgpu_init_sequence_test` target covers successful staged initialization,
+reverse-order teardown, duplicate initialization rejection, failure rollback,
+retained ownership after a cleanup failure, and retrying that cleanup. It is
+registered but has not been run in a Haiku build environment.
+
 ## Architecture
 
 The implementation is organized around AMD IP blocks, not Linux kernel

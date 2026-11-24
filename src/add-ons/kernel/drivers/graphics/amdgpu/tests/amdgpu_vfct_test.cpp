@@ -124,6 +124,7 @@ static std::vector<uint8> sProviderTable;
 static int sGetTableCalls = 0;
 static int sPutTableCalls = 0;
 static bool sFailGetTable = false;
+static bool sReturnNullTable = false;
 
 
 static status_t
@@ -134,7 +135,7 @@ FakeGetTable(const char* signature, uint32 instance, void** tableHeader)
 		|| instance != 1 || tableHeader == NULL || sFailGetTable) {
 		return B_ENTRY_NOT_FOUND;
 	}
-	*tableHeader = &sProviderTable[0];
+	*tableHeader = sReturnNullTable ? NULL : &sProviderTable[0];
 	return B_OK;
 }
 
@@ -142,9 +143,11 @@ FakeGetTable(const char* signature, uint32 instance, void** tableHeader)
 static status_t
 FakePutTable(void* tableHeader)
 {
-	if (sProviderTable.empty() || tableHeader != &sProviderTable[0])
-		return B_BAD_VALUE;
 	sPutTableCalls++;
+	if (tableHeader == NULL || sProviderTable.empty()
+		|| tableHeader != &sProviderTable[0]) {
+		return B_BAD_VALUE;
+	}
 	return B_OK;
 }
 
@@ -266,6 +269,14 @@ main()
 		== B_ENTRY_NOT_FOUND && sPutTableCalls == putsBefore,
 		"provider does not release a table it failed to acquire");
 	sFailGetTable = false;
+
+	sReturnNullTable = true;
+	putsBefore = sPutTableCalls;
+	success &= Check(amdgpu_get_vbios_from_vfct(&fakeACPI, &device,
+		&copiedBIOS[0], copiedBIOS.size(), &copiedBIOSSize, &info)
+		== B_BAD_VALUE && sPutTableCalls == putsBefore + 1,
+		"provider pairs successful null-table result with release attempt");
+	sReturnNullTable = false;
 
 	fakeACPI.put_table = NULL;
 	int getsBefore = sGetTableCalls;

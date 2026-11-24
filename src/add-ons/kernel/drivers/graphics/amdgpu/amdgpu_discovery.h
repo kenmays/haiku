@@ -48,7 +48,11 @@ status_t amdgpu_parse_ip_discovery_table(const void* data, size_t dataSize,
 	amdgpu_ip_block* blocks, uint32 blockCapacity,
 	amdgpu_ip_discovery_info* info);
 
-/* Validate an AMD discovery binary and parse its IP_DISCOVERY directory entry. */
+/*
+ * Validate an AMD discovery binary and parse its IP_DISCOVERY directory
+ * entry. The binary and IP table checksums use AMD's 16-bit byte-sum format.
+ * The output storage contract and status values match the standalone parser.
+ */
 status_t amdgpu_parse_discovery_binary(const void* data, size_t dataSize,
 	amdgpu_ip_block* blocks, uint32 blockCapacity,
 	amdgpu_ip_discovery_info* info);

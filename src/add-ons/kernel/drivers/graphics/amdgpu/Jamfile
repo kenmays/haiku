@@ -7,6 +7,7 @@ KernelAddon amdgpu :
 	driver.cpp
 	pci_device.cpp
 	device_resources.cpp
+	amdgpu_device_context.cpp
 	amdgpu_discovery.cpp
 	amdgpu_discovery_source.cpp
 	amdgpu_vfct.cpp

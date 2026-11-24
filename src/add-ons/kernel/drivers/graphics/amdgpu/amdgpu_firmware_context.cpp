@@ -98,7 +98,8 @@ amdgpu_firmware_context_load(amdgpu_firmware_context* context,
 	if (imageSize != context->required_size
 		|| info.image_size != context->required_size
 		|| !MatchesDevice(context, info)) {
-		memset(biosBuffer, 0, context->required_size);
+		size_t clearSize = imageSize < biosCapacity ? imageSize : biosCapacity;
+		memset(biosBuffer, 0, clearSize);
 		return B_BAD_DATA;
 	}
 

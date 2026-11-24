@@ -180,6 +180,15 @@ main()
 		binaryV1.size(), blocks, 0, &info) == B_BUFFER_OVERFLOW,
 		"output capacity checked");
 
+	std::vector<uint8> badTableChecksum(binaryV1);
+	uint32 checksumTableOffset = ReadLE16(&badTableChecksum[12]);
+	badTableChecksum[checksumTableOffset + 90] ^= 1;
+	WriteLE16(&badTableChecksum[8], Checksum(&badTableChecksum[10],
+		badTableChecksum.size() - 10));
+	success &= Check(amdgpu_parse_discovery_binary(&badTableChecksum[0],
+		badTableChecksum.size(), blocks, 4, &info) == B_BAD_VALUE,
+		"IP table checksum corruption rejected");
+
 	std::vector<uint8> badChecksum(binaryV1);
 	badChecksum.back() ^= 1;
 	success &= Check(amdgpu_parse_discovery_binary(&badChecksum[0],

@@ -80,6 +80,28 @@ behavior, not compatibility with the full range of vendor VBIOS images;
 real-world firmware samples and cross-checking against upstream Linux remain
 required before using this parser to initialize hardware.
 
+`amdgpu_vfct.cpp` adds an offline parser for AMD's ACPI VFCT table using
+upstream Linux's public VFCT structure layout. It validates the ACPI signature,
+declared table length and checksum, the VBIOS image region, each 28-byte PCI
+image header, and the embedded image extent. It matches vendor/device and PCI
+device/function; a bus mismatch is accepted but reported because VFCT records
+the POST-time bus number and PCI bus renumbering can occur. The embedded ROM
+is then checked by the existing bounded option-ROM/ATOMBIOS parser, and its
+PCIR vendor/device IDs must agree with the VFCT entry. Subsystem IDs and
+revision are returned as metadata, not used as a substitute for the mandatory
+PCI identity match.
+
+The `amdgpu_vfct_test` target covers multi-entry selection, exact and
+renumbered-bus matching, absent devices, ACPI checksum failure, invalid VBIOS
+offsets, truncated images, and a mismatch between the VFCT identity and the
+embedded PCIR IDs. The tests are registered but have not been run in a Haiku
+build environment. The parser is deliberately not wired to
+`acpi_module_info::get_table()`: Haiku's public ACPI module interface exposes
+that lookup but no matching table-release operation, so table lifetime and
+ownership must be resolved before adding a production provider. The parser
+accepts caller-owned bytes and performs no ACPI call, allocation, PCI access,
+or MMIO.
+
 ### Native Haiku provider audit
 
 The current Haiku interfaces were checked before adding a hardware-backed

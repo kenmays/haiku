@@ -110,6 +110,13 @@ main()
 	success &= Check(amdgpu_parse_vbios_image(&badPcir[0],
 		badPcir.size(), &info) == B_BAD_VALUE, "invalid PCIR signature rejected");
 
+	std::vector<uint8> overlappingPcir = second;
+	WriteLE16(&overlappingPcir[0x18], 0x10);
+	FinishChecksum(overlappingPcir);
+	success &= Check(amdgpu_parse_vbios_image(&overlappingPcir[0],
+		overlappingPcir.size(), &info) == B_BAD_VALUE,
+		"PCIR pointer into fixed ROM header rejected");
+
 	std::vector<uint8> badLength = second;
 	WriteLE16(&badLength[0x1c + 16], 2);
 	FinishChecksum(badLength);

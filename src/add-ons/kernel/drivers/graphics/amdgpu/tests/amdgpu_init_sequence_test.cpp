@@ -7,8 +7,9 @@
 #include <stdio.h>
 
 struct test_state {
-	int calls[8];
+	int calls[16];
 	int fail_call;
+	int fail_call2;
 	int call_count;
 };
 
@@ -27,7 +28,8 @@ static status_t
 Record(test_state* state, int call)
 {
 	state->calls[state->call_count++] = call;
-	return call == state->fail_call ? B_ERROR : B_OK;
+	return call == state->fail_call || call == state->fail_call2
+		? B_ERROR : B_OK;
 }
 
 #define TEST_CALLBACK(name, id) \
@@ -62,6 +64,8 @@ main()
 	bool success = true;
 	amdgpu_init_sequence sequence;
 	test_state state = {};
+	state.fail_call = -1;
+	state.fail_call2 = -1;
 	amdgpu_init_sequence_init(&sequence);
 
 	success &= Check(amdgpu_initialize_device(&sequence, &kOperations,
@@ -86,6 +90,7 @@ main()
 	amdgpu_init_sequence_init(&sequence);
 	state = {};
 	state.fail_call = CALL_MAP;
+	state.fail_call2 = -1;
 	success &= Check(amdgpu_initialize_device(&sequence, &kOperations,
 		&state) == B_ERROR
 		&& sequence.last_error == B_ERROR
@@ -99,21 +104,24 @@ main()
 
 	amdgpu_init_sequence_init(&sequence);
 	state = {};
-	state.fail_call = CALL_MAP;
-	/* Make firmware unload fail too, proving ownership is retained. */
-	state.fail_call = CALL_FIRMWARE;
-	/* Firmware-load failure leaves only the PCI claim to release. */
+	state.fail_call = CALL_ASIC_INIT;
+	state.fail_call2 = CALL_UNMAP;
 	success &= Check(amdgpu_initialize_device(&sequence, &kOperations,
 		&state) == B_ERROR
-		&& sequence.completed_steps == AMDGPU_INIT_STEP_NONE,
-		"failure before firmware completion releases only the PCI claim");
+		&& sequence.rollback_error == B_ERROR
+		&& sequence.completed_steps == (AMDGPU_INIT_STEP_DEVICE_CLAIMED
+			| AMDGPU_INIT_STEP_FIRMWARE_READY
+			| AMDGPU_INIT_STEP_REGISTERS_MAPPED),
+		"failed cleanup retains all resources whose release is not complete");
+	success &= Check(state.call_count == 6
+		&& state.calls[4] == CALL_UNMAP,
+		"rollback stops at first cleanup failure to preserve dependencies");
 
-	amdgpu_init_sequence_init(&sequence);
-	state = {};
-	state.fail_call = CALL_MAP;
-	/* The test callback can fail only one call; fail cleanup via call ordinal. */
-	success &= Check(amdgpu_initialize_device(&sequence, &kOperations,
-		&state) == B_ERROR, "bring-up failure triggers rollback");
+	state.fail_call2 = -1;
+	success &= Check(amdgpu_unwind_device(&sequence, &kOperations, &state)
+		== B_OK && sequence.completed_steps == AMDGPU_INIT_STEP_NONE,
+		"retained resources can be released by a later cleanup retry");
+
 	if (!success)
 		return 1;
 	printf("AMDGPU init sequence tests passed.\n");

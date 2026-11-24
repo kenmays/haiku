@@ -20,6 +20,7 @@ struct amdgpu_device_resources {
 	size_t mmio_size[6];
 };
 
+void amdgpu_init_device_resources(amdgpu_device_resources* resources);
 status_t amdgpu_claim_device(pci_module_info* pci,
 	const amdgpu_pci_device* device, amdgpu_device_resources* resources);
 status_t amdgpu_map_mmio_bar(const amdgpu_pci_device* device,

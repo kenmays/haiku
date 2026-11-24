@@ -153,7 +153,8 @@ main()
 		&& context.resources.reserved,
 		"explicit claim advances device state");
 	success &= Check(amdgpu_device_context_set_node_ready(&context) == B_OK
-		&& context.state == AMDGPU_DEVICE_NODE_READY,
+		&& context.state == AMDGPU_DEVICE_NODE_READY
+		&& amdgpu_device_context_is_node_ready(&context),
 		"node becomes ready only after claim and initialization");
 	success &= Check(amdgpu_device_context_open(&context, &cookie) == B_OK
 		&& cookie == &context && context.open_count == 1,
@@ -169,15 +170,17 @@ main()
 	sReleaseStatus = B_ERROR;
 	success &= Check(amdgpu_device_context_release(
 		(pci_module_info*)1, &context) == B_ERROR
-		&& context.state == AMDGPU_DEVICE_CLAIMED
+		&& context.state == AMDGPU_DEVICE_NODE_READY
 		&& context.resources.reserved,
 		"failed release preserves ownership state for retry");
 	sReleaseStatus = B_OK;
 	success &= Check(amdgpu_device_context_release(
 		(pci_module_info*)1, &context) == B_OK
 		&& context.magic == 0
-		&& context.state == AMDGPU_DEVICE_UNINITIALIZED,
-		"successful release clears device and firmware context");
+		&& context.state == AMDGPU_DEVICE_UNINITIALIZED
+		&& context.lock_initialized
+		&& !amdgpu_device_context_is_node_ready(&context),
+		"successful release clears payload but preserves the reusable lock");
 
 	device.pci.vendor_id = 0x1234;
 	success &= Check(amdgpu_device_context_init(&context, &device)

@@ -7,6 +7,9 @@
 #include <ACPI.h>
 #include <KernelExport.h>
 
+#include <string.h>
+#include "pci_device.h"
+
 
 status_t
 amdgpu_load_vbios_from_vfct(const amdgpu_vfct_device* device,
@@ -23,4 +26,29 @@ amdgpu_load_vbios_from_vfct(const amdgpu_vfct_device* device,
 		biosCapacity, biosSize, info);
 	put_module(B_ACPI_TABLE_MODULE_NAME);
 	return status;
+}
+
+
+status_t
+amdgpu_load_vbios_for_pci_device(const amdgpu_pci_device* pciDevice,
+	void* biosBuffer, size_t biosCapacity, size_t* biosSize,
+	amdgpu_vfct_info* info)
+{
+	if (biosSize != NULL)
+		*biosSize = 0;
+	if (info != NULL)
+		memset(info, 0, sizeof(*info));
+	if (pciDevice == NULL || biosBuffer == NULL || biosSize == NULL
+		|| info == NULL) {
+		return B_BAD_VALUE;
+	}
+
+	amdgpu_vfct_device vfctDevice;
+	status_t status = amdgpu_vfct_device_from_pci_device(pciDevice,
+		&vfctDevice);
+	if (status != B_OK)
+		return status;
+
+	return amdgpu_load_vbios_from_vfct(&vfctDevice, biosBuffer,
+		biosCapacity, biosSize, info);
 }

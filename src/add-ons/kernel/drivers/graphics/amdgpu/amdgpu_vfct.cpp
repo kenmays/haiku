@@ -46,7 +46,6 @@ amdgpu_parse_vfct_table(const void* data, size_t dataSize,
 		memset(info, 0, sizeof(*info));
 
 	/* ACPI header (36) + VFCT-specific header (40). */
-	static const size_t kACPIHeaderSize = 36;
 	static const size_t kVFCTHeaderSize = 76;
 	static const size_t kVFCTImageHeaderSize = 28;
 

@@ -60,6 +60,11 @@ amdgpu_firmware_context_query(amdgpu_firmware_context* context)
 	if (context->state == AMDGPU_FIRMWARE_LOADED)
 		return B_BUSY;
 
+	// A failed refresh must not leave an older image size usable for loading.
+	memset(&context->info, 0, sizeof(context->info));
+	context->required_size = 0;
+	context->state = AMDGPU_FIRMWARE_DEVICE_IDENTIFIED;
+
 	size_t requiredSize = 0;
 	amdgpu_vfct_info info;
 	status_t status = amdgpu_query_vbios_size_for_pci_device(

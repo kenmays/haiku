@@ -26,9 +26,22 @@ status_t amdgpu_get_vbios_from_vfct(struct acpi_table_module_info* acpi,
 	const amdgpu_vfct_device* device, void* biosBuffer,
 	size_t biosCapacity, size_t* biosSize, amdgpu_vfct_info* info);
 
+/*
+ * Query the selected image size without copying it. Returns
+ * B_BUFFER_OVERFLOW with biosSize set to the required size when found.
+ */
+status_t amdgpu_query_vbios_size_from_vfct(
+	struct acpi_table_module_info* acpi, const amdgpu_vfct_device* device,
+	size_t* biosSize, amdgpu_vfct_info* info);
+
 /* Convenience entry point that loads and releases the ACPI table module. */
 status_t amdgpu_load_vbios_from_vfct(const amdgpu_vfct_device* device,
 	void* biosBuffer, size_t biosCapacity, size_t* biosSize,
+	amdgpu_vfct_info* info);
+
+/* Query required image size using a candidate from amdgpu_enumerate(). */
+status_t amdgpu_query_vbios_size_for_pci_device(
+	const amdgpu_pci_device* pciDevice, size_t* biosSize,
 	amdgpu_vfct_info* info);
 
 /* Convenience entry point using a candidate from amdgpu_enumerate(). */

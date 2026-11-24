@@ -1,7 +1,5 @@
 SubDir HAIKU_TOP src add-ons kernel drivers graphics amdgpu ;
 
-SubInclude HAIKU_TOP src add-ons kernel drivers graphics amdgpu tests ;
-
 UsePrivateHeaders graphics kernel ;
 UsePrivateKernelHeaders ;
 
@@ -11,3 +9,5 @@ KernelAddon amdgpu :
 	device_resources.cpp
 	amdgpu_discovery.cpp
 ;
+
+SubInclude HAIKU_TOP src add-ons kernel drivers graphics amdgpu tests ;

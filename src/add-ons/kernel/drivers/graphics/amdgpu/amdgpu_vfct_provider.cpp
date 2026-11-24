@@ -54,7 +54,10 @@ amdgpu_get_vbios_from_vfct(acpi_table_module_info* acpi,
 		status = amdgpu_parse_vfct_table(table, tableSize, device, &parsed);
 		if (status == B_OK) {
 			*biosSize = parsed.image_size;
-			if (biosBuffer == NULL) {
+			if (biosBuffer == NULL && biosCapacity == 0) {
+				*info = parsed;
+				status = B_BUFFER_OVERFLOW;
+			} else if (biosBuffer == NULL) {
 				status = B_BAD_VALUE;
 			} else if (biosCapacity < parsed.image_size) {
 				status = B_BUFFER_OVERFLOW;
@@ -73,3 +76,13 @@ amdgpu_get_vbios_from_vfct(acpi_table_module_info* acpi,
 	return status;
 }
 
+
+
+status_t
+amdgpu_query_vbios_size_from_vfct(acpi_table_module_info* acpi,
+	const amdgpu_vfct_device* device, size_t* biosSize,
+	amdgpu_vfct_info* info)
+{
+	return amdgpu_get_vbios_from_vfct(acpi, device, NULL, 0, biosSize,
+		info);
+}

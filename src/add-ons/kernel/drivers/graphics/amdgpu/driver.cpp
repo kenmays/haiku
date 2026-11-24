@@ -53,8 +53,14 @@ init_driver(void)
 		return status;
 	}
 
-	dprintf("amdgpu: retained %" B_PRIu32 " AMD display PCI record(s); hardware "
-		"bring-up remains disabled.\n", sDeviceCount);
+	uint32 known = 0;
+	for (uint32 i = 0; i < sDeviceCount; i++) {
+		if (sDevices[i].generation != AMDGPU_GENERATION_UNKNOWN)
+			known++;
+	}
+	dprintf("amdgpu: retained %" B_PRIu32 " AMD display record(s), "
+		"%" B_PRIu32 " with curated ASIC IDs; no hardware initialized.\\n",
+		sDeviceCount, known);
 	return B_OK;
 }
 

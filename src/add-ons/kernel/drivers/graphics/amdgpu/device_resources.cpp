@@ -113,10 +113,14 @@ amdgpu_map_mmio_bar(const amdgpu_pci_device* device,
 		|| physicalAddress > (~(uint64)0) - size) {
 		return B_BAD_DATA;
 	}
+	const phys_addr_t physicalAddressForMapping
+		= (phys_addr_t)physicalAddress;
+	if ((uint64)physicalAddressForMapping != physicalAddress)
+		return B_NOT_SUPPORTED;
 
 	void* mappedAddress = NULL;
 	area_id area = map_physical_memory("amdgpu-mmio",
-		(phys_addr_t)physicalAddress, size,
+		physicalAddressForMapping, size,
 		B_ANY_KERNEL_BLOCK_ADDRESS | B_UNCACHED_MEMORY,
 		B_READ_AREA | B_WRITE_AREA, &mappedAddress);
 	if (area < 0)
@@ -128,7 +132,7 @@ amdgpu_map_mmio_bar(const amdgpu_pci_device* device,
 
 	resources->mmio_area[bar] = area;
 	resources->mmio[bar] = mappedAddress;
-	resources->mmio_physical[bar] = (phys_addr_t)physicalAddress;
+	resources->mmio_physical[bar] = physicalAddressForMapping;
 	resources->mmio_size[bar] = size;
 	return B_OK;
 }

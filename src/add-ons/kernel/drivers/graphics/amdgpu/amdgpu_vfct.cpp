@@ -52,7 +52,7 @@ amdgpu_parse_vfct_table(const void* data, size_t dataSize,
 	if (data == NULL || device == NULL || info == NULL
 		|| dataSize < kVFCTHeaderSize || dataSize > 0xffffffffU
 		|| device->vendor_id == 0 || device->device_id == 0
-		|| device->device > 31 || device->function > 7) {
+		|| device->bus > 255 || device->device > 31 || device->function > 7) {
 		return B_BAD_VALUE;
 	}
 

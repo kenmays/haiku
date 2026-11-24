@@ -95,12 +95,26 @@ The `amdgpu_vfct_test` target covers multi-entry selection, exact and
 renumbered-bus matching, absent devices, ACPI checksum failure, invalid VBIOS
 offsets, truncated images, and a mismatch between the VFCT identity and the
 embedded PCIR IDs. The tests are registered but have not been run in a Haiku
-build environment. The parser is deliberately not wired to
-`acpi_module_info::get_table()`: Haiku's public ACPI module interface exposes
-that lookup but no matching table-release operation, so table lifetime and
-ownership must be resolved before adding a production provider. The parser
-accepts caller-owned bytes and performs no ACPI call, allocation, PCI access,
-or MMIO.
+build environment. The parser accepts caller-owned bytes and performs no ACPI
+call, allocation, PCI access, or MMIO.
+
+Haiku's existing `acpi_module_info::get_table()` calls ACPICA
+`AcpiGetTable()`, which acquires a reference, but the legacy public module
+does not expose `AcpiPutTable()`. To preserve the old module ABI, the ACPI
+bus manager now exports a separate `acpi_table_module_info` module named
+`B_ACPI_TABLE_MODULE_NAME` (`bus_managers/acpi/tables/v1`). Its
+`get_table()` and `put_table()` methods are a paired reference-counted
+interface. The table module holds the legacy ACPI module loaded for its own
+lifetime, and `put_table()` calls ACPICA `AcpiPutTable()`.
+
+`amdgpu_vfct_provider.cpp` uses that paired interface. It keeps the VFCT
+reference while validating the table and copies the selected VBIOS image into
+caller-owned storage before releasing the reference on every post-acquisition
+path. A 16 MiB maximum table size bounds the provider's input. The convenience
+entry point in `amdgpu_vfct_module.cpp` loads and releases the table module;
+the lower-level provider remains independently testable. The provider does
+not reserve or initialize the GPU, map a ROM BAR, or retain a pointer into the
+ACPI table.
 
 ### Native Haiku provider audit
 
@@ -119,11 +133,13 @@ provider:
   driver must also account for device ownership, address translation, image
   extent, and mapping lifetime. The AMDGPU driver therefore does not toggle
   the ROM-enable bit or map a ROM BAR as part of discovery.
-- Haiku's `headers/os/drivers/ACPI.h` exposes `acpi_module_info::get_table()`
-  for ACPI tables. The ACPI implementation delegates this to ACPICA's
-  `AcpiGetTable()`. This is suitable for ACPI-defined tables, but it is not
-  a generic firmware-file service and does not provide the AMDGPU discovery
-  binary or a VBIOS image by itself.
+- Haiku's legacy `acpi_module_info::get_table()` delegates to ACPICA's
+  `AcpiGetTable()`, which acquires a reference. The legacy module has no
+  paired release callback. A separate `acpi_table_module_info` module now
+  exposes `get_table()/put_table()` without changing the layout or name of
+  the existing `acpi_module_info` ABI. The AMDGPU VFCT provider holds that
+  reference only while parsing and copying the selected image. This is an
+  ACPI-defined firmware source, not a generic EFI firmware-file service.
 - The private ACPI header describes ACPI table structures and signatures;
   it does not establish a supported kernel API for retrieving arbitrary
   firmware blobs from EFI/UEFI variables or the bootloader.

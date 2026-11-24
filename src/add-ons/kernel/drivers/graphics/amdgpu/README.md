@@ -94,11 +94,19 @@ PCI identity match.
 The `amdgpu_vfct_test` target covers multi-entry selection, exact and
 renumbered-bus matching, absent devices, PCI candidate identity translation,
 rejection of invalid vendors/unrecognized records/bridge functions, no-copy
-size queries and their reference cleanup, ACPI
-checksum failure, invalid VBIOS offsets, truncated images, and a mismatch
+size queries and their reference cleanup, successful-null-handle cleanup,
+ACPI checksum failure, invalid VBIOS offsets, truncated images, and a mismatch
 between the VFCT identity and the embedded PCIR IDs. The tests are registered
 but have not been run in a Haiku build environment. The parser accepts caller-owned bytes and performs no ACPI
 call, allocation, PCI access, or MMIO.
+
+The separate `amdgpu_firmware_context_test` target tests the per-device
+firmware state machine with injected provider stubs: initialization, size-query
+and load transitions, undersized buffers, stale-query invalidation, PCI-ID
+mismatches, changed image size between query and load, and clearing any copied
+image bytes after a mismatch. It can be built with
+`jam amdgpu_firmware_context_test`. Like the other AMDGPU tests, it is
+registered but has not yet been executed in a Haiku build environment.
 
 Haiku's existing `acpi_module_info::get_table()` calls ACPICA
 `AcpiGetTable()`, which acquires a reference, but the legacy public module

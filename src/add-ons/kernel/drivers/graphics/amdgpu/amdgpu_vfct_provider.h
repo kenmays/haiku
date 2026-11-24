@@ -25,4 +25,9 @@ status_t amdgpu_get_vbios_from_vfct(struct acpi_table_module_info* acpi,
 	const amdgpu_vfct_device* device, void* biosBuffer,
 	size_t biosCapacity, size_t* biosSize, amdgpu_vfct_info* info);
 
+/* Convenience entry point that loads and releases the ACPI table module. */
+status_t amdgpu_load_vbios_from_vfct(const amdgpu_vfct_device* device,
+	void* biosBuffer, size_t biosCapacity, size_t* biosSize,
+	amdgpu_vfct_info* info);
+
 #endif

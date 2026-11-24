@@ -53,14 +53,19 @@ init_driver(void)
 		return status;
 	}
 
-	uint32 known = 0;
+	uint32 exactIDs = 0;
+	uint32 ipDiscovery = 0;
 	for (uint32 i = 0; i < sDeviceCount; i++) {
-		if (sDevices[i].generation != AMDGPU_GENERATION_UNKNOWN)
-			known++;
+		if ((sDevices[i].identification_flags & AMDGPU_PCI_ID_EXACT) != 0)
+			exactIDs++;
+		if ((sDevices[i].identification_flags
+			& AMDGPU_PCI_ID_IP_DISCOVERY) != 0)
+			ipDiscovery++;
 	}
-	dprintf("amdgpu: retained %" B_PRIu32 " AMD display record(s), "
-		"%" B_PRIu32 " with curated ASIC IDs; no hardware initialized.\\n",
-		sDeviceCount, known);
+	dprintf("amdgpu: retained %" B_PRIu32 " AMD GPU function(s), "
+		"%" B_PRIu32 " exact PCI IDs, %" B_PRIu32
+		" IP-discovery class matches; no hardware initialized.\\n",
+		sDeviceCount, exactIDs, ipDiscovery);
 	return B_OK;
 }
 

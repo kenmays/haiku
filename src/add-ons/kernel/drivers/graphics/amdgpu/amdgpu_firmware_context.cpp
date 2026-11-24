@@ -1,0 +1,118 @@
+/*
+ * Copyright 2026, Haiku, Inc. All rights reserved.
+ * Distributed under the terms of the MIT License.
+ *
+ * Caller-owned per-PCI-function VBIOS state machine. No allocations, PCI
+ * reservation, BAR mapping, or firmware execution are performed here.
+ */
+#include <string.h>
+
+#include "amdgpu_firmware_context.h"
+#include "amdgpu_vfct_provider.h"
+
+
+static bool
+IsValidContext(const amdgpu_firmware_context* context)
+{
+	return context != NULL
+		&& context->magic == AMDGPU_FIRMWARE_CONTEXT_MAGIC
+		&& context->state >= AMDGPU_FIRMWARE_DEVICE_IDENTIFIED
+		&& context->state <= AMDGPU_FIRMWARE_LOADED;
+}
+
+
+static bool
+MatchesDevice(const amdgpu_firmware_context* context,
+	const amdgpu_vfct_info& info)
+{
+	return info.vendor_id == context->device.pci.vendor_id
+		&& info.device_id == context->device.pci.device_id
+		&& info.vbios.vendor_id == context->device.pci.vendor_id
+		&& info.vbios.device_id == context->device.pci.device_id;
+}
+
+
+status_t
+amdgpu_firmware_context_init(amdgpu_firmware_context* context,
+	const amdgpu_pci_device* device)
+{
+	if (context == NULL || device == NULL)
+		return B_BAD_VALUE;
+
+	amdgpu_vfct_device identity;
+	status_t status = amdgpu_vfct_device_from_pci_device(device, &identity);
+	if (status != B_OK)
+		return status;
+
+	memset(context, 0, sizeof(*context));
+	context->device = *device;
+	context->state = AMDGPU_FIRMWARE_DEVICE_IDENTIFIED;
+	context->magic = AMDGPU_FIRMWARE_CONTEXT_MAGIC;
+	return B_OK;
+}
+
+
+status_t
+amdgpu_firmware_context_query(amdgpu_firmware_context* context)
+{
+	if (!IsValidContext(context))
+		return B_BAD_VALUE;
+	if (context->state == AMDGPU_FIRMWARE_LOADED)
+		return B_BUSY;
+
+	size_t requiredSize = 0;
+	amdgpu_vfct_info info;
+	status_t status = amdgpu_query_vbios_size_for_pci_device(
+		&context->device, &requiredSize, &info);
+	if (status != B_BUFFER_OVERFLOW)
+		return status == B_OK ? B_BAD_DATA : status;
+	if (requiredSize == 0 || info.image_size != requiredSize
+		|| !MatchesDevice(context, info)) {
+		return B_BAD_DATA;
+	}
+
+	context->info = info;
+	context->required_size = requiredSize;
+	context->state = AMDGPU_FIRMWARE_SIZE_KNOWN;
+	return B_OK;
+}
+
+
+status_t
+amdgpu_firmware_context_load(amdgpu_firmware_context* context,
+	void* biosBuffer, size_t biosCapacity)
+{
+	if (!IsValidContext(context) || biosBuffer == NULL)
+		return B_BAD_VALUE;
+	if (context->state != AMDGPU_FIRMWARE_SIZE_KNOWN)
+		return B_NOT_ALLOWED;
+	if (biosCapacity < context->required_size)
+		return B_BUFFER_OVERFLOW;
+
+	size_t imageSize = 0;
+	amdgpu_vfct_info info;
+	status_t status = amdgpu_load_vbios_for_pci_device(
+		&context->device, biosBuffer, biosCapacity, &imageSize, &info);
+	if (status != B_OK)
+		return status;
+	if (imageSize != context->required_size
+		|| info.image_size != context->required_size
+		|| !MatchesDevice(context, info)) {
+		memset(biosBuffer, 0, context->required_size);
+		return B_BAD_DATA;
+	}
+
+	context->info = info;
+	context->state = AMDGPU_FIRMWARE_LOADED;
+	return B_OK;
+}
+
+
+status_t
+amdgpu_firmware_context_reset(amdgpu_firmware_context* context)
+{
+	if (context == NULL)
+		return B_BAD_VALUE;
+	memset(context, 0, sizeof(*context));
+	return B_OK;
+}

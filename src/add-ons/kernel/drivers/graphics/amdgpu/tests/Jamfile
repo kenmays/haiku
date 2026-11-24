@@ -22,3 +22,8 @@ SimpleTest amdgpu_firmware_context_test :
 	amdgpu_firmware_context_test.cpp
 	../amdgpu_firmware_context.cpp
 ;
+
+SimpleTest amdgpu_device_context_test :
+	amdgpu_device_context_test.cpp
+	../amdgpu_device_context.cpp
+;

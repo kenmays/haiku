@@ -136,6 +136,16 @@ MakeBinary(uint16 binaryVersion, bool address64 = false)
 	return binary;
 }
 
+static status_t
+ReadVector(void* cookie, uint32 offset, void* buffer, size_t size)
+{
+	std::vector<uint8>* bytes = (std::vector<uint8>*)cookie;
+	if (offset > bytes->size() || size > bytes->size() - offset)
+		return B_BAD_VALUE;
+	memcpy(buffer, &(*bytes)[offset], size);
+	return B_OK;
+}
+
 static bool
 Check(bool condition, const char* name)
 {
@@ -158,6 +168,32 @@ main()
 		&& blocks[1].hardware_id == 0x200, "multi-die records decoded");
 
 	std::vector<uint8> binaryV1 = MakeBinary(1);
+
+	amdgpu_discovery_source source;
+	source.kind = AMDGPU_DISCOVERY_SOURCE_FIRMWARE;
+	source.read_at = ReadVector;
+	source.cookie = &binaryV1;
+	source.size = binaryV1.size();
+	uint8 sourceScratch[512];
+	success &= Check(amdgpu_read_discovery_source(&source, sourceScratch,
+		sizeof(sourceScratch), blocks, 4, &info) == B_OK,
+		"read discovery binary from firmware source");
+	success &= Check(info.ip_count == 1 && blocks[0].hardware_id == 0x1234,
+		"firmware source decoded");
+
+	source.kind = AMDGPU_DISCOVERY_SOURCE_OPTION_ROM;
+	success &= Check(amdgpu_read_discovery_source(&source, sourceScratch,
+		sizeof(sourceScratch), blocks, 4, &info) == B_OK,
+		"read discovery binary from option ROM source");
+	success &= Check(amdgpu_read_discovery_source(&source, sourceScratch,
+		12, blocks, 4, &info) == B_BUFFER_OVERFLOW,
+		"source scratch capacity checked");
+
+	source.size--;
+	success &= Check(amdgpu_read_discovery_source(&source, sourceScratch,
+		sizeof(sourceScratch), blocks, 4, &info) == B_BAD_VALUE,
+		"source extent checked");
+	source.size++;
 	success &= Check(amdgpu_parse_discovery_binary(&binaryV1[0],
 		binaryV1.size(), blocks, 4, &info) == B_OK, "valid v1 binary");
 	success &= Check(info.version == 3 && info.die_count == 1

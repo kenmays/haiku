@@ -194,6 +194,19 @@ main()
 		sizeof(sourceScratch), blocks, 4, &info) == B_BAD_VALUE,
 		"source extent checked");
 	source.size++;
+
+	std::vector<uint8> truncatedSource(binaryV1.begin(), binaryV1.end() - 1);
+	source.cookie = &truncatedSource;
+	success &= Check(amdgpu_read_discovery_source(&source, sourceScratch,
+		sizeof(sourceScratch), blocks, 4, &info) == B_BAD_VALUE,
+		"provider short read propagated");
+	source.cookie = &binaryV1;
+
+	source.kind = (amdgpu_discovery_source_kind)99;
+	success &= Check(amdgpu_read_discovery_source(&source, sourceScratch,
+		sizeof(sourceScratch), blocks, 4, &info) == B_BAD_VALUE,
+		"unknown source kind rejected");
+	source.kind = AMDGPU_DISCOVERY_SOURCE_OPTION_ROM;
 	success &= Check(amdgpu_parse_discovery_binary(&binaryV1[0],
 		binaryV1.size(), blocks, 4, &info) == B_OK, "valid v1 binary");
 	success &= Check(info.version == 3 && info.die_count == 1

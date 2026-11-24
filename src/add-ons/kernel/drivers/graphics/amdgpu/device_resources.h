@@ -11,7 +11,10 @@
 
 #include "pci_device.h"
 
+static const uint32 AMDGPU_DEVICE_RESOURCES_MAGIC = 0x414d4452;
+
 struct amdgpu_device_resources {
+	uint32 magic;
 	pci_info pci;
 	bool reserved;
 	area_id mmio_area[6];
@@ -20,6 +23,7 @@ struct amdgpu_device_resources {
 	size_t mmio_size[6];
 };
 
+/* Call once before the first claim, and again only after a successful release. */
 void amdgpu_init_device_resources(amdgpu_device_resources* resources);
 status_t amdgpu_claim_device(pci_module_info* pci,
 	const amdgpu_pci_device* device, amdgpu_device_resources* resources);

@@ -113,7 +113,7 @@ main()
 			| AMDGPU_INIT_STEP_FIRMWARE_READY
 			| AMDGPU_INIT_STEP_REGISTERS_MAPPED),
 		"failed cleanup retains all resources whose release is not complete");
-	success &= Check(state.call_count == 6
+	success &= Check(state.call_count == 5
 		&& state.calls[4] == CALL_UNMAP,
 		"rollback stops at first cleanup failure to preserve dependencies");
 

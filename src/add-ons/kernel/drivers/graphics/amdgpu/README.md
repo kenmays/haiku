@@ -5,13 +5,19 @@ The existing drivers remain unchanged.
 
 ## Current status: PCI discovery foundation
 
-The driver enumerates AMD (vendor 0x1002) display-class PCI functions and
-retains a bounded set of endpoint identity records. A deliberately partial,
-curated PCI-ID table labels selected Tahiti, Bonaire, Hawaii, Polaris 10,
-Vega 10/20, Navi 10/21 and Navi 31 devices. Unknown IDs remain unknown; the
-table is not an enablement whitelist and does not imply support. For type-0 endpoints it
-records BAR size/type metadata, including 64-bit BAR slot pairing and
-prefetchability.
+The driver carries all 312 exact AMD vendor/device IDs present in the
+current upstream Linux `amdgpu_drv.c` PCI table in `pci_ids.h`, plus the
+upstream class-wide IP-discovery matches for VGA, other display, and
+processing-accelerator functions. Exact IDs are binary-searched in the table;
+class-wide matching is used for devices supported by Linux's IP-discovery
+fallback. The ASIC-family decoder remains incomplete, so an exact PCI match
+does not mean that an ASIC is initialized or supported. For type-0 endpoints
+the driver records BAR size/type metadata, including 64-bit BAR slot pairing
+and prefetchability.
+
+The PCI scan is bounded to 4096 functions and retained records to 64 devices.
+The exact-ID table is synchronized against upstream Linux and should be
+refreshed when that PCI match table changes.
 
 **This is not yet a functioning graphics driver.** It does not reserve devices,
 map BARs, alter PCI command bits, install interrupts, load firmware, allocate

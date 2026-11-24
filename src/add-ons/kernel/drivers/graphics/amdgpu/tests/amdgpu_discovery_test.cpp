@@ -8,6 +8,12 @@
 #include <string.h>
 #include <vector>
 
+static uint16
+ReadLE16(const uint8* data)
+{
+	return (uint16)data[0] | ((uint16)data[1] << 8);
+}
+
 static void
 WriteLE16(uint8* data, uint16 value)
 {
@@ -165,7 +171,6 @@ main()
 	std::vector<uint8> badDie(binaryV1);
 	uint32 tableOffset = ReadLE16(&badDie[12]);
 	WriteLE16(&badDie[tableOffset + 80], 8);
-	WriteLE16(&badDie[tableOffset + 6], ReadLE16(&badDie[tableOffset + 6]));
 	WriteLE16(&badDie[14], Checksum(&badDie[tableOffset],
 		ReadLE16(&badDie[tableOffset + 6])));
 	WriteLE16(&badDie[8], Checksum(&badDie[10], badDie.size() - 10));

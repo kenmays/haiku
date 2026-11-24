@@ -44,6 +44,7 @@ status_t amdgpu_device_context_claim(pci_module_info* pci,
 /* Called only after ASIC initialization and node backing are complete. */
 status_t amdgpu_device_context_set_node_ready(
 	amdgpu_device_context* context);
+bool amdgpu_device_context_is_node_ready(amdgpu_device_context* context);
 
 /* Open/free hooks hold a reference so teardown cannot free a live context. */
 status_t amdgpu_device_context_open(amdgpu_device_context* context,

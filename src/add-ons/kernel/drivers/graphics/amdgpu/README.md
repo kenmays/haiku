@@ -39,7 +39,8 @@ unknown versions are not guessed.
 
 The `tests` subdirectory contains a `SimpleTest` fixture executable covering
 valid v1/v2 binaries, v4 64-bit addresses, multi-die parsing, firmware and
-option-ROM source callbacks, source and scratch bounds, output-capacity limits,
+option-ROM source callbacks, short reads, invalid source kinds, source and
+scratch bounds, output-capacity limits,
 truncated input, checksum corruption, unsupported binary versions, invalid
 directory offsets, overlapping table ranges, and die-ID mismatches.
 Run `jam amdgpu_discovery_test` in a Haiku build tree to build the test target,

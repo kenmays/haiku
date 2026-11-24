@@ -59,7 +59,8 @@ amdgpu_parse_ip_discovery_table(const void* data, size_t dataSize,
 	uint16 tableSize = ReadLE16(bytes + 6);
 	uint16 dieCount = ReadLE16(bytes + 12);
 	if (version < 1 || version > 4 || tableSize < kDiscoveryHeaderSize
-		|| tableSize > dataSize || dieCount > AMDGPU_IP_DISCOVERY_MAX_DIES) {
+		|| tableSize > dataSize || dieCount == 0
+		|| dieCount > AMDGPU_IP_DISCOVERY_MAX_DIES) {
 		return B_BAD_VALUE;
 	}
 
@@ -73,7 +74,7 @@ amdgpu_parse_ip_discovery_table(const void* data, size_t dataSize,
 			return B_BAD_VALUE;
 		}
 		for (uint32 j = 0; j < i; j++) {
-			if (dieOffsets[i] == dieOffsets[j])
+			if (dieOffsets[i] == dieOffsets[j] || dieIDs[i] == dieIDs[j])
 				return B_BAD_VALUE;
 		}
 	}

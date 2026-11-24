@@ -89,6 +89,8 @@ main()
 		&info) == B_OK, "valid multi-image PCI ROM chain");
 	success &= Check(info.image_offset == 512 && info.image_size == 512
 		&& info.pcir_offset == 512 + 0x1c, "selected ATOM image metadata");
+	success &= Check(info.vendor_id == 0x1002 && info.device_id == 0x73bf,
+		"PCI vendor and device identity decoded");
 	success &= Check(info.atom_header_offset == 0x80
 		&& info.master_data_table_offset == 0x100
 		&& info.atom_format_revision == 2

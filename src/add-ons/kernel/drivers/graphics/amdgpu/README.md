@@ -123,7 +123,13 @@ with the required image size, allowing callers to allocate an exact caller-owned
 buffer and then fetch the image in a second, independently referenced call.
 The caller still owns the destination buffer and must
 not treat returned VBIOS metadata as authorization to execute firmware or
-initialize hardware. The lower-level provider remains independently
+initialize hardware. `amdgpu_firmware_context` adds a caller-owned per-PCI-
+function state machine (`identified` → `size known` → `loaded`). It queries the
+VFCT image size, requires both VFCT and embedded PCIR vendor/device IDs to match
+the candidate PCI function, and loads only into caller-supplied storage. It
+retains no buffer pointer and performs no allocation, PCI reservation, BAR
+mapping, or firmware execution. The context can be reset explicitly after its
+caller has finished with the image. The lower-level provider remains independently
 testable. The provider does
 not reserve or initialize the GPU, map a ROM BAR, or retain a pointer into the
 ACPI table.

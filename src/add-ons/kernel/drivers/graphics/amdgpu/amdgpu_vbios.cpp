@@ -131,7 +131,10 @@ amdgpu_parse_vbios_image(const void* data, size_t dataSize,
 		if (!foundAtom) {
 			amdgpu_vbios_info candidate;
 			memset(&candidate, 0, sizeof(candidate));
-			if (HasAtomHeader(image, imageSize, &candidate)) {
+			if (ReadLE16(pcir + 4) == 0x1002
+				&& HasAtomHeader(image, imageSize, &candidate)) {
+				candidate.vendor_id = ReadLE16(pcir + 4);
+				candidate.device_id = ReadLE16(pcir + 6);
 				candidate.image_offset = (uint32)imageOffset;
 				candidate.image_size = (uint32)imageSize;
 				candidate.pcir_offset = (uint32)(imageOffset

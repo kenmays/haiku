@@ -38,11 +38,9 @@ amdgpu_get_vbios_from_vfct(acpi_table_module_info* acpi,
 	status_t status = acpi->get_table("VFCT", 1, &table);
 	if (status != B_OK)
 		return status;
+
 	if (table == NULL) {
-		/*
-		 * get_table() succeeded, so still pair it with put_table(). A null
-		 * handle is a broken provider result, but must not skip cleanup.
-		 */
+		// Pair every successful acquisition, even a malformed null result.
 		status = B_BAD_VALUE;
 	} else {
 		/*
@@ -54,23 +52,24 @@ amdgpu_get_vbios_from_vfct(acpi_table_module_info* acpi,
 		if (tableSize < 76 || tableSize > kMaximumVFCTTableSize) {
 			status = B_BAD_VALUE;
 		} else {
-		amdgpu_vfct_info parsed;
-		status = amdgpu_parse_vfct_table(table, tableSize, device, &parsed);
-		if (status == B_OK) {
-			*biosSize = parsed.image_size;
-			if (biosBuffer == NULL && biosCapacity == 0) {
-				*info = parsed;
-				status = B_BUFFER_OVERFLOW;
-			} else if (biosBuffer == NULL) {
-				status = B_BAD_VALUE;
-			} else if (biosCapacity < parsed.image_size) {
-				status = B_BUFFER_OVERFLOW;
-			} else {
-				memcpy(biosBuffer, bytes + parsed.image_offset,
-					parsed.image_size);
-				*info = parsed;
+			amdgpu_vfct_info parsed;
+			status = amdgpu_parse_vfct_table(table, tableSize, device,
+				&parsed);
+			if (status == B_OK) {
+				*biosSize = parsed.image_size;
+				if (biosBuffer == NULL && biosCapacity == 0) {
+					*info = parsed;
+					status = B_BUFFER_OVERFLOW;
+				} else if (biosBuffer == NULL) {
+					status = B_BAD_VALUE;
+				} else if (biosCapacity < parsed.image_size) {
+					status = B_BUFFER_OVERFLOW;
+				} else {
+					memcpy(biosBuffer, bytes + parsed.image_offset,
+						parsed.image_size);
+					*info = parsed;
+				}
 			}
-		}
 		}
 	}
 
@@ -80,7 +79,6 @@ amdgpu_get_vbios_from_vfct(acpi_table_module_info* acpi,
 
 	return status;
 }
-
 
 
 status_t

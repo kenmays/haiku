@@ -161,6 +161,7 @@ typedef struct acpi_root_info {
 
 
 extern struct acpi_module_info gACPIModule;
+extern struct acpi_table_module_info gACPITableModule;
 
 extern struct device_module_info acpi_ns_dump_module;
 

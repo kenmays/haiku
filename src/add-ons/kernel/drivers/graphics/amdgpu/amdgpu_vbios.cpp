@@ -38,7 +38,7 @@ HasAtomHeader(const uint8* image, size_t imageSize,
 	}
 
 	const uint16 headerSize = ReadLE16(header);
-	if (headerSize < 36 || !RangeIsValid(atomOffset, headerSize, imageSize))
+	if (headerSize < 34 || !RangeIsValid(atomOffset, headerSize, imageSize))
 		return false;
 
 	const uint16 masterDataOffset = ReadLE16(header + 32);

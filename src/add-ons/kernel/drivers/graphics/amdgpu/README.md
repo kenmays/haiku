@@ -344,6 +344,44 @@ GC revision, missing register-base metadata, duplicate IP instances, and
 rejection of class-only PCI identification. It is registered but has not been
 run in a Haiku build environment.
 
+### Vega 10 register-base metadata (no MMIO)
+
+`amdgpu_vega10_registers.h/.cpp` adds a small native table for the Vega 10
+SOC15 register-base indices. The values are transcribed from upstream Linux
+`drivers/gpu/drm/amd/include/vega10_ip_offset.h` and the selected IP hardware
+IDs from `soc15_hw_ip.h`. The active Linux `vega10_reg_base_init()` path
+assigns pointers to these `IP_BASE.instance[]` tables, while
+`SOC15_REG_OFFSET` adds a generated register's base-indexed register offset.
+These values therefore remain register indices in dword units.
+
+The resolver currently exposes only the table entries that were checked
+against the active static table: NBIO (108), MP0 (255), DF (46), UVD (12),
+ATHUB (35), VCE (32), GC (11), MMHUB (34), HDP (41), OSSSYS (40), SDMA0
+(42), SDMA1 (43), UMC (150), THM (3), SMUIO (4), and PWR (10). It permits
+only instance zero, because all other instances in these table entries are
+empty. Unsupported hardware IDs, instances, and empty segments are rejected.
+NBIO segment zero is explicitly retained as a valid zero base.
+
+MP1 is intentionally not exposed: the upstream static `MP1_BASE` initializer
+used by `vega10_reg_base_init()` and the generated `MP1_BASE__INST0_SEG0`
+macro disagree. DCI also remains unsupported because this Vega 10 register
+base header does not provide a corresponding DCI table. These are explicit
+gaps, not guessed offsets.
+
+`amdgpu_vega10_register_byte_offset()` performs checked dword-base addition
+and converts the resulting SOC15 register index to a byte offset. It does not
+select a PCI BAR, account for any ASIC register-hole remapping, translate an
+IP-discovery address, map memory, or perform MMIO. In particular, this
+resolver is not yet connected to `amdgpu_resolve_register_aperture()`: the
+BAR-relative mapping and any register-window remap must be separately
+established from the actual Haiku mapping and upstream SOC15 access path
+before integration. No register read or write is enabled.
+
+The `amdgpu_vega10_registers_test` target covers known base values, NBIO's
+valid zero base, dword-to-byte conversion, unsupported instances/segments
+and IP IDs, the MP1 exclusion, null outputs, and arithmetic overflow. It is
+registered but has not been run in a Haiku build environment.
+
 ## Architecture
 
 The implementation is organized around AMD IP blocks, not Linux kernel

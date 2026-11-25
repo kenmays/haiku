@@ -34,6 +34,10 @@ amdgpu_resolve_register_aperture(const amdgpu_pci_device* device,
 		return B_NOT_SUPPORTED;
 
 	const uint64 mappedSize = resources->mmio_size[bar];
+	if (resources->mmio_physical[bar] == 0
+		|| device->mmio_bar_size[bar] == 0
+		|| mappedSize > device->mmio_bar_size[bar])
+		return B_BAD_DATA;
 	if (barRelativeOffset > mappedSize
 		|| apertureSize > mappedSize - barRelativeOffset)
 		return B_BAD_VALUE;

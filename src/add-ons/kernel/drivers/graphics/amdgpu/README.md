@@ -355,7 +355,8 @@ assigns pointers to these `IP_BASE.instance[]` tables, while
 These values therefore remain register indices in dword units.
 
 The resolver currently exposes only the table entries that were checked
-against the active static table: NBIO (108), MP0 (255), DF (46), UVD (12),
+against the active static table: the NBIO register-base slot (hardware ID
+108, named NBIF_HWID in upstream soc15_hw_ip.h), MP0 (255), DF (46), UVD (12),
 ATHUB (35), VCE (32), GC (11), MMHUB (34), HDP (41), OSSSYS (40), SDMA0
 (42), SDMA1 (43), UMC (150), THM (3), SMUIO (4), and PWR (10). It permits
 only instance zero, because all other instances in these table entries are

@@ -65,7 +65,9 @@ amdgpu_validate_vega10_profile(const amdgpu_pci_device* device,
 	if (device == NULL || discovery == NULL || profile == NULL
 		|| discovery->blocks == NULL || discovery->ip_count == 0
 		|| discovery->ip_count > AMDGPU_IP_DISCOVERY_MAX_IPS
-		|| discovery->ip_count > discovery->block_capacity) {
+		|| discovery->ip_count > discovery->block_capacity
+		|| discovery->version < 1 || discovery->version > 4
+		|| discovery->die_count != 1) {
 		return B_BAD_VALUE;
 	}
 

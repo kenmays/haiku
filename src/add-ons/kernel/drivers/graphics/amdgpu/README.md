@@ -337,11 +337,7 @@ addresses as CPU physical addresses, select a PCI BAR, map MMIO, touch
 registers, load firmware, or authorize node publication.
 
 This is intentionally a validation boundary, not yet an operational Vega 10
-driver. The next step is to add a reviewed register-aperture address-translation
-layer that binds the discovery register-block indices to the correct BAR and
-validates every computed offset against the mapped aperture before any read.
-Only after that should a read-only, side-effect-minimized hardware identity
-probe be considered.
+driver. The next step is to bind verified Vega 10 register-block indices to reviewed ASIC register-base tables. The current `amdgpu_register_aperture` layer is deliberately narrower: it accepts only an explicitly selected, already mapped non-prefetchable BAR and an ASIC-reviewed BAR-relative window; it never converts IP-discovery base-address values into CPU addresses. It validates the PCI-function identity, mapping lifetime, window bounds, dword alignment, and every 32-bit register access before returning an offset. It performs no MMIO read or write. The `amdgpu_register_aperture_test` target covers BAR identity, mapping state, prefetchability, aperture bounds, alignment, and end-of-window accesses. It is registered but has not been run in a Haiku build environment.
 
 The `amdgpu_vega10_profile_test` target covers a valid profile, unsupported
 GC revision, missing register-base metadata, duplicate IP instances, and

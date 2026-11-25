@@ -66,6 +66,18 @@ main()
 		&& profile.gc_revision == 1,
 		"Vega 10 exact required IP topology is accepted");
 
+	discovery.version = 5;
+	success &= Check(amdgpu_validate_vega10_profile(&device, &discovery,
+		&profile) == B_BAD_VALUE,
+		"unsupported discovery table version is rejected");
+	discovery.version = 4;
+
+	discovery.die_count = 2;
+	success &= Check(amdgpu_validate_vega10_profile(&device, &discovery,
+		&profile) == B_BAD_VALUE,
+		"unexpected multi-die topology is rejected");
+	discovery.die_count = 1;
+
 	blocks[0].revision = 2;
 	success &= Check(amdgpu_validate_vega10_profile(&device, &discovery,
 		&profile) == B_NOT_SUPPORTED,

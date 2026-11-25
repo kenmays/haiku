@@ -17,6 +17,7 @@ KernelAddon amdgpu :
 	amdgpu_firmware_context.cpp
 	amdgpu_init_sequence.cpp
 	amdgpu_vega10_profile.cpp
+	amdgpu_register_aperture.cpp
 ;
 
 SubInclude HAIKU_TOP src add-ons kernel drivers graphics amdgpu tests ;

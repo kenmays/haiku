@@ -32,12 +32,14 @@ main()
 	device.pci.device = 2;
 	device.pci.function = 0;
 	device.mmio_bar_mask = 1u << 2;
+	device.mmio_bar_size[2] = sizeof(mmio);
 	resources.magic = AMDGPU_DEVICE_RESOURCES_MAGIC;
 	resources.reserved = true;
 	resources.pci = device.pci;
 	resources.mmio_area[2] = 1;
 	resources.mmio[2] = mmio;
 	resources.mmio_size[2] = sizeof(mmio);
+	resources.mmio_physical[2] = 0x100000;
 
 	amdgpu_register_aperture aperture;
 	memset(&aperture, 0, sizeof(aperture));

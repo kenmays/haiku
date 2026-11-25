@@ -13,29 +13,30 @@ struct required_ip {
 	uint8 major;
 	uint8 minor;
 	uint8 revision;
+	bool requires_base_address;
 	amdgpu_ip_block_role role;
 };
 
 /* Values cross-checked against Linux soc15_hw_ip.h and
  * amdgpu_discovery_set_ip_blocks() for CHIP_VEGA10. */
 static const required_ip kVega10RequiredIPs[] = {
-	{11, 0, 9, 0, 1, AMDGPU_IP_ROLE_GC},
-	{108, 0, 6, 1, 0, AMDGPU_IP_ROLE_NBIO},
-	{34, 0, 9, 0, 0, AMDGPU_IP_ROLE_MM_HUB},
-	{35, 0, 9, 0, 0, AMDGPU_IP_ROLE_AT_HUB},
-	{150, 0, 6, 0, 0, AMDGPU_IP_ROLE_UMC},
-	{255, 0, 9, 0, 0, AMDGPU_IP_ROLE_MP0},
-	{1, 0, 9, 0, 0, AMDGPU_IP_ROLE_MP1},
-	{40, 0, 4, 0, 0, AMDGPU_IP_ROLE_OSSSYS},
-	{41, 0, 4, 0, 0, AMDGPU_IP_ROLE_HDP},
-	{42, 0, 4, 0, 0, AMDGPU_IP_ROLE_SDMA0},
-	{43, 0, 4, 0, 0, AMDGPU_IP_ROLE_SDMA1},
-	{46, 0, 2, 1, 0, AMDGPU_IP_ROLE_DF},
-	{3, 0, 9, 0, 0, AMDGPU_IP_ROLE_THM},
-	{4, 0, 9, 0, 0, AMDGPU_IP_ROLE_SMUIO},
-	{12, 0, 7, 0, 0, AMDGPU_IP_ROLE_UVD},
-	{32, 0, 4, 0, 0, AMDGPU_IP_ROLE_VCE},
-	{15, 0, 12, 0, 0, AMDGPU_IP_ROLE_DCI}
+	{11, 0, 9, 0, 1, true, AMDGPU_IP_ROLE_GC},
+	{108, 0, 6, 1, 0, true, AMDGPU_IP_ROLE_NBIO},
+	{34, 0, 9, 0, 0, true, AMDGPU_IP_ROLE_MM_HUB},
+	{35, 0, 9, 0, 0, true, AMDGPU_IP_ROLE_AT_HUB},
+	{150, 0, 6, 0, 0, true, AMDGPU_IP_ROLE_UMC},
+	{255, 0, 9, 0, 0, false, AMDGPU_IP_ROLE_MP0},
+	{1, 0, 9, 0, 0, false, AMDGPU_IP_ROLE_MP1},
+	{40, 0, 4, 0, 0, false, AMDGPU_IP_ROLE_OSSSYS},
+	{41, 0, 4, 0, 0, false, AMDGPU_IP_ROLE_HDP},
+	{42, 0, 4, 0, 0, true, AMDGPU_IP_ROLE_SDMA0},
+	{43, 0, 4, 0, 0, true, AMDGPU_IP_ROLE_SDMA1},
+	{46, 0, 2, 1, 0, false, AMDGPU_IP_ROLE_DF},
+	{3, 0, 9, 0, 0, false, AMDGPU_IP_ROLE_THM},
+	{4, 0, 9, 0, 0, false, AMDGPU_IP_ROLE_SMUIO},
+	{12, 0, 7, 0, 0, false, AMDGPU_IP_ROLE_UVD},
+	{32, 0, 4, 0, 0, false, AMDGPU_IP_ROLE_VCE},
+	{15, 0, 12, 0, 0, false, AMDGPU_IP_ROLE_DCI}
 };
 
 
@@ -87,7 +88,8 @@ amdgpu_validate_vega10_profile(const amdgpu_pci_device* device,
 		if (block->major != required.major
 			|| block->minor != required.minor
 			|| block->revision != required.revision
-			|| block->base_address_count == 0) {
+			|| (required.requires_base_address
+				&& block->base_address_count == 0)) {
 			return B_NOT_SUPPORTED;
 		}
 	}

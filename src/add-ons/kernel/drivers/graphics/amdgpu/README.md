@@ -316,6 +316,38 @@ reverse-order teardown, duplicate initialization rejection, failure rollback,
 retained ownership after a cleanup failure, and retrying that cleanup. It is
 registered but has not been run in a Haiku build environment.
 
+
+### First ASIC/IP profile: Vega 10 (metadata validation only)
+
+`amdgpu_vega10_profile.h/.cpp` introduces the first conservative ASIC profile
+validator. It accepts only exact PCI-ID candidates already classified as
+Vega 10, then checks the IP-discovery records against the Vega 10 IP topology
+and revisions used by upstream Linux: GC 9.0.1, NBIO 6.1.0, MMHUB/ATHUB 9.0.0,
+UMC 6.0.0, MP0/MP1 9.0.0, OSSSYS/HDP 4.0.0, SDMA0/1 4.0.0, DF 2.1.0,
+THM/SMUIO 9.0.0, UVD 7.0.0, VCE 4.0.0, and DCI 12.0.0. Hardware IDs are
+taken from upstream `soc15_hw_ip.h`; the per-ASIC revision tuple is
+cross-checked against upstream `amdgpu_discovery.c`.
+
+The validator rejects missing or duplicated required instances, duplicate
+hardware-ID/instance pairs, absent base-address metadata, unexpected IP
+revisions, class-only PCI matches, and non-Vega 10 candidates. Unknown extra
+IP blocks are retained and ignored rather than treated as known hardware.
+It produces a small profile summary but does not interpret discovery base
+addresses as CPU physical addresses, select a PCI BAR, map MMIO, touch
+registers, load firmware, or authorize node publication.
+
+This is intentionally a validation boundary, not yet an operational Vega 10
+driver. The next step is to add a reviewed register-aperture address-translation
+layer that binds the discovery register-block indices to the correct BAR and
+validates every computed offset against the mapped aperture before any read.
+Only after that should a read-only, side-effect-minimized hardware identity
+probe be considered.
+
+The `amdgpu_vega10_profile_test` target covers a valid profile, unsupported
+GC revision, missing register-base metadata, duplicate IP instances, and
+rejection of class-only PCI identification. It is registered but has not been
+run in a Haiku build environment.
+
 ## Architecture
 
 The implementation is organized around AMD IP blocks, not Linux kernel

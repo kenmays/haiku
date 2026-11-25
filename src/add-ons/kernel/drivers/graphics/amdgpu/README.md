@@ -329,7 +329,7 @@ taken from upstream `soc15_hw_ip.h`; the per-ASIC revision tuple is
 cross-checked against upstream `amdgpu_discovery.c`.
 
 The validator rejects missing or duplicated required instances, duplicate
-hardware-ID/instance pairs, absent base-address metadata, unexpected IP
+hardware-ID/instance pairs, absent base-address metadata on required register-bearing IPs, unexpected IP
 revisions, class-only PCI matches, and non-Vega 10 candidates. Unknown extra
 IP blocks are retained and ignored rather than treated as known hardware.
 It produces a small profile summary but does not interpret discovery base

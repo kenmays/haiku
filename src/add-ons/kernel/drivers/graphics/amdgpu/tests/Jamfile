@@ -35,3 +35,8 @@ SimpleTest amdgpu_init_sequence_test :
 	amdgpu_init_sequence_test.cpp
 	../amdgpu_init_sequence.cpp
 ;
+
+SimpleTest amdgpu_vega10_profile_test :
+	amdgpu_vega10_profile_test.cpp
+	../amdgpu_vega10_profile.cpp
+;

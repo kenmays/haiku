@@ -10,10 +10,20 @@
 
 status_t
 amdgpu_vega10_read_gb_addr_config(
-	const amdgpu_register_aperture* aperture, uint32* value)
+	const amdgpu_pci_device* device,
+	const amdgpu_device_resources* resources,
+	const amdgpu_ip_discovery_info* discovery, uint32* value)
 {
-	if (aperture == NULL || value == NULL)
+	if (device == NULL || resources == NULL || discovery == NULL
+		|| value == NULL) {
 		return B_BAD_VALUE;
+	}
+
+	amdgpu_register_aperture aperture;
+	status_t status = amdgpu_vega10_resolve_register_aperture(device,
+		resources, discovery, &aperture);
+	if (status != B_OK)
+		return status;
 
 	/*
 	 * gc_9_0_offset.h defines mmGB_ADDR_CONFIG as register index 0x063e,
@@ -21,13 +31,13 @@ amdgpu_vega10_read_gb_addr_config(
 	 * SOC15 offsets are dword indices, so the byte offset is 0x98f8.
 	 */
 	uint32 registerByteOffset;
-	status_t status = amdgpu_vega10_register_byte_offset(11, 0, 0,
+	status = amdgpu_vega10_register_byte_offset(11, 0, 0,
 		0x063e, &registerByteOffset);
 	if (status != B_OK)
 		return status;
 
 	uint32 mappedOffset;
-	status = amdgpu_vega10_register_mapped_offset(aperture,
+	status = amdgpu_vega10_register_mapped_offset(&aperture,
 		registerByteOffset, &mappedOffset);
 	if (status != B_OK)
 		return status;
@@ -36,7 +46,7 @@ amdgpu_vega10_read_gb_addr_config(
 		return B_BAD_VALUE;
 
 	volatile const uint32* registerAddress =
-		(volatile const uint32*)(aperture->address + mappedOffset);
+		(volatile const uint32*)(aperture.address + mappedOffset);
 
 	/*
 	 * The aperture is mapped uncached. Keep the MMIO load explicit and

@@ -483,6 +483,33 @@ of existing Haiku Radeon drivers unless a deliberate migration is designed.
 
 Each stage must build and pass tests before hardware functionality is enabled.
 
+### MMIO lifetime serialization
+
+The per-device context now exposes serialized BAR map/unmap operations and a
+context-owned Vega 10 `GB_ADDR_CONFIG` probe entry point. Each operation takes
+the device-context mutex and verifies that the device is in the claimed or
+node-ready state. The probe keeps that mutex held across profile/aperture
+validation and the actual volatile MMIO load. Device release takes the same
+mutex before unmapping areas and releasing PCI ownership, so it cannot tear
+down the BAR while a context-mediated read or mapping operation is in flight.
+
+Once a context is active, callers must use
+`amdgpu_device_context_map_mmio_bar()`,
+`amdgpu_device_context_unmap_mmio_bar()`, and
+`amdgpu_device_context_read_vega10_gb_addr_config()`; they must not call the
+lower-level mapping or probe helpers concurrently with context teardown. The
+mutex is a sleepable lifecycle lock: these APIs are for thread context, not
+interrupt handlers. No lock is held across interrupt callbacks, and no
+interrupt path is implemented.
+
+The device-context test now injects the low-level map, unmap, and probe
+operations. It verifies that all three are rejected before PCI claim, that
+claimed-state operations are routed through the context, and that the probe
+callback executes while the context mutex is held. This is a lock-contract
+test using stubs, not a parallel stress test or proof of hardware MMIO safety.
+The test is registered but has not been run in a native Haiku build
+environment.
+
 ### Vega 10 register access policy (read-only allowlist)
 
 `amdgpu_vega10_reg_access.h/.cpp` adds a per-register policy gate keyed by

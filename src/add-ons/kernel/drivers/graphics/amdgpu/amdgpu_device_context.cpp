@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "amdgpu_device_context.h"
+#include "amdgpu_vega10_probe.h"
 
 
 static bool
@@ -96,6 +97,80 @@ amdgpu_device_context_claim(pci_module_info* pci,
 		&context->resources);
 	if (status == B_OK)
 		context->state = AMDGPU_DEVICE_CLAIMED;
+	mutex_unlock(&context->lock);
+	return status;
+}
+
+
+status_t
+amdgpu_device_context_map_mmio_bar(amdgpu_device_context* context,
+	uint8 bar)
+{
+	if (!IsValidContext(context))
+		return B_BAD_VALUE;
+
+	status_t status = mutex_lock(&context->lock);
+	if (status != B_OK)
+		return status;
+	if (context->state != AMDGPU_DEVICE_CLAIMED
+		&& context->state != AMDGPU_DEVICE_NODE_READY) {
+		mutex_unlock(&context->lock);
+		return B_NOT_ALLOWED;
+	}
+
+	status = amdgpu_map_mmio_bar(&context->pci_device,
+		&context->resources, bar);
+	mutex_unlock(&context->lock);
+	return status;
+}
+
+
+status_t
+amdgpu_device_context_unmap_mmio_bar(amdgpu_device_context* context,
+	uint8 bar)
+{
+	if (!IsValidContext(context))
+		return B_BAD_VALUE;
+
+	status_t status = mutex_lock(&context->lock);
+	if (status != B_OK)
+		return status;
+	if (context->state != AMDGPU_DEVICE_CLAIMED
+		&& context->state != AMDGPU_DEVICE_NODE_READY) {
+		mutex_unlock(&context->lock);
+		return B_NOT_ALLOWED;
+	}
+
+	status = amdgpu_unmap_mmio_bar(&context->resources, bar);
+	mutex_unlock(&context->lock);
+	return status;
+}
+
+
+status_t
+amdgpu_device_context_read_vega10_gb_addr_config(
+	amdgpu_device_context* context,
+	const amdgpu_ip_discovery_info* discovery, uint32* value)
+{
+	if (!IsValidContext(context) || discovery == NULL || value == NULL)
+		return B_BAD_VALUE;
+
+	status_t status = mutex_lock(&context->lock);
+	if (status != B_OK)
+		return status;
+	if (context->state != AMDGPU_DEVICE_CLAIMED
+		&& context->state != AMDGPU_DEVICE_NODE_READY) {
+		mutex_unlock(&context->lock);
+		return B_NOT_ALLOWED;
+	}
+
+	/*
+	 * Keep the context mutex held for the complete validation and MMIO load.
+	 * Release/unmap paths take the same mutex, so the BAR area cannot be
+	 * deleted while this read is in flight.
+	 */
+	status = amdgpu_vega10_read_gb_addr_config(&context->pci_device,
+		&context->resources, discovery, value);
 	mutex_unlock(&context->lock);
 	return status;
 }

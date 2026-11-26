@@ -122,6 +122,20 @@ main()
 		== B_OK && sequence.completed_steps == AMDGPU_INIT_STEP_NONE,
 		"retained resources can be released by a later cleanup retry");
 
+
+	amdgpu_init_sequence_init(&sequence);
+	sequence.completed_steps = 1 << 12;
+	state = {};
+	state.fail_call = -1;
+	state.fail_call2 = -1;
+	success &= Check(amdgpu_unwind_device(&sequence, &kOperations, &state)
+		== B_BAD_VALUE && state.call_count == 0
+		&& sequence.completed_steps == (1 << 12),
+		"unwind rejects unknown ownership bits without releasing resources");
+	success &= Check(amdgpu_initialize_device(&sequence, &kOperations, &state)
+		== B_BAD_VALUE && state.call_count == 0,
+		"bring-up rejects corrupted sequence state before callbacks");
+
 	if (!success)
 		return 1;
 	printf("AMDGPU init sequence tests passed.\n");

@@ -352,12 +352,6 @@ amdgpu_device_context_release(pci_module_info* pci,
 	if (context->init_sequence_active) {
 		status = amdgpu_unwind_device(&context->init_sequence,
 			&context->init_operations, context->init_cookie);
-		if (status == B_OK) {
-			context->init_sequence_active = false;
-			context->init_cookie = NULL;
-			memset(&context->init_operations, 0,
-				sizeof(context->init_operations));
-		}
 	} else {
 		status = amdgpu_release_device(pci, &context->resources);
 	}
@@ -374,6 +368,14 @@ amdgpu_device_context_release(pci_module_info* pci,
 		return status;
 	}
 
+	/*
+	 * Retain sequence ownership metadata until every final teardown step,
+	 * including firmware-context reset, has succeeded. If reset fails, a
+	 * retry must not fall through to the legacy direct PCI release path.
+	 */
+	context->init_sequence_active = false;
+	context->init_cookie = NULL;
+	memset(&context->init_operations, 0, sizeof(context->init_operations));
 	ClearContextPayload(context);
 	mutex_unlock(&context->lock);
 	return B_OK;

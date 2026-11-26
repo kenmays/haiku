@@ -65,7 +65,7 @@ amdgpu_unmap_mmio_bar(amdgpu_device_resources*, uint8)
 
 
 status_t
-amdgpu_vega10_read_gb_addr_config(const amdgpu_pci_device*,
+amdgpu_vega10_read_gb_addr_config_unlocked(const amdgpu_pci_device*,
 	const amdgpu_device_resources*,
 	const amdgpu_ip_discovery_info*, uint32* value)
 {

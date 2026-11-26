@@ -98,8 +98,11 @@ amdgpu_firmware_context_load(amdgpu_firmware_context* context,
 	amdgpu_vfct_info info;
 	status_t status = amdgpu_load_vbios_for_pci_device(
 		&context->device, biosBuffer, biosCapacity, &imageSize, &info);
-	if (status != B_OK)
+	if (status != B_OK) {
+		/* A provider may have copied a prefix before reporting failure. */
+		memset(biosBuffer, 0, context->required_size);
 		return status;
+	}
 	if (imageSize != context->required_size
 		|| info.image_size != context->required_size
 		|| !MatchesDevice(context, info)) {

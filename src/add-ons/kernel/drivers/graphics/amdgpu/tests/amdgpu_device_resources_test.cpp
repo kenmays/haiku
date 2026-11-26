@@ -11,6 +11,7 @@ static area_id sMapResult = 7;
 static status_t sUnmapResult = B_OK;
 static uint32 sMapCalls = 0;
 static uint32 sUnmapCalls = 0;
+static bool sMapAddressNull = false;
 
 
 static area_id
@@ -18,7 +19,7 @@ FakeMap(const char*, phys_addr_t, size_t, uint32, uint32,
 	void** address)
 {
 	sMapCalls++;
-	if (sMapResult >= 0)
+	if (sMapResult >= 0 && !sMapAddressNull)
 		*address = (void*)0x1000;
 	else
 		*address = NULL;
@@ -68,9 +69,9 @@ main()
 	resources.reserved = true;
 	resources.pci = device.pci;
 
-	sMapResult = -B_NO_MEMORY;
+	sMapResult = B_NO_MEMORY;
 	success &= Check(amdgpu_map_mmio_bar_with_ops(&device, &resources, 5,
-		&ops) == -B_NO_MEMORY && resources.mmio_area[5] < 0
+		&ops) == B_NO_MEMORY && resources.mmio_area[5] < 0
 		&& resources.mmio[5] == NULL,
 		"map failure leaves no published mapping state");
 
@@ -93,17 +94,19 @@ main()
 		"successful retry clears mapping state");
 
 	sMapResult = 8;
+	sMapAddressNull = true;
 	success &= Check(amdgpu_map_mmio_bar_with_ops(&device, &resources, 5,
-		&ops) == B_OK, "second mapping succeeds");
-	resources.mmio[5] = NULL;
+		&ops) == B_NO_MEMORY && resources.mmio_area[5] == 8
+		&& resources.mmio[5] == NULL,
+		"area ID is retained when the OS returns no mapped address");
 	success &= Check(amdgpu_unmap_mmio_bar_with_ops(&resources, 5,
 		&ops) == B_OK && resources.mmio_area[5] < 0,
-		"area with absent virtual address is still releasable");
+		"partially created area is still releasable");
 
 	success &= Check(sMapCalls == 3 && sUnmapCalls == 3,
 		"failure paths invoke exactly the expected OS operations");
 	if (!success)
 		return 1;
-	printf("AMDGPU device resource mapping tests passed.\\n");
+	printf("AMDGPU device resource mapping tests passed.\n");
 	return 0;
 }

@@ -136,6 +136,16 @@ main()
 		== B_BAD_VALUE && state.call_count == 0,
 		"bring-up rejects corrupted sequence state before callbacks");
 
+
+	amdgpu_init_sequence_init(&sequence);
+	sequence.completed_steps = AMDGPU_INIT_STEP_REGISTERS_MAPPED;
+	state = {};
+	state.fail_call = -1;
+	state.fail_call2 = -1;
+	success &= Check(amdgpu_unwind_device(&sequence, &kOperations, &state)
+		== B_BAD_VALUE && state.call_count == 0,
+		"unwind rejects impossible stage dependencies without callbacks");
+
 	if (!success)
 		return 1;
 	printf("AMDGPU init sequence tests passed.\n");

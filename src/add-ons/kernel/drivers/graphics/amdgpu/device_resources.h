@@ -29,6 +29,10 @@ struct amdgpu_device_resources {
  * physical memory. The table is borrowed for the duration of one call.
  */
 struct amdgpu_resource_mapping_ops {
+	status_t (*reserve)(pci_module_info* pci, uint8 bus, uint8 device,
+		uint8 function, const char* driver_name, void* cookie);
+	status_t (*unreserve)(pci_module_info* pci, uint8 bus, uint8 device,
+		uint8 function, const char* driver_name, void* cookie);
 	area_id (*map)(const char* name, phys_addr_t physical_address,
 		size_t size, uint32 address_specification, uint32 protection,
 		void** mapped_address);
@@ -39,6 +43,9 @@ struct amdgpu_resource_mapping_ops {
 status_t amdgpu_init_device_resources(amdgpu_device_resources* resources);
 status_t amdgpu_claim_device(pci_module_info* pci,
 	const amdgpu_pci_device* device, amdgpu_device_resources* resources);
+status_t amdgpu_claim_device_with_ops(pci_module_info* pci,
+	const amdgpu_pci_device* device, amdgpu_device_resources* resources,
+	const amdgpu_resource_mapping_ops* ops);
 status_t amdgpu_map_mmio_bar(const amdgpu_pci_device* device,
 	amdgpu_device_resources* resources, uint8 bar);
 status_t amdgpu_map_mmio_bar_with_ops(const amdgpu_pci_device* device,
@@ -50,5 +57,8 @@ status_t amdgpu_unmap_mmio_bar_with_ops(amdgpu_device_resources* resources,
 	uint8 bar, const amdgpu_resource_mapping_ops* ops);
 status_t amdgpu_release_device(pci_module_info* pci,
 	amdgpu_device_resources* resources);
+status_t amdgpu_release_device_with_ops(pci_module_info* pci,
+	amdgpu_device_resources* resources,
+	const amdgpu_resource_mapping_ops* ops);
 
 #endif

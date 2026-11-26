@@ -370,13 +370,29 @@ base header does not provide a corresponding DCI table. These are explicit
 gaps, not guessed offsets.
 
 `amdgpu_vega10_register_byte_offset()` performs checked dword-base addition
-and converts the resulting SOC15 register index to a byte offset. It does not
-select a PCI BAR, account for any ASIC register-hole remapping, translate an
-IP-discovery address, map memory, or perform MMIO. In particular, this
-resolver is not yet connected to `amdgpu_resolve_register_aperture()`: the
-BAR-relative mapping and any register-window remap must be separately
-established from the actual Haiku mapping and upstream SOC15 access path
-before integration. No register read or write is enabled.
+and converts the resulting SOC15 register index to a byte offset. It does not translate IP-discovery addresses, map memory, or perform
+MMIO. The separate `amdgpu_vega10_mmio.h/.cpp` layer now validates the exact
+Vega 10 PCI identity and revalidates the complete discovery topology before
+resolving the already-mapped BAR 5 window through
+`amdgpu_resolve_register_aperture()`. This follows upstream Linux's
+Bonaire-and-newer BAR 5 selection.
+
+The SOC15 common path defines `MMIO_REG_HOLE_OFFSET` as
+`0x80000 - PAGE_SIZE` (0x7f000 on a 4 KiB page) and records a remap bus
+address for that location. The Haiku layer currently requires a mapped BAR 5
+of at least 0x80000 bytes and permits only aligned 32-bit accesses entirely
+below 0x7f000. The 4 KiB hole and every offset after it are rejected. This is
+deliberately conservative: the Linux remap metadata is not treated as proof
+that a simple linear Haiku mapping reproduces Linux's special mapping
+semantics. The existing generic mapping helper also rejects prefetchable BARs;
+a BAR 5 with that attribute therefore remains unsupported until a suitable
+uncached register-mapping policy is reviewed.
+
+The `amdgpu_vega10_mmio_test` target covers BAR 5 selection, exact identity,
+topology revalidation, minimum mapping size, the final valid dword before the
+hole, and rejection of the hole and post-hole addresses. It is registered but
+has not been run in a Haiku build environment. No register read or write is
+enabled.
 
 The `amdgpu_vega10_registers_test` target covers known base values, NBIO's
 valid zero base, dword-to-byte conversion, unsupported instances/segments

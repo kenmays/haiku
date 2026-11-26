@@ -32,18 +32,24 @@ RecordSequenceCall(void* cookie, int value)
 	return B_OK;
 }
 
-#define SEQUENCE_CALLBACK(name, value) \\
-	static status_t name(void* cookie) \\
-	{ return RecordSequenceCall(cookie, value); }
 
-SEQUENCE_CALLBACK(SequenceClaim, 1)
-SEQUENCE_CALLBACK(SequenceFirmware, 2)
-SEQUENCE_CALLBACK(SequenceMap, 3)
-SEQUENCE_CALLBACK(SequenceASIC, 4)
-SEQUENCE_CALLBACK(SequenceShutdown, 5)
-SEQUENCE_CALLBACK(SequenceUnmap, 6)
-SEQUENCE_CALLBACK(SequenceFirmwareUnload, 7)
-SEQUENCE_CALLBACK(SequenceRelease, 8)
+static status_t SequenceClaim(void* cookie)
+	{ return RecordSequenceCall(cookie, 1); }
+static status_t SequenceFirmware(void* cookie)
+	{ return RecordSequenceCall(cookie, 2); }
+static status_t SequenceMap(void* cookie)
+	{ return RecordSequenceCall(cookie, 3); }
+static status_t SequenceASIC(void* cookie)
+	{ return RecordSequenceCall(cookie, 4); }
+static status_t SequenceShutdown(void* cookie)
+	{ return RecordSequenceCall(cookie, 5); }
+static status_t SequenceUnmap(void* cookie)
+	{ return RecordSequenceCall(cookie, 6); }
+static status_t SequenceFirmwareUnload(void* cookie)
+	{ return RecordSequenceCall(cookie, 7); }
+static status_t SequenceRelease(void* cookie)
+	{ return RecordSequenceCall(cookie, 8); }
+
 
 static const amdgpu_init_operations kSequenceOperations = {
 	SequenceClaim, SequenceFirmware, SequenceMap, SequenceASIC,

@@ -18,6 +18,7 @@ KernelAddon amdgpu :
 	amdgpu_init_sequence.cpp
 	amdgpu_vega10_profile.cpp
 	amdgpu_vega10_registers.cpp
+	amdgpu_vega10_reg_access.cpp
 	amdgpu_vega10_mmio.cpp
 	amdgpu_vega10_probe.cpp
 	amdgpu_register_aperture.cpp

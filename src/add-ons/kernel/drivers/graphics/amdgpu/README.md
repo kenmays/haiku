@@ -619,3 +619,21 @@ The test uses callback-controlled area IDs and does not invoke real
 `delete_area()`, reserve a PCI function, or prove concurrent MMIO safety. It
 is registered in `amdgpu_device_resources_test` and remains unexecuted in a
 native Haiku build environment.
+
+
+### Firmware-context option-ROM validation
+
+The per-device firmware context now validates the loaded VFCT bytes again
+before transitioning to `AMDGPU_FIRMWARE_LOADED`. It parses the complete PCI
+option-ROM chain, requires valid PCIR bounds and image lengths, verifies each
+image checksum, locates an ATOM/MOTA BIOS header, and checks the embedded PCI
+vendor/device identity against the enumerated function. The validated ATOMBIOS
+metadata replaces the provider's preliminary parser result in the context.
+Any malformed image or identity mismatch is rejected and the copied image
+bytes are cleared; the context remains in `AMDGPU_FIRMWARE_SIZE_KNOWN` so a
+subsequent load can retry. The firmware-context test now constructs a valid
+512-byte synthetic option ROM and covers checksum corruption, PCI device-ID
+mismatch, image clearing, and retry after rejection. These are parser/test-
+double checks only: no real platform VFCT image, firmware signature policy,
+firmware execution, or GPU hardware has been validated. The test target is
+registered but has not been run in a native Haiku build environment.

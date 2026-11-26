@@ -15,15 +15,18 @@
  * SOC15 also defines a separate KFD userspace MMIO remap page at 0x7f000;
  * this does not interrupt the kernel's linear register aperture.
  */
-static const uint8 AMDGPU_VEGA10_REGISTER_BAR = 5;
 /*
  * Linux's rmmio_remap page is a separate KFD userspace mapping facility,
  * not a hole in the kernel's linear BAR register mapping.
  */
-static const uint32 AMDGPU_VEGA10_KFD_MMIO_REMAP_OFFSET = 0x7f000;
-static const uint32 AMDGPU_VEGA10_KFD_MMIO_REMAP_SIZE = 0x1000;
-static const uint32 AMDGPU_VEGA10_GB_ADDR_CONFIG_OFFSET = 0x98f8;
-static const uint32 AMDGPU_VEGA10_MMIO_MIN_SIZE = 0x10000;
+enum {
+	AMDGPU_VEGA10_REGISTER_BAR = 5,
+	AMDGPU_VEGA10_KFD_MMIO_REMAP_OFFSET = 0x7f000,
+	AMDGPU_VEGA10_KFD_MMIO_REMAP_SIZE = 0x1000,
+	AMDGPU_VEGA10_GB_ADDR_CONFIG_REGISTER_INDEX = 0x063e,
+	AMDGPU_VEGA10_GB_ADDR_CONFIG_BYTE_OFFSET = 0x98f8,
+	AMDGPU_VEGA10_MMIO_MIN_SIZE = 0x10000
+};
 
 /*
  * Resolve the complete mapped BAR 5 aperture for a Vega 10 device whose complete IP-discovery topology is revalidated.

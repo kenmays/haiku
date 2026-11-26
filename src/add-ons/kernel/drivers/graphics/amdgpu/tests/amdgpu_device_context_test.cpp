@@ -37,6 +37,37 @@ mutex_unlock(mutex*)
 
 static status_t sClaimStatus = B_OK;
 static status_t sReleaseStatus = B_OK;
+static uint32 sMapCalls = 0;
+static uint32 sUnmapCalls = 0;
+static uint32 sProbeCalls = 0;
+
+
+status_t
+amdgpu_map_mmio_bar(const amdgpu_pci_device*, amdgpu_device_resources*,
+	uint8)
+{
+	sMapCalls++;
+	return B_OK;
+}
+
+
+status_t
+amdgpu_unmap_mmio_bar(amdgpu_device_resources*, uint8)
+{
+	sUnmapCalls++;
+	return B_OK;
+}
+
+
+status_t
+amdgpu_vega10_read_gb_addr_config(const amdgpu_pci_device*,
+	const amdgpu_device_resources*,
+	const amdgpu_ip_discovery_info*, uint32* value)
+{
+	sProbeCalls++;
+	*value = 0x12345678;
+	return B_OK;
+}
 
 
 status_t
@@ -139,6 +170,17 @@ main()
 		&& strcmp(context.node_name, "graphics/amdgpu_020301") == 0,
 		"initialization binds metadata and stable BDF node name without claim");
 	void* cookie = NULL;
+	amdgpu_ip_discovery_info discovery;
+	memset(&discovery, 0, sizeof(discovery));
+	uint32 registerValue = 0;
+	success &= Check(amdgpu_device_context_map_mmio_bar(&context, 5)
+		== B_NOT_ALLOWED
+		&& amdgpu_device_context_unmap_mmio_bar(&context, 5)
+		== B_NOT_ALLOWED
+		&& amdgpu_device_context_read_vega10_gb_addr_config(&context,
+			&discovery, &registerValue) == B_NOT_ALLOWED
+		&& sMapCalls == 0 && sUnmapCalls == 0 && sProbeCalls == 0,
+		"MMIO operations are blocked before PCI claim");
 	success &= Check(!amdgpu_device_context_is_node_ready(&context)
 		&& amdgpu_device_context_set_node_ready(&context) == B_NOT_ALLOWED,
 		"node cannot become ready before PCI ownership is established");
@@ -155,6 +197,16 @@ main()
 		&& context.state == AMDGPU_DEVICE_CLAIMED
 		&& context.resources.reserved,
 		"explicit claim advances device state");
+	success &= Check(amdgpu_device_context_map_mmio_bar(&context, 5)
+		== B_OK && sMapCalls == 1,
+		"BAR mapping is routed through the claimed context");
+	success &= Check(amdgpu_device_context_read_vega10_gb_addr_config(
+		&context, &discovery, &registerValue) == B_OK
+		&& sProbeCalls == 1 && registerValue == 0x12345678,
+		"read-only probe is executed through the claimed context");
+	success &= Check(amdgpu_device_context_unmap_mmio_bar(&context, 5)
+		== B_OK && sUnmapCalls == 1,
+		"BAR unmapping is routed through the claimed context");
 	success &= Check(amdgpu_device_context_set_node_ready(&context) == B_OK
 		&& context.state == AMDGPU_DEVICE_NODE_READY
 		&& amdgpu_device_context_is_node_ready(&context),

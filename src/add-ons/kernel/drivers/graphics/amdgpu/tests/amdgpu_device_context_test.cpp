@@ -8,6 +8,8 @@
 #include <string.h>
 #include <lock.h>
 
+static bool sContextMutexHeld = false;
+
 
 void
 mutex_init(mutex* lock, const char* name)
@@ -42,7 +44,6 @@ static status_t sReleaseStatus = B_OK;
 static uint32 sMapCalls = 0;
 static uint32 sUnmapCalls = 0;
 static uint32 sProbeCalls = 0;
-static bool sContextMutexHeld = false;
 static bool sProbeObservedMutex = false;
 
 

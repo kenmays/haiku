@@ -21,6 +21,34 @@ static volatile int32 sReleaseDone = 0;
 static status_t sConcurrentProbeStatus = B_ERROR;
 static status_t sConcurrentReleaseStatus = B_ERROR;
 static uint32 sConcurrentProbeValue = 0;
+static int sSequenceCalls[16];
+static int sSequenceCallCount = 0;
+
+static status_t
+RecordSequenceCall(void* cookie, int value)
+{
+	int* calls = (int*)cookie;
+	calls[sSequenceCallCount++] = value;
+	return B_OK;
+}
+
+#define SEQUENCE_CALLBACK(name, value) \\
+	static status_t name(void* cookie) \\
+	{ return RecordSequenceCall(cookie, value); }
+
+SEQUENCE_CALLBACK(SequenceClaim, 1)
+SEQUENCE_CALLBACK(SequenceFirmware, 2)
+SEQUENCE_CALLBACK(SequenceMap, 3)
+SEQUENCE_CALLBACK(SequenceASIC, 4)
+SEQUENCE_CALLBACK(SequenceShutdown, 5)
+SEQUENCE_CALLBACK(SequenceUnmap, 6)
+SEQUENCE_CALLBACK(SequenceFirmwareUnload, 7)
+SEQUENCE_CALLBACK(SequenceRelease, 8)
+
+static const amdgpu_init_operations kSequenceOperations = {
+	SequenceClaim, SequenceFirmware, SequenceMap, SequenceASIC,
+	SequenceShutdown, SequenceUnmap, SequenceFirmwareUnload, SequenceRelease
+};
 
 
 void
@@ -263,27 +291,9 @@ main()
 	success &= Check(amdgpu_device_context_unmap_mmio_bar(&context, 5)
 		== B_OK && sUnmapCalls == 1,
 		"BAR unmapping is routed through the claimed context");
-	success &= Check(amdgpu_device_context_set_node_ready(&context) == B_OK
-		&& context.state == AMDGPU_DEVICE_NODE_READY
-		&& amdgpu_device_context_is_node_ready(&context),
-		"node becomes ready only after claim and initialization");
-	success &= Check(amdgpu_device_context_open(&context, &cookie) == B_OK
-		&& cookie == &context && context.open_count == 1,
-		"open acquires a per-device lifetime reference");
-	success &= Check(amdgpu_device_context_release(
-		(pci_module_info*)1, &context) == B_BUSY,
-		"teardown refuses to release a live open cookie");
-	success &= Check(amdgpu_device_context_close(cookie) == B_OK
-		&& amdgpu_device_context_free(cookie) == B_OK
-		&& context.open_count == 0,
-		"close and free release the node lifetime reference");
-
-	sReleaseStatus = B_ERROR;
-	success &= Check(amdgpu_device_context_release(
-		(pci_module_info*)1, &context) == B_ERROR
-		&& context.state == AMDGPU_DEVICE_NODE_READY
-		&& context.resources.reserved,
-		"failed release preserves ownership state for retry");
+	success &= Check(amdgpu_device_context_set_node_ready(&context)
+		== B_NOT_ALLOWED,
+		"manual PCI claim cannot bypass the ASIC initialization coordinator");
 	/*
 	 * Hold the context mutex inside the MMIO probe while a second thread
 	 * attempts device release. The lock stub is an actual atomic spin lock;
@@ -365,6 +375,47 @@ main()
 		delete_sem(sProbeContinueSem);
 	if (sLockContendedSem >= B_OK)
 		delete_sem(sLockContendedSem);
+
+
+	/*
+	 * Exercise the context-owned initialization coordinator separately from
+	 * the legacy claim-only path above. The callbacks are test doubles; they
+	 * verify ordering and lifetime integration, not hardware bring-up.
+	 */
+	success &= Check(amdgpu_device_context_init(&context, &device) == B_OK,
+		"context can be reused after complete release");
+	sSequenceCallCount = 0;
+	success &= Check(amdgpu_device_context_initialize(&context,
+		&kSequenceOperations, sSequenceCalls) == B_OK
+		&& context.state == AMDGPU_DEVICE_CLAIMED
+		&& context.init_sequence_active
+		&& context.init_sequence.completed_steps
+			== (AMDGPU_INIT_STEP_DEVICE_CLAIMED
+				| AMDGPU_INIT_STEP_FIRMWARE_READY
+				| AMDGPU_INIT_STEP_REGISTERS_MAPPED
+				| AMDGPU_INIT_STEP_ASIC_INITIALIZED)
+		&& sSequenceCallCount == 4,
+		"context initialization runs all ordered stages and records ownership");
+	success &= Check(amdgpu_device_context_set_node_ready(&context) == B_OK
+		&& context.state == AMDGPU_DEVICE_NODE_READY,
+		"node-ready transition requires completed ASIC initialization");
+	cookie = NULL;
+	success &= Check(amdgpu_device_context_open(&context, &cookie) == B_OK
+		&& cookie == &context,
+		"initialized node accepts an open reference");
+	success &= Check(amdgpu_device_context_release((pci_module_info*)1,
+		&context) == B_BUSY,
+		"coordinated teardown refuses a live open reference");
+	success &= Check(amdgpu_device_context_close(cookie) == B_OK
+		&& amdgpu_device_context_free(cookie) == B_OK,
+		"coordinated node reference is dropped");
+	success &= Check(amdgpu_device_context_release((pci_module_info*)1,
+		&context) == B_OK
+		&& context.state == AMDGPU_DEVICE_UNINITIALIZED
+		&& sSequenceCallCount == 8
+		&& sSequenceCalls[4] == 5 && sSequenceCalls[5] == 6
+		&& sSequenceCalls[6] == 7 && sSequenceCalls[7] == 8,
+		"context release unwinds ASIC, registers, firmware, then PCI ownership");
 
 	device.pci.vendor_id = 0x1234;
 	success &= Check(amdgpu_device_context_init(&context, &device)

@@ -391,7 +391,9 @@ uncached register-mapping policy is reviewed.
 The `amdgpu_vega10_mmio_test` target covers BAR 5 selection, exact identity,
 topology revalidation, minimum mapping size, the final valid dword before the
 hole, and rejection of the hole and post-hole addresses. It is registered but
-has not been run in a Haiku build environment. A narrowly scoped read-only probe is now available as
+has not been run in a Haiku build environment.
+
+A narrowly scoped read-only probe is now available as
 `amdgpu_vega10_read_gb_addr_config()`. It reads only GC
 `mmGB_ADDR_CONFIG` (register index 0x063e, BASE_IDX 0), whose Vega 10 GC
 segment-zero base is 0x2000 dwords; the resulting BAR 5 byte offset is
@@ -399,8 +401,9 @@ segment-zero base is 0x2000 dwords; the resulting BAR 5 byte offset is
 `gc_9_0_offset.h`, and Linux's Vega 10 GC code uses this register in its
 configuration path. The probe uses a single aligned volatile 32-bit read,
 converts the little-endian register value, and contains no write or
-read-modify-write operation. It still depends on the caller to establish
-device ownership, validate discovery, and map BAR 5. It is not called by
+read-modify-write operation. It revalidates the exact PCI identity and full IP-discovery topology, and checks
+the existing BAR 5 mapping/resource identity before reading. The caller must
+still establish PCI ownership and map BAR 5. It is not called by
 `init_driver()` or any device publication path.
 
 The `amdgpu_vega10_probe_test` target uses a RAM-backed fake aperture to

@@ -303,10 +303,16 @@ main()
 		sContentionSignaled = 0;
 		thread_id probeThread = spawn_thread(ReadProbeThread,
 			"amdgpu MMIO probe test", B_NORMAL_PRIORITY, &context);
-		success &= Check(probeThread >= B_OK
-			&& resume_thread(probeThread) == B_OK,
+		status_t probeStartStatus = probeThread >= B_OK
+			? resume_thread(probeThread) : probeThread;
+		success &= Check(probeStartStatus == B_OK,
 			"MMIO probe worker starts");
-		if (probeThread >= B_OK) {
+		if (probeStartStatus != B_OK && probeThread >= B_OK) {
+			kill_thread(probeThread);
+			status_t ignoredStatus;
+			wait_for_thread(probeThread, &ignoredStatus);
+		}
+		if (probeStartStatus == B_OK) {
 			status_t waitStatus = acquire_sem_etc(sProbeEnteredSem, 1,
 				B_RELATIVE_TIMEOUT, 5000000);
 			success &= Check(waitStatus == B_OK,
@@ -314,10 +320,17 @@ main()
 			if (waitStatus == B_OK) {
 				sReleaseThread = spawn_thread(ReleaseDeviceThread,
 					"amdgpu teardown test", B_NORMAL_PRIORITY, &context);
-				success &= Check(sReleaseThread >= B_OK
-					&& resume_thread(sReleaseThread) == B_OK,
+				status_t releaseStartStatus = sReleaseThread >= B_OK
+					? resume_thread(sReleaseThread) : sReleaseThread;
+				success &= Check(releaseStartStatus == B_OK,
 					"teardown worker starts");
-				if (sReleaseThread >= B_OK) {
+				if (releaseStartStatus != B_OK && sReleaseThread >= B_OK) {
+					kill_thread(sReleaseThread);
+					status_t ignoredStatus;
+					wait_for_thread(sReleaseThread, &ignoredStatus);
+					sReleaseThread = -1;
+				}
+				if (releaseStartStatus == B_OK) {
 					status_t contentionStatus = acquire_sem_etc(
 						sLockContendedSem, 1, B_RELATIVE_TIMEOUT, 5000000);
 					success &= Check(contentionStatus == B_OK

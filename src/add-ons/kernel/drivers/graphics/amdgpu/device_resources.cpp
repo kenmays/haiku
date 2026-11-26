@@ -18,6 +18,28 @@
 static const char* const kAMDGPUDriverName = "amdgpu";
 
 
+static area_id
+MapPhysicalMemory(const char* name, phys_addr_t physicalAddress, size_t size,
+	uint32 addressSpecification, uint32 protection, void** mappedAddress)
+{
+	return map_physical_memory(name, physicalAddress, size,
+		addressSpecification, protection, mappedAddress);
+}
+
+
+static status_t
+UnmapPhysicalMemory(area_id area)
+{
+	return delete_area(area);
+}
+
+
+static const amdgpu_resource_mapping_ops kNativeMappingOps = {
+	MapPhysicalMemory,
+	UnmapPhysicalMemory
+};
+
+
 static void
 InitializeResources(amdgpu_device_resources& resources)
 {
@@ -87,7 +109,18 @@ status_t
 amdgpu_map_mmio_bar(const amdgpu_pci_device* device,
 	amdgpu_device_resources* resources, uint8 bar)
 {
-	if (device == NULL || resources == NULL || bar >= 6
+	return amdgpu_map_mmio_bar_with_ops(device, resources, bar,
+		&kNativeMappingOps);
+}
+
+
+status_t
+amdgpu_map_mmio_bar_with_ops(const amdgpu_pci_device* device,
+	amdgpu_device_resources* resources, uint8 bar,
+	const amdgpu_resource_mapping_ops* ops)
+{
+	if (device == NULL || resources == NULL || bar >= 6 || ops == NULL
+		|| ops->map == NULL || ops->unmap == NULL
 		|| resources->magic != AMDGPU_DEVICE_RESOURCES_MAGIC
 		|| !resources->reserved) {
 		return B_BAD_VALUE;
@@ -157,9 +190,8 @@ amdgpu_map_mmio_bar(const amdgpu_pci_device* device,
 		return B_NOT_SUPPORTED;
 
 	void* mappedAddress = NULL;
-	area_id area = map_physical_memory("amdgpu-mmio",
-		physicalAddressForMapping, size,
-		B_ANY_KERNEL_BLOCK_ADDRESS | B_UNCACHED_MEMORY,
+	area_id area = ops->map("amdgpu-mmio", physicalAddressForMapping,
+		size, B_ANY_KERNEL_BLOCK_ADDRESS | B_UNCACHED_MEMORY,
 		B_READ_AREA | B_WRITE_AREA, &mappedAddress);
 	if (area < 0)
 		return (status_t)area;
@@ -182,13 +214,22 @@ amdgpu_map_mmio_bar(const amdgpu_pci_device* device,
 status_t
 amdgpu_unmap_mmio_bar(amdgpu_device_resources* resources, uint8 bar)
 {
-	if (resources == NULL || bar >= 6
+	return amdgpu_unmap_mmio_bar_with_ops(resources, bar,
+		&kNativeMappingOps);
+}
+
+
+status_t
+amdgpu_unmap_mmio_bar_with_ops(amdgpu_device_resources* resources,
+	uint8 bar, const amdgpu_resource_mapping_ops* ops)
+{
+	if (resources == NULL || bar >= 6 || ops == NULL || ops->unmap == NULL
 		|| resources->magic != AMDGPU_DEVICE_RESOURCES_MAGIC)
 		return B_BAD_VALUE;
 	if (resources->mmio_area[bar] < 0)
 		return B_OK;
 
-	status_t status = delete_area(resources->mmio_area[bar]);
+	status_t status = ops->unmap(resources->mmio_area[bar]);
 	if (status != B_OK)
 		return status;
 

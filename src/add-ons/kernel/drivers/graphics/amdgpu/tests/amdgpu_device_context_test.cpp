@@ -26,6 +26,7 @@ mutex_destroy(mutex*)
 status_t
 mutex_lock(mutex*)
 {
+	sContextMutexHeld = true;
 	return B_OK;
 }
 
@@ -33,6 +34,7 @@ mutex_lock(mutex*)
 void
 mutex_unlock(mutex*)
 {
+	sContextMutexHeld = false;
 }
 
 static status_t sClaimStatus = B_OK;
@@ -40,6 +42,8 @@ static status_t sReleaseStatus = B_OK;
 static uint32 sMapCalls = 0;
 static uint32 sUnmapCalls = 0;
 static uint32 sProbeCalls = 0;
+static bool sContextMutexHeld = false;
+static bool sProbeObservedMutex = false;
 
 
 status_t
@@ -65,6 +69,7 @@ amdgpu_vega10_read_gb_addr_config(const amdgpu_pci_device*,
 	const amdgpu_ip_discovery_info*, uint32* value)
 {
 	sProbeCalls++;
+	sProbeObservedMutex = sContextMutexHeld;
 	*value = 0x12345678;
 	return B_OK;
 }
@@ -202,7 +207,8 @@ main()
 		"BAR mapping is routed through the claimed context");
 	success &= Check(amdgpu_device_context_read_vega10_gb_addr_config(
 		&context, &discovery, &registerValue) == B_OK
-		&& sProbeCalls == 1 && registerValue == 0x12345678,
+		&& sProbeCalls == 1 && sProbeObservedMutex
+		&& registerValue == 0x12345678,
 		"read-only probe is executed through the claimed context");
 	success &= Check(amdgpu_device_context_unmap_mmio_bar(&context, 5)
 		== B_OK && sUnmapCalls == 1,

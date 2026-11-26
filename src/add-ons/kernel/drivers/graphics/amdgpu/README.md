@@ -637,3 +637,12 @@ mismatch, image clearing, and retry after rejection. These are parser/test-
 double checks only: no real platform VFCT image, firmware signature policy,
 firmware execution, or GPU hardware has been validated. The test target is
 registered but has not been run in a native Haiku build environment.
+
+
+The firmware-context load boundary also clears the entire queried image
+capacity when the VFCT provider reports an error. This protects callers from
+a provider that copied a prefix before failing; the context remains in the
+size-known state and may retry. The test injects a partial-copy provider
+failure and verifies the complete destination image is zeroed. This does not
+protect against a provider that writes beyond the supplied capacity; that
+remains a provider-contract and memory-safety requirement.

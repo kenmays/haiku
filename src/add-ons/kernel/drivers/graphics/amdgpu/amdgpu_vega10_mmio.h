@@ -16,9 +16,14 @@
  * as a special MMIO register hole.
  */
 static const uint8 AMDGPU_VEGA10_REGISTER_BAR = 5;
-static const uint32 AMDGPU_VEGA10_MMIO_HOLE_OFFSET = 0x7f000;
-static const uint32 AMDGPU_VEGA10_MMIO_HOLE_SIZE = 0x1000;
-static const uint32 AMDGPU_VEGA10_MMIO_MIN_SIZE = 0x80000;
+/*
+ * Linux's rmmio_remap page is a separate KFD userspace mapping facility,
+ * not a hole in the kernel's linear BAR register mapping.
+ */
+static const uint32 AMDGPU_VEGA10_KFD_MMIO_REMAP_OFFSET = 0x7f000;
+static const uint32 AMDGPU_VEGA10_KFD_MMIO_REMAP_SIZE = 0x1000;
+static const uint32 AMDGPU_VEGA10_GB_ADDR_CONFIG_OFFSET = 0x98f8;
+static const uint32 AMDGPU_VEGA10_MMIO_MIN_SIZE = 0x10000;
 
 /*
  * Resolve the complete mapped BAR 5 aperture for a Vega 10 device whose complete IP-discovery topology is revalidated.
@@ -33,8 +38,8 @@ status_t amdgpu_vega10_resolve_register_aperture(
 
 /*
  * Convert a byte offset from the SOC15 register-window origin into an offset
- * within the mapped BAR 5 aperture. The special hole and every offset after
- * it are rejected until the SOC15 remap mechanism is implemented.
+ * within the mapped BAR 5 aperture. The mapping is linear for kernel register
+ * access; KFD's separate rmmio_remap page is not a hole in this aperture.
  */
 status_t amdgpu_vega10_register_mapped_offset(
 	const amdgpu_register_aperture* aperture, uint64 registerByteOffset,

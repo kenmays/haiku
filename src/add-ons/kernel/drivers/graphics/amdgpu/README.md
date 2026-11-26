@@ -554,3 +554,21 @@ The invariant is that a failed delete preserves the area ID and associated
 mapping metadata, while successful deletion clears them. This test target is
 registered but has not been run in a native Haiku build environment. It does
 not test PCI unreserve failure or real concurrent teardown/read behavior.
+
+
+### PCI ownership failure injection
+
+The same per-call resource-operation table now includes PCI reserve and
+unreserve callbacks. The production wrappers delegate to Haiku's
+`pci_module_info` methods; tests can inject deterministic outcomes without
+reserving a physical function. The new claim/release-with-ops entry points
+share the same validation and bookkeeping paths as the production entry
+points.
+
+The resource lifecycle test now covers failed reservation, successful
+reservation, failed unreserve with ownership retained, and successful retry.
+A failed reserve leaves an initialized but unclaimed resource object; a failed
+unreserve preserves the reservation identity so teardown can be retried.
+These are callback-contract tests only: they do not validate PCI bus-manager
+behavior or actual hardware ownership. The test remains registered but has
+not been run in a native Haiku build environment.

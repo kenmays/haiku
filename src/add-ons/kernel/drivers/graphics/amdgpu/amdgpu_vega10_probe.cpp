@@ -6,6 +6,7 @@
 
 #include "amdgpu_vega10_probe.h"
 #include "amdgpu_vega10_registers.h"
+#include "amdgpu_vega10_reg_access.h"
 
 
 status_t
@@ -30,6 +31,12 @@ amdgpu_vega10_read_gb_addr_config(
 	 * BASE_IDX 0. Vega 10 GC segment zero begins at dword index 0x2000.
 	 * SOC15 offsets are dword indices, so the byte offset is 0x98f8.
 	 */
+	status = amdgpu_vega10_check_register_access(11, 0, 0,
+		AMDGPU_VEGA10_GB_ADDR_CONFIG_REGISTER_INDEX,
+		AMDGPU_REGISTER_ACCESS_READ);
+	if (status != B_OK)
+		return status;
+
 	uint32 registerByteOffset;
 	status = amdgpu_vega10_register_byte_offset(11, 0, 0,
 		AMDGPU_VEGA10_GB_ADDR_CONFIG_REGISTER_INDEX, &registerByteOffset);

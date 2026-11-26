@@ -377,20 +377,25 @@ resolving the already-mapped BAR 5 window through
 `amdgpu_resolve_register_aperture()`. This follows upstream Linux's
 Bonaire-and-newer BAR 5 selection.
 
-The SOC15 common path defines `MMIO_REG_HOLE_OFFSET` as
-`0x80000 - PAGE_SIZE` (0x7f000 on a 4 KiB page) and records a remap bus
-address for that location. The Haiku layer currently requires a mapped BAR 5
-of at least 0x80000 bytes and permits only aligned 32-bit accesses entirely
-below 0x7f000. The 4 KiB hole and every offset after it are rejected. This is
-deliberately conservative: the Linux remap metadata is not treated as proof
-that a simple linear Haiku mapping reproduces Linux's special mapping
-semantics. The existing generic mapping helper also rejects prefetchable BARs;
-a BAR 5 with that attribute therefore remains unsupported until a suitable
-uncached register-mapping policy is reviewed.
+Linux's SOC15 common path sets `rmmio_remap.reg_offset` to
+`0x80000 - PAGE_SIZE` (0x7f000 on a 4 KiB page) and its bus address to
+BAR 5 plus that offset. This is used by the separate KFD userspace
+`MMIO_REMAP` allocation/mmap path; it is not a hole in the kernel's direct
+register aperture. Linux's normal `amdgpu_device_rreg()` reads directly from
+`rmmio + reg * 4` whenever the byte offset is within `rmmio_size`.
+Accordingly, the Haiku resolver preserves linear BAR 5 offsets across the
+KFD remap page and relies on mapped-size, dword-alignment, and access-width
+checks. The current minimum mapping size is 64 KiB, enough to cover the
+whitelisted Vega 10 `GB_ADDR_CONFIG` probe at byte offset 0x98f8.
+
+The existing generic mapping helper rejects prefetchable BARs; a BAR 5 with
+that attribute therefore remains unsupported until a suitable uncached
+register-mapping policy is reviewed. KFD's userspace remap page is not
+implemented by this driver yet.
 
 The `amdgpu_vega10_mmio_test` target covers BAR 5 selection, exact identity,
-topology revalidation, minimum mapping size, the final valid dword before the
-hole, and rejection of the hole and post-hole addresses. It is registered but
+topology revalidation, minimum mapping size, linear offsets before, within, and after the KFD remap page, plus rejection
+of unaligned and out-of-range accesses. It is registered but
 has not been run in a Haiku build environment.
 
 A narrowly scoped read-only probe is now available as
@@ -401,8 +406,8 @@ segment-zero base is 0x2000 dwords; the resulting BAR 5 byte offset is
 `gc_9_0_offset.h`, and Linux's Vega 10 GC code uses this register in its
 configuration path. The probe uses a single aligned volatile 32-bit read,
 converts the little-endian register value, and contains no write or
-read-modify-write operation. It revalidates the exact PCI identity and full IP-discovery topology, and checks
-the existing BAR 5 mapping/resource identity before reading. The caller must
+read-modify-write operation. It revalidates the exact PCI identity and full IP-discovery topology, and
+checks the existing BAR 5 mapping/resource identity before reading. The caller must
 still establish PCI ownership and map BAR 5. It is not called by
 `init_driver()` or any device publication path.
 

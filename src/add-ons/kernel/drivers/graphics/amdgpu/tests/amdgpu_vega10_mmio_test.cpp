@@ -98,6 +98,16 @@ main()
 		AMDGPU_VEGA10_KFD_MMIO_REMAP_OFFSET + 0x100, &mappedOffset) == B_OK && mappedOffset == AMDGPU_VEGA10_KFD_MMIO_REMAP_OFFSET + 0x100,
 		"offsets after the KFD remap page remain linearly mapped");
 	success &= Check(amdgpu_vega10_register_mapped_offset(&aperture,
+		AMDGPU_VEGA10_KFD_MMIO_REMAP_OFFSET
+			+ AMDGPU_VEGA10_KFD_MMIO_REMAP_SIZE - sizeof(uint32),
+		&mappedOffset) == B_OK
+		&& mappedOffset == AMDGPU_VEGA10_KFD_MMIO_REMAP_OFFSET
+			+ AMDGPU_VEGA10_KFD_MMIO_REMAP_SIZE - sizeof(uint32),
+		"last dword in KFD remap page remains linearly mapped");
+	success &= Check(amdgpu_vega10_register_mapped_offset(&aperture,
+		sizeof(mmio), &mappedOffset) == B_BAD_VALUE,
+		"register access at BAR mapping end is rejected");
+	success &= Check(amdgpu_vega10_register_mapped_offset(&aperture,
 		0x7effe, &mappedOffset) == B_BAD_VALUE,
 		"unaligned dword access is rejected");
 

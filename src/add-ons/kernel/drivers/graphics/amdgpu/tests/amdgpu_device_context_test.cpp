@@ -7,8 +7,20 @@
 #include <stdio.h>
 #include <string.h>
 #include <lock.h>
+#include <OS.h>
 
+static volatile int32 sContextMutexWord = 0;
 static bool sContextMutexHeld = false;
+static thread_id sReleaseThread = -1;
+static volatile int32 sContentionSignaled = 0;
+static sem_id sLockContendedSem = -1;
+static sem_id sProbeEnteredSem = -1;
+static sem_id sProbeContinueSem = -1;
+static bool sBlockProbe = false;
+static volatile int32 sReleaseDone = 0;
+static status_t sConcurrentProbeStatus = B_ERROR;
+static status_t sConcurrentReleaseStatus = B_ERROR;
+static uint32 sConcurrentProbeValue = 0;
 
 
 void
@@ -28,6 +40,13 @@ mutex_destroy(mutex*)
 status_t
 mutex_lock(mutex*)
 {
+	while (!__sync_bool_compare_and_swap(&sContextMutexWord, 0, 1)) {
+		if (find_thread(NULL) == sReleaseThread
+			&& __sync_bool_compare_and_swap(&sContentionSignaled, 0, 1)) {
+			release_sem(sLockContendedSem);
+		}
+		snooze(1000);
+	}
 	sContextMutexHeld = true;
 	return B_OK;
 }
@@ -37,6 +56,7 @@ void
 mutex_unlock(mutex*)
 {
 	sContextMutexHeld = false;
+	__sync_lock_release(&sContextMutexWord);
 }
 
 static status_t sClaimStatus = B_OK;
@@ -71,6 +91,12 @@ amdgpu_vega10_read_gb_addr_config_unlocked(const amdgpu_pci_device*,
 {
 	sProbeCalls++;
 	sProbeObservedMutex = sContextMutexHeld;
+	if (sBlockProbe) {
+		release_sem(sProbeEnteredSem);
+		status_t waitStatus = acquire_sem(sProbeContinueSem);
+		if (waitStatus != B_OK)
+			return waitStatus;
+	}
 	*value = 0x12345678;
 	return B_OK;
 }
@@ -142,6 +168,29 @@ amdgpu_firmware_context_reset(amdgpu_firmware_context* context)
 	return B_OK;
 }
 
+
+
+static int32
+ReadProbeThread(void* cookie)
+{
+	amdgpu_device_context* context = (amdgpu_device_context*)cookie;
+	amdgpu_ip_discovery_info discovery;
+	memset(&discovery, 0, sizeof(discovery));
+	sConcurrentProbeStatus = amdgpu_device_context_read_vega10_gb_addr_config(
+		context, &discovery, &sConcurrentProbeValue);
+	return 0;
+}
+
+
+static int32
+ReleaseDeviceThread(void* cookie)
+{
+	amdgpu_device_context* context = (amdgpu_device_context*)cookie;
+	sConcurrentReleaseStatus = amdgpu_device_context_release(
+		(pci_module_info*)1, context);
+	__sync_lock_test_and_set(&sReleaseDone, 1);
+	return 0;
+}
 
 static bool
 Check(bool condition, const char* name)
@@ -235,14 +284,74 @@ main()
 		&& context.state == AMDGPU_DEVICE_NODE_READY
 		&& context.resources.reserved,
 		"failed release preserves ownership state for retry");
-	sReleaseStatus = B_OK;
-	success &= Check(amdgpu_device_context_release(
-		(pci_module_info*)1, &context) == B_OK
-		&& context.magic == 0
-		&& context.state == AMDGPU_DEVICE_UNINITIALIZED
-		&& context.lock_initialized
-		&& !amdgpu_device_context_is_node_ready(&context),
-		"successful release clears payload but preserves the reusable lock");
+	/*
+	 * Hold the context mutex inside the MMIO probe while a second thread
+	 * attempts device release. The lock stub is an actual atomic spin lock;
+	 * the contention semaphore is signaled only when the release thread
+	 * reaches mutex_lock() and observes the probe owning the lock.
+	 */
+	sProbeEnteredSem = create_sem(0, "amdgpu probe entered");
+	sProbeContinueSem = create_sem(0, "amdgpu continue probe");
+	sLockContendedSem = create_sem(0, "amdgpu release lock contention");
+	success &= Check(sProbeEnteredSem >= B_OK && sProbeContinueSem >= B_OK
+		&& sLockContendedSem >= B_OK,
+		"concurrency test semaphores created");
+	if (sProbeEnteredSem >= B_OK && sProbeContinueSem >= B_OK
+		&& sLockContendedSem >= B_OK) {
+		sBlockProbe = true;
+		sReleaseDone = 0;
+		sContentionSignaled = 0;
+		thread_id probeThread = spawn_thread(ReadProbeThread,
+			"amdgpu MMIO probe test", B_NORMAL_PRIORITY, &context);
+		success &= Check(probeThread >= B_OK
+			&& resume_thread(probeThread) == B_OK,
+			"MMIO probe worker starts");
+		if (probeThread >= B_OK) {
+			status_t waitStatus = acquire_sem_etc(sProbeEnteredSem, 1,
+				B_RELATIVE_TIMEOUT, 5000000);
+			success &= Check(waitStatus == B_OK,
+				"probe reaches MMIO operation while holding context lock");
+			if (waitStatus == B_OK) {
+				sReleaseThread = spawn_thread(ReleaseDeviceThread,
+					"amdgpu teardown test", B_NORMAL_PRIORITY, &context);
+				success &= Check(sReleaseThread >= B_OK
+					&& resume_thread(sReleaseThread) == B_OK,
+					"teardown worker starts");
+				if (sReleaseThread >= B_OK) {
+					status_t contentionStatus = acquire_sem_etc(
+						sLockContendedSem, 1, B_RELATIVE_TIMEOUT, 5000000);
+					success &= Check(contentionStatus == B_OK
+						&& sReleaseDone == 0,
+						"teardown is blocked at the context mutex during MMIO read");
+				}
+			}
+			release_sem(sProbeContinueSem);
+			status_t probeWaitStatus;
+			wait_for_thread(probeThread, &probeWaitStatus);
+			success &= Check(probeWaitStatus == B_OK
+				&& sConcurrentProbeStatus == B_OK
+				&& sConcurrentProbeValue == 0x12345678
+				&& sProbeObservedMutex,
+				"probe completes before teardown can acquire the context lock");
+		}
+		if (sReleaseThread >= B_OK) {
+			status_t releaseWaitStatus;
+			wait_for_thread(sReleaseThread, &releaseWaitStatus);
+			success &= Check(releaseWaitStatus == B_OK
+				&& sConcurrentReleaseStatus == B_OK && sReleaseDone != 0
+				&& context.magic == 0
+				&& context.state == AMDGPU_DEVICE_UNINITIALIZED
+				&& context.lock_initialized,
+				"teardown completes after the in-flight MMIO read and preserves reusable lock");
+		}
+		sBlockProbe = false;
+	}
+	if (sProbeEnteredSem >= B_OK)
+		delete_sem(sProbeEnteredSem);
+	if (sProbeContinueSem >= B_OK)
+		delete_sem(sProbeContinueSem);
+	if (sLockContendedSem >= B_OK)
+		delete_sem(sLockContendedSem);
 
 	device.pci.vendor_id = 0x1234;
 	success &= Check(amdgpu_device_context_init(&context, &device)

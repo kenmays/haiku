@@ -14,6 +14,7 @@
 #include "device_resources.h"
 #include "amdgpu_firmware_context.h"
 #include "amdgpu_discovery.h"
+#include "amdgpu_init_sequence.h"
 
 static const uint32 AMDGPU_DEVICE_CONTEXT_MAGIC = 0x414d4443;
 
@@ -36,12 +37,24 @@ struct amdgpu_device_context {
 	bool lock_initialized;
 	uint32 open_count;
 	char node_name[64];
+	amdgpu_init_sequence init_sequence;
+	amdgpu_init_operations init_operations;
+	void* init_cookie;
+	bool init_sequence_active;
 };
 
 status_t amdgpu_device_context_init(amdgpu_device_context* context,
 	const amdgpu_pci_device* device);
 status_t amdgpu_device_context_claim(pci_module_info* pci,
 	amdgpu_device_context* context);
+
+/*
+ * Execute generation-specific bring-up under the context lifecycle lock.
+ * Callback cookie storage must remain valid until context release completes.
+ * Callbacks must not re-enter context APIs while the lock is held.
+ */
+status_t amdgpu_device_context_initialize(amdgpu_device_context* context,
+	const amdgpu_init_operations* operations, void* cookie);
 
 /* Serialize BAR mapping and probe access against device teardown. */
 status_t amdgpu_device_context_map_mmio_bar(

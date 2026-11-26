@@ -50,3 +50,10 @@ SimpleTest amdgpu_register_aperture_test :
 	amdgpu_register_aperture_test.cpp
 	../amdgpu_register_aperture.cpp
 ;
+
+SimpleTest amdgpu_vega10_mmio_test :
+	amdgpu_vega10_mmio_test.cpp
+	../amdgpu_vega10_mmio.cpp
+	../amdgpu_vega10_profile.cpp
+	../amdgpu_register_aperture.cpp
+;

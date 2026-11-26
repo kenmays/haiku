@@ -12,6 +12,26 @@ static status_t sUnmapResult = B_OK;
 static uint32 sMapCalls = 0;
 static uint32 sUnmapCalls = 0;
 static bool sMapAddressNull = false;
+static status_t sReserveResult = B_OK;
+static status_t sUnreserveResult = B_OK;
+static uint32 sReserveCalls = 0;
+static uint32 sUnreserveCalls = 0;
+
+
+static status_t
+FakeReserve(pci_module_info*, uint8, uint8, uint8, const char*, void*)
+{
+	sReserveCalls++;
+	return sReserveResult;
+}
+
+
+static status_t
+FakeUnreserve(pci_module_info*, uint8, uint8, uint8, const char*, void*)
+{
+	sUnreserveCalls++;
+	return sUnreserveResult;
+}
 
 
 static area_id
@@ -47,7 +67,9 @@ Check(bool condition, const char* name)
 int
 main()
 {
-	const amdgpu_resource_mapping_ops ops = { FakeMap, FakeUnmap };
+	const amdgpu_resource_mapping_ops ops = {
+		FakeReserve, FakeUnreserve, FakeMap, FakeUnmap
+	};
 	bool success = true;
 	amdgpu_pci_device device;
 	memset(&device, 0, sizeof(device));
@@ -104,9 +126,39 @@ main()
 		"partially created area is still releasable");
 
 	success &= Check(sMapCalls == 3 && sUnmapCalls == 3,
-		"failure paths invoke exactly the expected OS operations");
+		"mapping failure paths invoke expected OS operations");
+
+	pci_module_info pci;
+	memset(&pci, 0, sizeof(pci));
+	memset(&resources, 0, sizeof(resources));
+	success &= Check(amdgpu_init_device_resources(&resources) == B_OK,
+		"resource state reinitializes after complete cleanup");
+	sReserveResult = B_BUSY;
+	success &= Check(amdgpu_claim_device_with_ops(&pci, &device, &resources,
+		&ops) == B_BUSY && !resources.reserved
+		&& resources.magic == AMDGPU_DEVICE_RESOURCES_MAGIC,
+		"failed PCI reservation leaves an initialized unclaimed object");
+
+	sReserveResult = B_OK;
+	success &= Check(amdgpu_claim_device_with_ops(&pci, &device, &resources,
+		&ops) == B_OK && resources.reserved
+		&& resources.pci.vendor_id == 0x1002,
+		"successful PCI reservation records ownership");
+
+	sUnreserveResult = B_ERROR;
+	success &= Check(amdgpu_release_device_with_ops(&pci, &resources,
+		&ops) == B_ERROR && resources.reserved,
+		"failed PCI unreserve preserves ownership for retry");
+
+	sUnreserveResult = B_OK;
+	success &= Check(amdgpu_release_device_with_ops(&pci, &resources,
+		&ops) == B_OK && !resources.reserved
+		&& resources.magic == AMDGPU_DEVICE_RESOURCES_MAGIC,
+		"successful PCI unreserve clears resource state");
+	success &= Check(sReserveCalls == 2 && sUnreserveCalls == 2,
+		"PCI failure and retry paths invoke expected callbacks");
 	if (!success)
 		return 1;
-	printf("AMDGPU device resource mapping tests passed.\n");
+	printf("AMDGPU device resource lifecycle tests passed.\n");
 	return 0;
 }

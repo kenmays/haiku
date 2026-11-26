@@ -400,7 +400,8 @@ of unaligned and out-of-range accesses. It is registered but
 has not been run in a Haiku build environment.
 
 A narrowly scoped read-only probe is now available as
-`amdgpu_vega10_read_gb_addr_config()`. It reads only GC
+`amdgpu_vega10_read_gb_addr_config_unlocked()`, with the preferred active-device
+entry point `amdgpu_device_context_read_vega10_gb_addr_config()`. It reads only GC
 `mmGB_ADDR_CONFIG` (register index 0x063e, BASE_IDX 0), whose Vega 10 GC
 segment-zero base is 0x2000 dwords; the resulting BAR 5 byte offset is
 0x98f8. The register definition is taken from upstream

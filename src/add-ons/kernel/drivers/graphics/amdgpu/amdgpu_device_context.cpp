@@ -169,7 +169,7 @@ amdgpu_device_context_read_vega10_gb_addr_config(
 	 * Release/unmap paths take the same mutex, so the BAR area cannot be
 	 * deleted while this read is in flight.
 	 */
-	status = amdgpu_vega10_read_gb_addr_config(&context->pci_device,
+	status = amdgpu_vega10_read_gb_addr_config_unlocked(&context->pci_device,
 		&context->resources, discovery, value);
 	mutex_unlock(&context->lock);
 	return status;

@@ -42,9 +42,9 @@ amdgpu_vega10_resolve_register_aperture(
 		return status;
 
 	/*
-	 * The first 0x80000 bytes contain the documented SOC15 register hole.
-	 * Do not infer that the mapping of that hole or later addresses is
-	 * linear. Only the lower, directly mapped register range is enabled.
+	 * Keep the kernel register mapping linear. The SOC15 rmmio_remap
+	 * metadata describes a separate KFD userspace mapping page; it does
+	 * not create a hole in the BAR window used by direct register access.
 	 */
 	if (aperture->bar != AMDGPU_VEGA10_REGISTER_BAR
 		|| aperture->offset != 0
@@ -73,13 +73,11 @@ amdgpu_vega10_register_mapped_offset(
 		return B_BAD_DATA;
 	}
 
-	/* The 4 KiB remap hole and everything beyond it are not linear. */
-	if (registerByteOffset >= AMDGPU_VEGA10_MMIO_HOLE_OFFSET
-		|| sizeof(uint32) > AMDGPU_VEGA10_MMIO_HOLE_OFFSET
-			- registerByteOffset) {
-		return B_NOT_SUPPORTED;
-	}
-
+	/*
+	 * Direct kernel MMIO access uses rmmio + byte offset. KFD's remap
+	 * page at 0x7f000 is an additional userspace mapping, not an aperture
+	 * hole, so normal bounds/alignment checks are sufficient here.
+	 */
 	return amdgpu_register_offset(aperture, registerByteOffset,
 		mappedOffset);
 }

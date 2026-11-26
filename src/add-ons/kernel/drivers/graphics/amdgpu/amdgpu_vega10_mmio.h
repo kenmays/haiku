@@ -12,8 +12,8 @@
 
 /*
  * Upstream SOC15 maps register MMIO from BAR 5 for Bonaire and newer ASICs.
- * The SOC15 common path reserves the final page of the first 0x80000 bytes
- * as a special MMIO register hole.
+ * SOC15 also defines a separate KFD userspace MMIO remap page at 0x7f000;
+ * this does not interrupt the kernel's linear register aperture.
  */
 static const uint8 AMDGPU_VEGA10_REGISTER_BAR = 5;
 /*

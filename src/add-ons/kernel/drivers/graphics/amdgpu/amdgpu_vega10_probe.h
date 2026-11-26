@@ -15,6 +15,8 @@
  * accesses are performed. Caller owns PCI reservation and BAR mapping.
  */
 status_t amdgpu_vega10_read_gb_addr_config(
-	const amdgpu_register_aperture* aperture, uint32* value);
+	const amdgpu_pci_device* device,
+	const amdgpu_device_resources* resources,
+	const amdgpu_ip_discovery_info* discovery, uint32* value);
 
 #endif

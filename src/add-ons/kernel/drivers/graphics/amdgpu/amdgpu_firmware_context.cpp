@@ -108,7 +108,22 @@ amdgpu_firmware_context_load(amdgpu_firmware_context* context,
 		return B_BAD_DATA;
 	}
 
+	/*
+	 * The VFCT provider has already bounded the image extent, but validate
+	 * the copied bytes again at the ownership boundary. A matching VFCT
+	 * record alone is not enough: require a complete, checksummed PCI ROM
+	 * chain containing an AMD ATOMBIOS image for this exact device.
+	 */
+	amdgpu_vbios_info parsedVbios;
+	status = amdgpu_parse_vbios_image(biosBuffer, imageSize, &parsedVbios);
+	if (status != B_OK || parsedVbios.vendor_id != context->device.pci.vendor_id
+		|| parsedVbios.device_id != context->device.pci.device_id) {
+		memset(biosBuffer, 0, imageSize);
+		return B_BAD_DATA;
+	}
+
 	context->info = info;
+	context->info.vbios = parsedVbios;
 	context->state = AMDGPU_FIRMWARE_LOADED;
 	return B_OK;
 }

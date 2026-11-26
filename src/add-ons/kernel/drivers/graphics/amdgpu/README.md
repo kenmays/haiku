@@ -482,3 +482,26 @@ of existing Haiku Radeon drivers unless a deliberate migration is designed.
 12. Automated tests, hardware stress, suspend/resume and failure injection.
 
 Each stage must build and pass tests before hardware functionality is enabled.
+
+### Vega 10 register access policy (read-only allowlist)
+
+`amdgpu_vega10_reg_access.h/.cpp` adds a per-register policy gate keyed by
+IP hardware ID, instance, register segment, register index, and access type.
+Unknown registers and unreviewed access types are rejected by default. The
+initial allowlist contains only GC instance 0, segment 0,
+`GB_ADDR_CONFIG` (register index 0x063e), and grants read access only.
+Writes to that register and reads or writes to every other register are denied.
+
+The Vega 10 probe now consults this policy before resolving the register
+offset or dereferencing the BAR mapping. The policy does not itself touch
+MMIO and is not a general-purpose register accessor. New entries must be
+reviewed for read side effects, write semantics, reset/interrupt behavior,
+and ASIC/IP revision applicability before being added. In particular,
+status, FIFO, interrupt, doorbell, index/data, reset, and write-one-to-clear
+registers are not implicitly safe to read or write.
+
+The `amdgpu_vega10_reg_access_test` target checks the single allowed read,
+write denial, adjacent-register denial, wrong instance/segment/IP denial,
+and invalid access-type rejection. The policy and probe tests are registered
+but have not been run in a native Haiku build environment. No GPU hardware
+validation has been performed.

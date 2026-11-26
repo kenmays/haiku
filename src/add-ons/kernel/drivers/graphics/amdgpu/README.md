@@ -572,3 +572,19 @@ unreserve preserves the reservation identity so teardown can be retried.
 These are callback-contract tests only: they do not validate PCI bus-manager
 behavior or actual hardware ownership. The test remains registered but has
 not been run in a native Haiku build environment.
+
+
+### Multi-BAR release failure ordering
+
+The resource lifecycle test now also seeds two independently mapped BAR areas and
+forces deletion of the higher-numbered BAR to fail. It verifies that release
+stops immediately: the failed area and lower-numbered area remain recorded, and
+PCI unreservation is not attempted. After the injected failure is removed, a
+second release attempt must delete the remaining areas in descending BAR order
+and only then unreserve the PCI function. This specifically exercises the
+dependency ordering required for safe retry after partial teardown.
+
+The test uses callback-controlled area IDs and does not invoke real
+`delete_area()`, reserve a PCI function, or prove concurrent MMIO safety. It
+is registered in `amdgpu_device_resources_test` and remains unexecuted in a
+native Haiku build environment.

@@ -191,10 +191,11 @@ lifecycle helpers:
 
 - initialize per-device resource state before use;
 - reserve a PCI function through Haiku's PCI bus manager;
-- map a caller-selected, validated, non-prefetchable type-0 register BAR with
+- map a caller-selected, validated type-0 register BAR with
   `map_physical_memory()`, page alignment, overflow checks, and uncached
-  memory attributes; prefetchable VRAM/framebuffer apertures are rejected and
-  require a separate write-combining mapping path;
+  memory attributes; prefetchable framebuffer/VRAM apertures are rejected,
+  with the narrowly validated Vega 10 BAR 5 register-aperture exception mapped
+  uncached rather than write-combined;
 - unmap each area and release the PCI reservation in reverse order.
 
 The caller must zero-initialize the resource structure and call
@@ -202,8 +203,8 @@ The caller must zero-initialize the resource structure and call
 select the BAR only after the matching ASIC/IP block layout is known. No BAR
 is selected automatically. BAR mapping verifies the reserved PCI function
 matches the supplied device record, checks the endpoint header and BAR type,
-requires a non-prefetchable BAR, a page-aligned physical base and page-multiple
-size, rejects address overflow or an address that cannot be represented by
+requires a non-prefetchable BAR except for the exact Vega 10 BAR 5 register
+aperture, a page-aligned physical base and page-multiple size, rejects address overflow or an address that cannot be represented by
 `phys_addr_t`, and maps with uncached attributes. Failed unmaps prevent release
 of the PCI reservation, so the driver cannot silently relinquish a device
 while its MMIO mapping remains live.
@@ -486,7 +487,9 @@ Each stage must build and pass tests before hardware functionality is enabled.
 ### MMIO lifetime serialization
 
 The per-device context now exposes serialized BAR map/unmap operations and a
-context-owned Vega 10 `GB_ADDR_CONFIG` probe entry point. Each operation takes
+context-owned Vega 10 `GB_ADDR_CONFIG` probe entry point. The raw
+`amdgpu_vega10_read_gb_addr_config_unlocked()` helper is explicitly named and
+documented as requiring the caller to hold the owning context mutex. Each operation takes
 the device-context mutex and verifies that the device is in the claimed or
 node-ready state. The probe keeps that mutex held across profile/aperture
 validation and the actual volatile MMIO load. Device release takes the same

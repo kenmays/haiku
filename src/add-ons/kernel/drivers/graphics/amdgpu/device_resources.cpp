@@ -103,9 +103,20 @@ amdgpu_map_mmio_bar(const amdgpu_pci_device* device,
 		return B_BUSY;
 	if ((device->mmio_bar_mask & (1u << bar)) == 0)
 		return B_BAD_VALUE;
-	// This helper is for register apertures, not prefetchable VRAM windows.
-	if ((device->prefetchable_bar_mask & (1u << bar)) != 0)
+	/*
+	 * Prefetchable framebuffer/VRAM BARs are not register mappings.
+	 * Vega 10's BAR 5 is the documented register aperture; permit its
+	 * prefetchable attribute only for an exact ASIC match. It is still
+	 * mapped with B_UNCACHED_MEMORY below, never write-combined.
+	 */
+	bool vega10RegisterBar = bar == 5
+		&& device->pci.vendor_id == 0x1002
+		&& device->asic_family == AMDGPU_ASIC_VEGA10
+		&& (device->identification_flags & AMDGPU_PCI_ID_EXACT) != 0;
+	if ((device->prefetchable_bar_mask & (1u << bar)) != 0
+		&& !vega10RegisterBar) {
 		return B_NOT_SUPPORTED;
+	}
 	if ((device->pci.header_type & PCI_header_type_mask)
 		!= PCI_header_type_generic) {
 		return B_NOT_SUPPORTED;

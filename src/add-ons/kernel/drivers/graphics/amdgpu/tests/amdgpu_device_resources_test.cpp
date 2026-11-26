@@ -11,6 +11,8 @@ static area_id sMapResult = 7;
 static status_t sUnmapResult = B_OK;
 static uint32 sMapCalls = 0;
 static uint32 sUnmapCalls = 0;
+static area_id sUnmapOrder[16];
+static area_id sFailUnmapArea = -1;
 static bool sMapAddressNull = false;
 static status_t sReserveResult = B_OK;
 static status_t sUnreserveResult = B_OK;
@@ -48,9 +50,13 @@ FakeMap(const char*, phys_addr_t, size_t, uint32, uint32,
 
 
 static status_t
-FakeUnmap(area_id)
+FakeUnmap(area_id area)
 {
+	if (sUnmapCalls < sizeof(sUnmapOrder) / sizeof(sUnmapOrder[0]))
+		sUnmapOrder[sUnmapCalls] = area;
 	sUnmapCalls++;
+	if (area == sFailUnmapArea)
+		return B_ERROR;
 	return sUnmapResult;
 }
 
@@ -157,6 +163,44 @@ main()
 		"successful PCI unreserve clears resource state");
 	success &= Check(sReserveCalls == 2 && sUnreserveCalls == 2,
 		"PCI failure and retry paths invoke expected callbacks");
+
+	/*
+	 * A failed high BAR teardown must stop release before lower BARs and
+	 * before PCI unreservation. The retained resource state must permit a
+	 * complete retry in descending BAR order.
+	 */
+	memset(&resources, 0, sizeof(resources));
+	success &= Check(amdgpu_init_device_resources(&resources) == B_OK,
+		"resource state initializes for multi-BAR release test");
+	resources.reserved = true;
+	resources.pci = device.pci;
+	resources.mmio_area[1] = 11;
+	resources.mmio[1] = (void*)0x1100;
+	resources.mmio_physical[1] = 0x81000000;
+	resources.mmio_size[1] = B_PAGE_SIZE;
+	resources.mmio_area[3] = 33;
+	resources.mmio[3] = (void*)0x3300;
+	resources.mmio_physical[3] = 0x83000000;
+	resources.mmio_size[3] = B_PAGE_SIZE;
+	sUnmapCalls = 0;
+	sUnreserveCalls = 0;
+	sUnmapResult = B_OK;
+	sFailUnmapArea = 33;
+	success &= Check(amdgpu_release_device_with_ops(&pci, &resources,
+		&ops) == B_ERROR && resources.reserved
+		&& resources.mmio_area[3] == 33 && resources.mmio_area[1] == 11
+		&& sUnmapCalls == 1 && sUnreserveCalls == 0
+		&& sUnmapOrder[0] == 33,
+		"failed high-BAR unmap retains lower BARs and skips PCI unreserve");
+
+	sFailUnmapArea = -1;
+	sUnmapCalls = 0;
+	success &= Check(amdgpu_release_device_with_ops(&pci, &resources,
+		&ops) == B_OK && !resources.reserved
+		&& resources.mmio_area[1] == -1 && resources.mmio_area[3] == -1
+		&& sUnmapCalls == 2 && sUnmapOrder[0] == 33
+		&& sUnmapOrder[1] == 11 && sUnreserveCalls == 1,
+		"release retry unmaps remaining BARs in reverse order before unreserve");
 	if (!success)
 		return 1;
 	printf("AMDGPU device resource lifecycle tests passed.\n");

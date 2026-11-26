@@ -92,10 +92,10 @@ main()
 		0x7effc, &mappedOffset) == B_OK && mappedOffset == 0x7effc,
 		"last dword before KFD remap page is accepted");
 	success &= Check(amdgpu_vega10_register_mapped_offset(&aperture,
-		0x7f000, &mappedOffset) == B_OK && mappedOffset == 0x7f000,
+		AMDGPU_VEGA10_KFD_MMIO_REMAP_OFFSET, &mappedOffset) == B_OK && mappedOffset == AMDGPU_VEGA10_KFD_MMIO_REMAP_OFFSET,
 		"KFD remap page remains part of the linear kernel register aperture");
 	success &= Check(amdgpu_vega10_register_mapped_offset(&aperture,
-		0x7f100, &mappedOffset) == B_OK && mappedOffset == 0x7f100,
+		AMDGPU_VEGA10_KFD_MMIO_REMAP_OFFSET + 0x100, &mappedOffset) == B_OK && mappedOffset == AMDGPU_VEGA10_KFD_MMIO_REMAP_OFFSET + 0x100,
 		"offsets after the KFD remap page remain linearly mapped");
 	success &= Check(amdgpu_vega10_register_mapped_offset(&aperture,
 		0x7effe, &mappedOffset) == B_BAD_VALUE,

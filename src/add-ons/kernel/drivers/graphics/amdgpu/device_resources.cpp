@@ -18,6 +18,22 @@
 static const char* const kAMDGPUDriverName = "amdgpu";
 
 
+static status_t
+ReserveDevice(pci_module_info* pci, uint8 bus, uint8 device, uint8 function,
+	const char* driverName, void* cookie)
+{
+	return pci->reserve_device(bus, device, function, driverName, cookie);
+}
+
+
+static status_t
+UnreserveDevice(pci_module_info* pci, uint8 bus, uint8 device, uint8 function,
+	const char* driverName, void* cookie)
+{
+	return pci->unreserve_device(bus, device, function, driverName, cookie);
+}
+
+
 static area_id
 MapPhysicalMemory(const char* name, phys_addr_t physicalAddress, size_t size,
 	uint32 addressSpecification, uint32 protection, void** mappedAddress)
@@ -35,6 +51,8 @@ UnmapPhysicalMemory(area_id area)
 
 
 static const amdgpu_resource_mapping_ops kNativeMappingOps = {
+	ReserveDevice,
+	UnreserveDevice,
 	MapPhysicalMemory,
 	UnmapPhysicalMemory
 };
@@ -72,8 +90,18 @@ status_t
 amdgpu_claim_device(pci_module_info* pci, const amdgpu_pci_device* device,
 	amdgpu_device_resources* resources)
 {
-	if (pci == NULL || device == NULL || resources == NULL
-		|| pci->reserve_device == NULL || pci->unreserve_device == NULL) {
+	return amdgpu_claim_device_with_ops(pci, device, resources,
+		&kNativeMappingOps);
+}
+
+
+status_t
+amdgpu_claim_device_with_ops(pci_module_info* pci,
+	const amdgpu_pci_device* device, amdgpu_device_resources* resources,
+	const amdgpu_resource_mapping_ops* ops)
+{
+	if (pci == NULL || device == NULL || resources == NULL || ops == NULL
+		|| ops->reserve == NULL || ops->unreserve == NULL) {
 		return B_BAD_VALUE;
 	}
 	// The caller must zero-initialize storage and call the initializer first.
@@ -92,7 +120,7 @@ amdgpu_claim_device(pci_module_info* pci, const amdgpu_pci_device* device,
 	}
 	resources->pci = device->pci;
 
-	status_t status = pci->reserve_device(device->pci.bus,
+	status_t status = ops->reserve(pci, device->pci.bus,
 		device->pci.device, device->pci.function, kAMDGPUDriverName,
 		resources);
 	if (status != B_OK) {
@@ -245,20 +273,30 @@ status_t
 amdgpu_release_device(pci_module_info* pci,
 	amdgpu_device_resources* resources)
 {
-	if (pci == NULL || resources == NULL
+	return amdgpu_release_device_with_ops(pci, resources,
+		&kNativeMappingOps);
+}
+
+
+status_t
+amdgpu_release_device_with_ops(pci_module_info* pci,
+	amdgpu_device_resources* resources,
+	const amdgpu_resource_mapping_ops* ops)
+{
+	if (pci == NULL || resources == NULL || ops == NULL
+		|| ops->unreserve == NULL || ops->unmap == NULL
 		|| resources->magic != AMDGPU_DEVICE_RESOURCES_MAGIC)
 		return B_BAD_VALUE;
 
 	for (int32 bar = 5; bar >= 0; bar--) {
-		status_t status = amdgpu_unmap_mmio_bar(resources, (uint8)bar);
+		status_t status = amdgpu_unmap_mmio_bar_with_ops(resources,
+			(uint8)bar, ops);
 		if (status != B_OK)
 			return status;
 	}
 
 	if (resources->reserved) {
-		if (pci->unreserve_device == NULL)
-			return B_NOT_SUPPORTED;
-		status_t status = pci->unreserve_device(resources->pci.bus,
+		status_t status = ops->unreserve(pci, resources->pci.bus,
 			resources->pci.device, resources->pci.function,
 			kAMDGPUDriverName, resources);
 		if (status != B_OK)

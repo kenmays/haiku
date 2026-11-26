@@ -22,6 +22,8 @@ static status_t
 ReserveDevice(pci_module_info* pci, uint8 bus, uint8 device, uint8 function,
 	const char* driverName, void* cookie)
 {
+	if (pci == NULL || pci->reserve_device == NULL)
+		return B_NOT_SUPPORTED;
 	return pci->reserve_device(bus, device, function, driverName, cookie);
 }
 
@@ -30,6 +32,8 @@ static status_t
 UnreserveDevice(pci_module_info* pci, uint8 bus, uint8 device, uint8 function,
 	const char* driverName, void* cookie)
 {
+	if (pci == NULL || pci->unreserve_device == NULL)
+		return B_NOT_SUPPORTED;
 	return pci->unreserve_device(bus, device, function, driverName, cookie);
 }
 

@@ -46,7 +46,7 @@ main()
 	device.identification_flags = AMDGPU_PCI_ID_EXACT;
 	device.mmio_bar_mask = 1u << AMDGPU_VEGA10_REGISTER_BAR;
 	device.mmio_bar_size[AMDGPU_VEGA10_REGISTER_BAR]
-		= AMDGPU_VEGA10_MMIO_MIN_SIZE;
+		= AMDGPU_VEGA10_MMIO_MIN_SIZE * 8;
 
 	amdgpu_ip_block blocks[32];
 	memset(blocks, 0, sizeof(blocks));
@@ -67,7 +67,7 @@ main()
 	discovery.blocks = blocks;
 	discovery.block_capacity = 32;
 
-	static uint8 mmio[AMDGPU_VEGA10_MMIO_MIN_SIZE];
+	static uint8 mmio[AMDGPU_VEGA10_MMIO_MIN_SIZE * 8];
 	amdgpu_device_resources resources;
 	memset(&resources, 0, sizeof(resources));
 	resources.magic = AMDGPU_DEVICE_RESOURCES_MAGIC;
@@ -90,7 +90,7 @@ main()
 	uint32 mappedOffset = 0;
 	success &= Check(amdgpu_vega10_register_mapped_offset(&aperture,
 		0x7effc, &mappedOffset) == B_OK && mappedOffset == 0x7effc,
-		"last dword before register hole is accepted");
+		"last dword before KFD remap page is accepted");
 	success &= Check(amdgpu_vega10_register_mapped_offset(&aperture,
 		0x7f000, &mappedOffset) == B_OK && mappedOffset == 0x7f000,
 		"KFD remap page remains part of the linear kernel register aperture");

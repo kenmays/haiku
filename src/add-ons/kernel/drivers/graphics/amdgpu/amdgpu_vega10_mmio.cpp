@@ -9,10 +9,10 @@ status_t
 amdgpu_vega10_resolve_register_aperture(
 	const amdgpu_pci_device* device,
 	const amdgpu_device_resources* resources,
-	const amdgpu_vega10_profile* profile,
+	const amdgpu_ip_discovery_info* discovery,
 	amdgpu_register_aperture* aperture)
 {
-	if (device == NULL || resources == NULL || profile == NULL
+	if (device == NULL || resources == NULL || discovery == NULL
 		|| aperture == NULL) {
 		return B_BAD_VALUE;
 	}
@@ -23,19 +23,18 @@ amdgpu_vega10_resolve_register_aperture(
 		return B_NOT_SUPPORTED;
 	}
 
-	if (profile->asic_family != AMDGPU_ASIC_VEGA10
-		|| profile->gc_major != 9 || profile->gc_minor != 0
-		|| profile->gc_revision != 1 || profile->sdma_instances != 2
-		|| profile->umc_instances != 4) {
-		return B_BAD_DATA;
-	}
+	amdgpu_vega10_profile profile;
+	status_t status = amdgpu_validate_vega10_profile(device, discovery,
+		&profile);
+	if (status != B_OK)
+		return status;
 
 	if (resources->mmio_size[AMDGPU_VEGA10_REGISTER_BAR]
 		< AMDGPU_VEGA10_MMIO_MIN_SIZE) {
 		return B_NOT_SUPPORTED;
 	}
 
-	status_t status = amdgpu_resolve_register_aperture(device, resources,
+	status = amdgpu_resolve_register_aperture(device, resources,
 		AMDGPU_VEGA10_REGISTER_BAR, 0,
 		(uint64)resources->mmio_size[AMDGPU_VEGA10_REGISTER_BAR],
 		aperture);

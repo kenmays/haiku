@@ -13,11 +13,8 @@
 static bool
 IsValidContext(const amdgpu_device_context* context)
 {
-	return context != NULL
-		&& context->magic == AMDGPU_DEVICE_CONTEXT_MAGIC
-		&& context->lock_initialized
-		&& context->state >= AMDGPU_DEVICE_DISCOVERED
-		&& context->state <= AMDGPU_DEVICE_STOPPING;
+	/* Mutable payload fields are checked only after acquiring context->lock. */
+	return context != NULL && context->lock_initialized;
 }
 
 

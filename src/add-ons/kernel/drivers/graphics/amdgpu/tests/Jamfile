@@ -72,3 +72,8 @@ SimpleTest amdgpu_vega10_reg_access_test :
 	amdgpu_vega10_reg_access_test.cpp
 	../amdgpu_vega10_reg_access.cpp
 ;
+
+SimpleTest amdgpu_device_resources_test :
+	amdgpu_device_resources_test.cpp
+	../device_resources.cpp
+;

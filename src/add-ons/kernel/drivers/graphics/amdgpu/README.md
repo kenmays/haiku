@@ -553,8 +553,7 @@ mapping, failed deletion, retry after failed deletion, and cleanup of an area
 whose mapping call returned an area ID without a usable virtual address.
 The invariant is that a failed delete preserves the area ID and associated
 mapping metadata, while successful deletion clears them. This test target is
-registered but has not been run in a native Haiku build environment. It does
-not test PCI unreserve failure or real concurrent teardown/read behavior.
+registered but has not been run in a native Haiku build environment. PCI reserve/unreserve failure and retry coverage is documented in the following PCI ownership section; real concurrent teardown/read behavior remains untested.
 
 
 ### PCI ownership failure injection

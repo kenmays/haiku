@@ -32,9 +32,11 @@ amdgpu_vega10_read_gb_addr_config(
 	 */
 	uint32 registerByteOffset;
 	status = amdgpu_vega10_register_byte_offset(11, 0, 0,
-		0x063e, &registerByteOffset);
+		AMDGPU_VEGA10_GB_ADDR_CONFIG_REGISTER_INDEX, &registerByteOffset);
 	if (status != B_OK)
 		return status;
+	if (registerByteOffset != AMDGPU_VEGA10_GB_ADDR_CONFIG_BYTE_OFFSET)
+		return B_BAD_DATA;
 
 	uint32 mappedOffset;
 	status = amdgpu_vega10_register_mapped_offset(&aperture,

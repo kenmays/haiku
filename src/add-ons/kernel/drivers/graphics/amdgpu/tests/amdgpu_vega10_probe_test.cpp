@@ -4,7 +4,6 @@
  */
 #include <ByteOrder.h>
 #include <stdio.h>
-#include <string.h>
 
 #include "../amdgpu_vega10_probe.h"
 
@@ -27,8 +26,8 @@ main()
 	uint32 value = 0;
 	status_t status = amdgpu_vega10_read_gb_addr_config(&aperture, &value);
 	if (status != B_OK || value != 0x12345678) {
-		fprintf(stderr, "FAIL: read-only GB_ADDR_CONFIG probe (%" B_PRIx32
-			", 0x%08" B_PRIx32 ")\n", status, value);
+		fprintf(stderr, "FAIL: read-only GB_ADDR_CONFIG probe (%ld, 0x%08lx)\n",
+			(long)status, (unsigned long)value);
 		return 1;
 	}
 

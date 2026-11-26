@@ -92,20 +92,20 @@ main()
 		0x7effc, &mappedOffset) == B_OK && mappedOffset == 0x7effc,
 		"last dword before register hole is accepted");
 	success &= Check(amdgpu_vega10_register_mapped_offset(&aperture,
-		0x7f000, &mappedOffset) == B_NOT_SUPPORTED,
-		"register hole start is rejected");
+		0x7f000, &mappedOffset) == B_OK && mappedOffset == 0x7f000,
+		"KFD remap page remains part of the linear kernel register aperture");
 	success &= Check(amdgpu_vega10_register_mapped_offset(&aperture,
-		0x7f100, &mappedOffset) == B_NOT_SUPPORTED,
-		"register offsets beyond hole are rejected pending remap support");
+		0x7f100, &mappedOffset) == B_OK && mappedOffset == 0x7f100,
+		"offsets after the KFD remap page remain linearly mapped");
 	success &= Check(amdgpu_vega10_register_mapped_offset(&aperture,
-		0x7effe, &mappedOffset) == B_NOT_SUPPORTED,
-		"unaligned dword crossing into hole is rejected");
+		0x7effe, &mappedOffset) == B_BAD_VALUE,
+		"unaligned dword access is rejected");
 
 	resources.mmio_size[AMDGPU_VEGA10_REGISTER_BAR]
-		= AMDGPU_VEGA10_MMIO_HOLE_OFFSET;
+		= 0x9000;
 	success &= Check(amdgpu_vega10_resolve_register_aperture(&device,
 		&resources, &discovery, &aperture) == B_NOT_SUPPORTED,
-		"BAR 5 mapping shorter than minimum remap window is rejected");
+		"BAR 5 mapping too small for the whitelisted probe register is rejected");
 	resources.mmio_size[AMDGPU_VEGA10_REGISTER_BAR] = sizeof(mmio);
 
 	device.identification_flags = AMDGPU_PCI_ID_IP_DISCOVERY;

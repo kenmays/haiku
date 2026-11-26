@@ -318,6 +318,33 @@ retained ownership after a cleanup failure, and retrying that cleanup. It is
 registered but has not been run in a Haiku build environment.
 
 
+
+### Context-owned staged initialization
+
+The per-device context now owns an initialization sequence, a copy of its
+callback table, and the callback cookie for the duration of bring-up and
+retryable teardown. The context initialization API runs the ordered claim,
+firmware, register-map, and ASIC stages while holding the context lifecycle
+mutex. Callbacks must not re-enter context APIs while this lock is held; they
+operate through their supplied cookie and reviewed lower-level resource
+helpers. The cookie storage must remain valid until release succeeds.
+
+If initialization fails after one or more stages completed, the context
+retains the callback table, cookie, and ownership bits so context release can
+retry reverse-order cleanup. Teardown does not run the legacy direct PCI
+release path for a sequence-owned device; the sequence's final release
+callback owns that stage. Open references still block teardown.
+
+A device can no longer be marked NODE_READY after a PCI claim alone. The
+transition requires a context-owned sequence with the ASIC-initialized bit
+still recorded. The legacy claim-only path remains available for staged
+development and MMIO tests, but cannot publish or open a graphics node.
+The context lifecycle test uses test-double callbacks to verify stage order,
+node-readiness gating, open-reference protection, and reverse-order release.
+It does not represent a real firmware load, register initialization, or
+hardware bring-up. The test is registered but has not been run in a native
+Haiku build environment.
+
 ### First ASIC/IP profile: Vega 10 (metadata validation only)
 
 `amdgpu_vega10_profile.h/.cpp` introduces the first conservative ASIC profile

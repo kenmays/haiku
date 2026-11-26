@@ -69,6 +69,10 @@ amdgpu_device_context_init(amdgpu_device_context* context,
 	context->pci_device = *device;
 	sprintf(context->node_name, "graphics/amdgpu_%02x%02x%02x",
 		device->pci.bus, device->pci.device, device->pci.function);
+	amdgpu_init_sequence_init(&context->init_sequence);
+	context->init_sequence_active = false;
+	context->init_cookie = NULL;
+	memset(&context->init_operations, 0, sizeof(context->init_operations));
 	context->state = AMDGPU_DEVICE_DISCOVERED;
 	context->magic = AMDGPU_DEVICE_CONTEXT_MAGIC;
 	mutex_unlock(&context->lock);
@@ -94,6 +98,50 @@ amdgpu_device_context_claim(pci_module_info* pci,
 		&context->resources);
 	if (status == B_OK)
 		context->state = AMDGPU_DEVICE_CLAIMED;
+	mutex_unlock(&context->lock);
+	return status;
+}
+
+
+
+status_t
+amdgpu_device_context_initialize(amdgpu_device_context* context,
+	const amdgpu_init_operations* operations, void* cookie)
+{
+	if (!IsValidContext(context) || operations == NULL)
+		return B_BAD_VALUE;
+
+	status_t status = mutex_lock(&context->lock);
+	if (status != B_OK)
+		return status;
+	if (context->magic != AMDGPU_DEVICE_CONTEXT_MAGIC
+		|| context->state != AMDGPU_DEVICE_DISCOVERED
+		|| context->init_sequence_active) {
+		mutex_unlock(&context->lock);
+		return B_BUSY;
+	}
+
+	/*
+	 * Callbacks operate on the supplied cookie and must use low-level
+	 * resource helpers. The context lock serializes the complete sequence
+	 * against opens, MMIO operations, and teardown.
+	 */
+	context->init_operations = *operations;
+	context->init_cookie = cookie;
+	amdgpu_init_sequence_init(&context->init_sequence);
+	status = amdgpu_initialize_device(&context->init_sequence,
+		&context->init_operations, context->init_cookie);
+	if (context->init_sequence.completed_steps != AMDGPU_INIT_STEP_NONE)
+		context->init_sequence_active = true;
+
+	if (status == B_OK) {
+		context->state = AMDGPU_DEVICE_CLAIMED;
+	} else if (!context->init_sequence_active) {
+		context->init_cookie = NULL;
+		memset(&context->init_operations, 0,
+			sizeof(context->init_operations));
+	}
+
 	mutex_unlock(&context->lock);
 	return status;
 }
@@ -183,6 +231,12 @@ amdgpu_device_context_set_node_ready(amdgpu_device_context* context)
 	if (status != B_OK)
 		return status;
 	if (context->state != AMDGPU_DEVICE_CLAIMED) {
+		mutex_unlock(&context->lock);
+		return B_NOT_ALLOWED;
+	}
+	if (!context->init_sequence_active
+		|| (context->init_sequence.completed_steps
+			& AMDGPU_INIT_STEP_ASIC_INITIALIZED) == 0) {
 		mutex_unlock(&context->lock);
 		return B_NOT_ALLOWED;
 	}
@@ -295,7 +349,18 @@ amdgpu_device_context_release(pci_module_info* pci,
 	const amdgpu_device_state previousState = context->state;
 	context->state = AMDGPU_DEVICE_STOPPING;
 
-	status = amdgpu_release_device(pci, &context->resources);
+	if (context->init_sequence_active) {
+		status = amdgpu_unwind_device(&context->init_sequence,
+			&context->init_operations, context->init_cookie);
+		if (status == B_OK) {
+			context->init_sequence_active = false;
+			context->init_cookie = NULL;
+			memset(&context->init_operations, 0,
+				sizeof(context->init_operations));
+		}
+	} else {
+		status = amdgpu_release_device(pci, &context->resources);
+	}
 	if (status != B_OK) {
 		context->state = previousState;
 		mutex_unlock(&context->lock);

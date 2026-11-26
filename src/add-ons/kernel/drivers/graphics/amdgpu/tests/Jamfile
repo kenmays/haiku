@@ -63,6 +63,7 @@ SimpleTest amdgpu_vega10_probe_test :
 	../amdgpu_vega10_probe.cpp
 	../amdgpu_vega10_mmio.cpp
 	../amdgpu_vega10_registers.cpp
+	../amdgpu_vega10_reg_access.cpp
 	../amdgpu_vega10_profile.cpp
 	../amdgpu_register_aperture.cpp
 ;

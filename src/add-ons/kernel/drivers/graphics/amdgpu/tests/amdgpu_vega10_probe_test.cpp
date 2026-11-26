@@ -70,7 +70,8 @@ main()
 	resources.mmio_size[AMDGPU_VEGA10_REGISTER_BAR] = sizeof(mmio);
 
 	/* GC base 0x2000 + mmGB_ADDR_CONFIG 0x063e, in dword units. */
-	static const uint32 kGBAddrConfigByteOffset = 0x98f8;
+	static const uint32 kGBAddrConfigByteOffset
+		= AMDGPU_VEGA10_GB_ADDR_CONFIG_BYTE_OFFSET;
 	mmio[kGBAddrConfigByteOffset / sizeof(uint32)]
 		= B_HOST_TO_LENDIAN_INT32(0x12345678);
 

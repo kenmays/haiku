@@ -76,7 +76,7 @@ main()
 		= B_HOST_TO_LENDIAN_INT32(0x12345678);
 
 	uint32 value = 0;
-	status_t status = amdgpu_vega10_read_gb_addr_config(&device,
+	status_t status = amdgpu_vega10_read_gb_addr_config_unlocked(&device,
 		&resources, &discovery, &value);
 	if (status != B_OK || value != 0x12345678) {
 		fprintf(stderr, "FAIL: read-only GB_ADDR_CONFIG probe (%ld, 0x%08lx)\n",
@@ -84,14 +84,14 @@ main()
 		return 1;
 	}
 
-	if (amdgpu_vega10_read_gb_addr_config(&device, &resources,
+	if (amdgpu_vega10_read_gb_addr_config_unlocked(&device, &resources,
 		&discovery, NULL) != B_BAD_VALUE) {
 		fprintf(stderr, "FAIL: null output rejected\n");
 		return 1;
 	}
 
 	device.identification_flags = AMDGPU_PCI_ID_IP_DISCOVERY;
-	if (amdgpu_vega10_read_gb_addr_config(&device, &resources,
+	if (amdgpu_vega10_read_gb_addr_config_unlocked(&device, &resources,
 		&discovery, &value) != B_NOT_SUPPORTED) {
 		fprintf(stderr, "FAIL: class-only PCI match rejected\n");
 		return 1;
@@ -99,7 +99,7 @@ main()
 
 	device.identification_flags = AMDGPU_PCI_ID_EXACT;
 	discovery.version = 5;
-	if (amdgpu_vega10_read_gb_addr_config(&device, &resources,
+	if (amdgpu_vega10_read_gb_addr_config_unlocked(&device, &resources,
 		&discovery, &value) != B_BAD_VALUE) {
 		fprintf(stderr, "FAIL: malformed discovery table rejected\n");
 		return 1;

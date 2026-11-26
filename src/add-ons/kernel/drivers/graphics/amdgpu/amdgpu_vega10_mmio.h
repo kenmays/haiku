@@ -21,14 +21,14 @@ static const uint32 AMDGPU_VEGA10_MMIO_HOLE_SIZE = 0x1000;
 static const uint32 AMDGPU_VEGA10_MMIO_MIN_SIZE = 0x80000;
 
 /*
- * Resolve the complete mapped BAR 5 aperture for a validated Vega 10 device.
+ * Resolve the complete mapped BAR 5 aperture for a Vega 10 device whose complete IP-discovery topology is revalidated.
  * This only validates metadata and returns a pointer/window; it performs no
  * MMIO access. The caller must already have claimed and mapped BAR 5.
  */
 status_t amdgpu_vega10_resolve_register_aperture(
 	const amdgpu_pci_device* device,
 	const amdgpu_device_resources* resources,
-	const amdgpu_vega10_profile* profile,
+	const amdgpu_ip_discovery_info* discovery,
 	amdgpu_register_aperture* aperture);
 
 /*

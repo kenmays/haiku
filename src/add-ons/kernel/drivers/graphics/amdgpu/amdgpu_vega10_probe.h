@@ -14,7 +14,7 @@
  * whitelisted 32-bit MMIO read. No register writes or indirect/indexed
  * accesses are performed. Caller owns PCI reservation and BAR mapping.
  */
-status_t amdgpu_vega10_read_gb_addr_config(
+status_t amdgpu_vega10_read_gb_addr_config_unlocked(
 	const amdgpu_pci_device* device,
 	const amdgpu_device_resources* resources,
 	const amdgpu_ip_discovery_info* discovery, uint32* value);

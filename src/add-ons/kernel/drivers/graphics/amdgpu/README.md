@@ -388,10 +388,10 @@ KFD remap page and relies on mapped-size, dword-alignment, and access-width
 checks. The current minimum mapping size is 64 KiB, enough to cover the
 whitelisted Vega 10 `GB_ADDR_CONFIG` probe at byte offset 0x98f8.
 
-The existing generic mapping helper rejects prefetchable BARs; a BAR 5 with
-that attribute therefore remains unsupported until a suitable uncached
-register-mapping policy is reviewed. KFD's userspace remap page is not
-implemented by this driver yet.
+The generic mapping helper still rejects prefetchable framebuffer/VRAM BARs.
+It permits a prefetchable BAR 5 only for an exact Vega 10 PCI-ID/ASIC match;
+the mapping is always `B_UNCACHED_MEMORY`, never write-combined. KFD's
+userspace remap page is not implemented by this driver yet.
 
 The `amdgpu_vega10_mmio_test` target covers BAR 5 selection, exact identity,
 topology revalidation, minimum mapping size, linear offsets before, within, and after the KFD remap page, plus rejection

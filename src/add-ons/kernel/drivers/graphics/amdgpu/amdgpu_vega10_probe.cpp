@@ -10,7 +10,7 @@
 
 
 status_t
-amdgpu_vega10_read_gb_addr_config(
+amdgpu_vega10_read_gb_addr_config_unlocked(
 	const amdgpu_pci_device* device,
 	const amdgpu_device_resources* resources,
 	const amdgpu_ip_discovery_info* discovery, uint32* value)

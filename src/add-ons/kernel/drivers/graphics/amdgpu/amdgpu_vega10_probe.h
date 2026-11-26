@@ -10,9 +10,9 @@
 #include "amdgpu_vega10_mmio.h"
 
 /*
- * Read the Vega 10 GC GB_ADDR_CONFIG register. This is a single, aligned,
- * whitelisted 32-bit MMIO read. No register writes or indirect/indexed
- * accesses are performed. Caller owns PCI reservation and BAR mapping.
+ * Low-level unlocked read helper for the Vega 10 GC GB_ADDR_CONFIG register.
+ * Call only while holding the owning device-context mutex; the context API
+ * provides this serialization. This performs one whitelisted 32-bit read.
  */
 status_t amdgpu_vega10_read_gb_addr_config_unlocked(
 	const amdgpu_pci_device* device,

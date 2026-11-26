@@ -238,7 +238,17 @@ amdgpu_device_context_close(void* cookie)
 	if (!IsValidContext(context))
 		return B_BAD_VALUE;
 
+	status_t status = mutex_lock(&context->lock);
+	if (status != B_OK)
+		return status;
+	if (context->magic != AMDGPU_DEVICE_CONTEXT_MAGIC
+		|| context->open_count == 0) {
+		mutex_unlock(&context->lock);
+		return B_BAD_VALUE;
+	}
+
 	// The reference is dropped by free(), after close-side work is complete.
+	mutex_unlock(&context->lock);
 	return B_OK;
 }
 

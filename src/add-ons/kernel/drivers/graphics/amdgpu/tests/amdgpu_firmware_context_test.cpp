@@ -12,6 +12,7 @@ static bool sMismatchIdentity = false;
 static const size_t kTestImageSize = 512;
 static size_t sLoadedImageSize = kTestImageSize;
 static status_t sQueryStatus = B_BUFFER_OVERFLOW;
+static status_t sLoadStatus = B_OK;
 static uint16 sRomDeviceId = 0x73bf;
 static bool sCorruptRom = false;
 
@@ -100,6 +101,10 @@ amdgpu_load_vbios_for_pci_device(const amdgpu_pci_device* device,
 		return B_BAD_VALUE;
 	if (biosCapacity < sLoadedImageSize)
 		return B_BUFFER_OVERFLOW;
+	if (sLoadStatus != B_OK) {
+		memset(biosBuffer, 0xa5, 16);
+		return sLoadStatus;
+	}
 	memset(biosBuffer, 0xa5, sLoadedImageSize);
 	if (sLoadedImageSize == kTestImageSize)
 		BuildTestRom(biosBuffer, sLoadedImageSize);
@@ -161,6 +166,16 @@ main()
 		"undersized destination does not advance context");
 
 	uint8 image[kTestImageSize];
+	memset(image, 0x5a, sizeof(image));
+	sLoadStatus = B_IO_ERROR;
+	success &= Check(amdgpu_firmware_context_load(&context, image,
+		sizeof(image)) == B_IO_ERROR
+		&& context.state == AMDGPU_FIRMWARE_SIZE_KNOWN
+		&& image[0] == 0 && image[15] == 0
+		&& image[kTestImageSize - 1] == 0,
+		"provider failure clears partially copied firmware buffer");
+	sLoadStatus = B_OK;
+
 	memset(image, 0, sizeof(image));
 	success &= Check(amdgpu_firmware_context_load(&context, image,
 		sizeof(image)) == B_OK

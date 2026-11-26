@@ -506,13 +506,17 @@ mutex is a sleepable lifecycle lock: these APIs are for thread context, not
 interrupt handlers. No lock is held across interrupt callbacks, and no
 interrupt path is implemented.
 
-The device-context test now injects the low-level map, unmap, and probe
-operations. It verifies that all three are rejected before PCI claim, that
-claimed-state operations are routed through the context, and that the probe
-callback executes while the context mutex is held. This is a lock-contract
-test using stubs, not a parallel stress test or proof of hardware MMIO safety.
-The test is registered but has not been run in a native Haiku build
-environment.
+The device-context test injects the low-level map, unmap, and probe
+operations and verifies that they are rejected before PCI claim. Its threaded
+lifetime case blocks the probe callback while it owns the context lock, starts
+a separate teardown thread, and waits for an explicit contention signal from
+the teardown thread's lock attempt. Only then does the test release the probe
+and verify teardown completes afterward. The test lock implementation uses an
+atomic spin lock, while Haiku threads and semaphores coordinate the two workers;
+this exercises real cross-thread exclusion in the test harness rather than a
+single shared boolean. It still does not validate the kernel mutex
+implementation itself, native BAR mappings, or GPU hardware behavior. The
+test is registered but has not been run in a native Haiku build environment.
 
 ### Vega 10 register access policy (read-only allowlist)
 

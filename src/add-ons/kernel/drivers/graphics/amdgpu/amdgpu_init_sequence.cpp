@@ -16,6 +16,12 @@ amdgpu_init_sequence_init(amdgpu_init_sequence* sequence)
 }
 
 
+static const uint32 kKnownInitSteps = AMDGPU_INIT_STEP_DEVICE_CLAIMED
+	| AMDGPU_INIT_STEP_FIRMWARE_READY
+	| AMDGPU_INIT_STEP_REGISTERS_MAPPED
+	| AMDGPU_INIT_STEP_ASIC_INITIALIZED;
+
+
 static bool
 HasCompleteOperations(const amdgpu_init_operations* operations)
 {
@@ -35,7 +41,8 @@ status_t
 amdgpu_unwind_device(amdgpu_init_sequence* sequence,
 	const amdgpu_init_operations* operations, void* cookie)
 {
-	if (sequence == NULL || !HasCompleteOperations(operations))
+	if (sequence == NULL || !HasCompleteOperations(operations)
+		|| (sequence->completed_steps & ~kKnownInitSteps) != 0)
 		return B_BAD_VALUE;
 
 	sequence->rollback_error = B_OK;
@@ -76,7 +83,8 @@ status_t
 amdgpu_initialize_device(amdgpu_init_sequence* sequence,
 	const amdgpu_init_operations* operations, void* cookie)
 {
-	if (sequence == NULL || !HasCompleteOperations(operations))
+	if (sequence == NULL || !HasCompleteOperations(operations)
+		|| (sequence->completed_steps & ~kKnownInitSteps) != 0)
 		return B_BAD_VALUE;
 	if (sequence->completed_steps != AMDGPU_INIT_STEP_NONE)
 		return B_BUSY;

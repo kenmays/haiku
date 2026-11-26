@@ -535,3 +535,22 @@ write denial, adjacent-register denial, wrong instance/segment/IP denial,
 and invalid access-type rejection. The policy and probe tests are registered
 but have not been run in a native Haiku build environment. No GPU hardware
 validation has been performed.
+
+
+### MMIO mapping failure injection
+
+The resource mapper now has a narrow per-call OS-operation seam:
+`amdgpu_map_mmio_bar_with_ops()` and
+`amdgpu_unmap_mmio_bar_with_ops()` accept explicit map/unmap callbacks.
+Production context operations continue to use the native Haiku
+`map_physical_memory()` and `delete_area()` wrappers. The callbacks are
+borrowed only for the duration of one operation; there is no global mutable
+test hook and no change to production call sites.
+
+The `amdgpu_device_resources_test` target injects map failure, successful
+mapping, failed deletion, retry after failed deletion, and cleanup of an area
+whose mapping call returned an area ID without a usable virtual address.
+The invariant is that a failed delete preserves the area ID and associated
+mapping metadata, while successful deletion clears them. This test target is
+registered but has not been run in a native Haiku build environment. It does
+not test PCI unreserve failure or real concurrent teardown/read behavior.

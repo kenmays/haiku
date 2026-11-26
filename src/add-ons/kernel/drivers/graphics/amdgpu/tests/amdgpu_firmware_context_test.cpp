@@ -33,9 +33,9 @@ BuildTestRom(void* buffer, size_t size)
 	image[0x30] = 0x01; // one 512-byte image
 	image[0x34] = 0x00; // x86 option ROM image
 	image[0x35] = 0x80; // last image in chain
-	image[0x48] = 0x40; // ATOM header offset
-	image[0x40] = 34; // ATOM common header size
-	memcpy(image + 0x44, "ATOM", 4);
+	image[0x48] = 0x80; // ATOM header offset
+	image[0x80] = 34; // ATOM common header size
+	memcpy(image + 0x84, "ATOM", 4);
 
 	uint8 checksum = 0;
 	for (size_t i = 0; i < size; i++)

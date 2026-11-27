@@ -31,6 +31,25 @@ MatchesDevice(const amdgpu_firmware_context* context,
 		&& info.vbios.device_id == context->device.pci.device_id;
 }
 
+static bool
+MatchesQuery(const amdgpu_firmware_context* context,
+	const amdgpu_vfct_info& info)
+{
+	const amdgpu_vfct_info& queried = context->info;
+	return info.image_offset == queried.image_offset
+		&& info.image_size == queried.image_size
+		&& info.entry_offset == queried.entry_offset
+		&& info.bus == queried.bus
+		&& info.device == queried.device
+		&& info.function == queried.function
+		&& info.vendor_id == queried.vendor_id
+		&& info.device_id == queried.device_id
+		&& info.subsystem_vendor_id == queried.subsystem_vendor_id
+		&& info.subsystem_device_id == queried.subsystem_device_id
+		&& info.revision == queried.revision
+		&& info.bus_matches == queried.bus_matches;
+}
+
 
 status_t
 amdgpu_firmware_context_init(amdgpu_firmware_context* context,
@@ -105,7 +124,8 @@ amdgpu_firmware_context_load(amdgpu_firmware_context* context,
 	}
 	if (imageSize != context->required_size
 		|| info.image_size != context->required_size
-		|| !MatchesDevice(context, info)) {
+		|| !MatchesDevice(context, info)
+		|| !MatchesQuery(context, info)) {
 		size_t clearSize = imageSize < biosCapacity ? imageSize : biosCapacity;
 		memset(biosBuffer, 0, clearSize);
 		return B_BAD_DATA;

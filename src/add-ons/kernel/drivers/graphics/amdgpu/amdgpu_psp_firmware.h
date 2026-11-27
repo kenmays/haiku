@@ -43,7 +43,10 @@ struct amdgpu_psp_firmware_segment {
 	uint32 feature_version;
 };
 
+static const uint32 AMDGPU_PSP_FIRMWARE_BUNDLE_MAGIC = 0x41505342;
+
 struct amdgpu_psp_firmware_bundle {
+	uint32 magic;
 	const void* sos_container;
 	size_t sos_container_size;
 	const void* asd_container;

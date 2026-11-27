@@ -87,3 +87,55 @@ amdgpu_parse_vega10_psp_firmware(const void* data, size_t size,
 	info->ip_version_minor = ipMinor;
 	return B_OK;
 }
+
+
+
+status_t
+amdgpu_parse_vega10_asd_firmware(const void* data, size_t size,
+	amdgpu_psp_firmware_info* info)
+{
+	/*
+	 * Linux parse_psp_v1_bin_descriptor() treats ASD as a common firmware
+	 * header with a single contiguous ucode array, not as an SOS package.
+	 */
+	static const size_t kCommonHeaderSize = 32;
+	static const uint16 kExpectedHeaderMajor = 1;
+	static const uint16 kExpectedHeaderMinor = 0;
+	static const uint16 kVega10MP0Major = 9;
+	static const uint16 kVega10MP0Minor = 0;
+
+	if (info == NULL)
+		return B_BAD_VALUE;
+	memset(info, 0, sizeof(*info));
+	if (data == NULL || size < kCommonHeaderSize)
+		return B_BAD_VALUE;
+
+	const uint8* bytes = (const uint8*)data;
+	const uint32 fileSize = ReadLE32(bytes);
+	const uint32 headerSize = ReadLE32(bytes + 4);
+	const uint16 headerMajor = ReadLE16(bytes + 8);
+	const uint16 headerMinor = ReadLE16(bytes + 10);
+	const uint16 ipMajor = ReadLE16(bytes + 12);
+	const uint16 ipMinor = ReadLE16(bytes + 14);
+	const uint32 firmwareVersion = ReadLE32(bytes + 16);
+	const uint32 payloadSize = ReadLE32(bytes + 20);
+	const uint32 payloadOffset = ReadLE32(bytes + 24);
+
+	if (fileSize != size || headerSize < kCommonHeaderSize
+		|| headerSize > fileSize || headerMajor != kExpectedHeaderMajor
+		|| headerMinor != kExpectedHeaderMinor
+		|| ipMajor != kVega10MP0Major || ipMinor != kVega10MP0Minor)
+		return B_BAD_DATA;
+
+	if (payloadSize == 0 || payloadOffset < headerSize
+		|| payloadOffset > fileSize
+		|| payloadSize > fileSize - payloadOffset)
+		return B_BAD_DATA;
+
+	info->firmware_version = firmwareVersion;
+	info->payload_offset = payloadOffset;
+	info->payload_size = payloadSize;
+	info->ip_version_major = ipMajor;
+	info->ip_version_minor = ipMinor;
+	return B_OK;
+}

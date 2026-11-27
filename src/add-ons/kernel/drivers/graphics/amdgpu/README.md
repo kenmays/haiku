@@ -652,3 +652,28 @@ size-known state and may retry. The test injects a partial-copy provider
 failure and verifies the complete destination image is zeroed. This does not
 protect against a provider that writes beyond the supplied capacity; that
 remains a provider-contract and memory-safety requirement.
+
+
+### Bounded VBIOS staging adapter (no firmware execution)
+
+`amdgpu_vbios_stage.h/.cpp` provides load and unload callbacks compatible
+with the generic initialization coordinator. The caller supplies a validated
+per-device firmware context and a bounded buffer whose storage remains alive
+until coordinator teardown. The load callback performs the VFCT size query,
+checks the caller's capacity before copying, and delegates to the existing
+option-ROM parser and PCI identity validation. The unload callback clears the
+entire caller-provided staging allocation and resets/reinitializes the
+per-device firmware context, so the option ROM is not retained as loaded
+state after rollback.
+
+This adapter stages a validated PCI VBIOS option ROM only. It is not a PSP
+firmware loader, does not select firmware binaries for PSP/SMU/GC/SDMA, and
+does not submit or execute firmware on the GPU. A generation-specific
+initialization callback must not interpret this staged VBIOS as executable
+microcode. The buffer and stage cookie are caller-owned and must remain valid
+until the coordinator has successfully completed its unload callback.
+
+The firmware-context test now covers successful bounded staging, full-buffer
+clearing on unload, context reset, and rejection of an undersized staging
+buffer before any copy. These tests are registered but have not been run in a
+native Haiku build environment.

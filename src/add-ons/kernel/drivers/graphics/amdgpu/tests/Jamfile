@@ -80,3 +80,8 @@ SimpleTest amdgpu_device_resources_test :
 	amdgpu_device_resources_test.cpp
 	../device_resources.cpp
 ;
+
+SimpleTest amdgpu_psp_firmware_test :
+	amdgpu_psp_firmware_test.cpp
+	../amdgpu_psp_firmware.cpp
+;

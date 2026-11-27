@@ -139,3 +139,79 @@ amdgpu_parse_vega10_asd_firmware(const void* data, size_t size,
 	info->ip_version_minor = ipMinor;
 	return B_OK;
 }
+
+
+
+void
+amdgpu_psp_firmware_bundle_init(amdgpu_psp_firmware_bundle* bundle)
+{
+	if (bundle != NULL)
+		memset(bundle, 0, sizeof(*bundle));
+}
+
+
+status_t
+amdgpu_psp_firmware_bundle_load(amdgpu_psp_firmware_bundle* bundle,
+	const void* sosData, size_t sosSize, const void* asdData, size_t asdSize)
+{
+	if (bundle == NULL || sosData == NULL || asdData == NULL
+		|| sosSize == 0 || asdSize == 0)
+		return B_BAD_VALUE;
+	if (bundle->loaded)
+		return B_BUSY;
+
+	/*
+	 * Parse both files into local metadata first. Do not publish a partial
+	 * bundle if either container fails validation.
+	 */
+	amdgpu_psp_firmware_info sosInfo;
+	amdgpu_psp_firmware_info asdInfo;
+	status_t status = amdgpu_parse_vega10_psp_firmware(sosData, sosSize,
+		&sosInfo);
+	if (status != B_OK) {
+		amdgpu_psp_firmware_bundle_init(bundle);
+		return status;
+	}
+
+	status = amdgpu_parse_vega10_asd_firmware(asdData, asdSize, &asdInfo);
+	if (status != B_OK) {
+		amdgpu_psp_firmware_bundle_init(bundle);
+		return status;
+	}
+
+	const uint8* sosBytes = (const uint8*)sosData;
+	const uint8* asdBytes = (const uint8*)asdData;
+	bundle->sos_container = sosData;
+	bundle->sos_container_size = sosSize;
+	bundle->asd_container = asdData;
+	bundle->asd_container_size = asdSize;
+
+	bundle->sys.data = sosBytes + sosInfo.payload_offset
+		+ sosInfo.sys_offset;
+	bundle->sys.size = sosInfo.sys_size;
+	bundle->sys.firmware_version = sosInfo.firmware_version;
+	bundle->sys.feature_version = sosInfo.feature_version;
+
+	bundle->sos.data = sosBytes + sosInfo.payload_offset
+		+ sosInfo.sos_offset;
+	bundle->sos.size = sosInfo.sos_size;
+	bundle->sos.firmware_version = sosInfo.firmware_version;
+	bundle->sos.feature_version = sosInfo.feature_version;
+
+	bundle->asd.data = asdBytes + asdInfo.payload_offset;
+	bundle->asd.size = asdInfo.payload_size;
+	bundle->asd.firmware_version = asdInfo.firmware_version;
+	bundle->asd.feature_version = asdInfo.feature_version;
+	bundle->loaded = true;
+	return B_OK;
+}
+
+
+status_t
+amdgpu_psp_firmware_bundle_unload(amdgpu_psp_firmware_bundle* bundle)
+{
+	if (bundle == NULL)
+		return B_BAD_VALUE;
+	amdgpu_psp_firmware_bundle_init(bundle);
+	return B_OK;
+}

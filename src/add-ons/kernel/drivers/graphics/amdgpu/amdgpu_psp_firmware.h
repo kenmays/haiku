@@ -35,4 +35,30 @@ status_t amdgpu_parse_vega10_psp_firmware(const void* data, size_t size,
 status_t amdgpu_parse_vega10_asd_firmware(const void* data, size_t size,
 	amdgpu_psp_firmware_info* info);
 
+/* Borrowed firmware views; source buffers remain owned by the caller. */
+struct amdgpu_psp_firmware_segment {
+	const uint8* data;
+	size_t size;
+	uint32 firmware_version;
+	uint32 feature_version;
+};
+
+struct amdgpu_psp_firmware_bundle {
+	const void* sos_container;
+	size_t sos_container_size;
+	const void* asd_container;
+	size_t asd_container_size;
+	amdgpu_psp_firmware_segment sys;
+	amdgpu_psp_firmware_segment sos;
+	amdgpu_psp_firmware_segment asd;
+	bool loaded;
+};
+
+void amdgpu_psp_firmware_bundle_init(amdgpu_psp_firmware_bundle* bundle);
+status_t amdgpu_psp_firmware_bundle_load(
+	amdgpu_psp_firmware_bundle* bundle, const void* sos_data,
+	size_t sos_size, const void* asd_data, size_t asd_size);
+status_t amdgpu_psp_firmware_bundle_unload(
+	amdgpu_psp_firmware_bundle* bundle);
+
 #endif

@@ -686,3 +686,29 @@ The firmware-context test now covers successful bounded staging, full-buffer
 clearing on unload, context reset, and rejection of an undersized staging
 buffer before any copy. These tests are registered but have not been run in a
 native Haiku build environment.
+
+
+### Vega 10 PSP 3.1 firmware-container validation
+
+`amdgpu_psp_firmware.h/.cpp` parses the bounded legacy PSP firmware v1.0
+container used by the Vega 10 PSP 3.1 path. The parser validates the complete
+file-size declaration, minimum PSP header size, header version 1.0, MP0 IP
+version 9.0, payload offset and length, and the SOS segment offset and length.
+It reports metadata for the SYS prefix and SOS segment without copying,
+submitting, or executing either segment.
+
+Upstream Linux's Vega 10 PSP 3.1 implementation requests
+`amdgpu/vega10_sos.bin` and `amdgpu/vega10_asd.bin`, and derives the SYS and
+SOS segment boundaries from the PSP v1.0 header. The parser follows the
+corresponding common-header and legacy PSP descriptor layout documented in
+Linux `amdgpu_ucode.h`. The upstream generic firmware validation currently
+checks that the declared file size equals the supplied firmware size; this
+Haiku parser adds explicit structural bounds checks. It does not claim
+cryptographic authenticity or verify the header CRC field.
+
+This is metadata validation only. Firmware discovery from Haiku's firmware
+filesystem, per-file ASD validation, version policy, PSP ring setup, command
+submission, and hardware execution remain unimplemented and disabled. The
+`amdgpu_psp_firmware_test` target covers valid metadata and malformed sizes,
+versions, payload ranges, and SOS ranges; it is registered but has not been
+run in a native Haiku build environment.

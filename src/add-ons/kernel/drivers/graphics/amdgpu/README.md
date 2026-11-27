@@ -671,7 +671,16 @@ firmware loader, does not select firmware binaries for PSP/SMU/GC/SDMA, and
 does not submit or execute firmware on the GPU. A generation-specific
 initialization callback must not interpret this staged VBIOS as executable
 microcode. The buffer and stage cookie are caller-owned and must remain valid
-until the coordinator has successfully completed its unload callback.
+until the coordinator has successfully completed its unload callback. Since
+ the coordinator passes one cookie to every operation, callers that also need
+PCI/resource state should use a caller-owned aggregate cookie and small
+dispatch wrappers that forward the firmware callbacks to its embedded
+`amdgpu_vbios_stage`; the stage object itself should not be reused as an
+unrelated hardware-resource cookie.
+
+Each load attempt clears the complete bounded allocation first. Query failure,
+insufficient capacity, provider failure, and ROM validation failure therefore
+cannot leave stale bytes from an earlier attempt in the staging buffer.
 
 The firmware-context test now covers successful bounded staging, full-buffer
 clearing on unload, context reset, and rejection of an undersized staging

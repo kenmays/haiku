@@ -103,8 +103,14 @@ call, allocation, PCI access, or MMIO.
 The separate `amdgpu_firmware_context_test` target tests the per-device
 firmware state machine with injected provider stubs: initialization, size-query
 and load transitions, undersized buffers, stale-query invalidation, PCI-ID
-mismatches, changed image size between query and load, and clearing any copied
-image bytes after a mismatch. It can be built with
+mismatches, changed VFCT record metadata or image size between query and load,
+and clearing any copied image bytes after a mismatch or provider failure. It
+also interleaves two independent PCI-function contexts with different device
+IDs, then verifies that a failed reinitialization clears only its destination
+context and cannot corrupt the other GPU's loaded identity. Initialization
+snapshots the candidate before clearing the context, so reinitializing from
+the context's own device field is safe; invalid candidates leave an
+uninitialized context rather than stale state. It can be built with
 `jam amdgpu_firmware_context_test`. Like the other AMDGPU tests, it is
 registered but has not yet been executed in a Haiku build environment.
 

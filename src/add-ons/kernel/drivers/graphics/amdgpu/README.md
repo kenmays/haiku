@@ -753,8 +753,8 @@ but has not been run in a native Haiku build environment.
 ### Vega 10 PSP firmware acquisition adapter
 
 `amdgpu_psp_firmware_provider.h/.cpp` adds a callback-based acquisition layer
-for the two upstream Vega 10 PSP 3.1 filenames:
-`amdgpu/vega10_sos.bin` and `amdgpu/vega10_asd.bin`. The adapter requests
+for the two upstream Vega 10 PSP 3.1 firmware basenames:
+`vega10_sos.bin` and `vega10_asd.bin`. The adapter requests
 each image independently, transfers ownership only on a successful provider
 callback, validates both containers, and applies the caller-supplied version
 policy before setting its `ready` state. It releases buffers in reverse
@@ -762,14 +762,29 @@ acquisition order. If a release fails, the exact pointer/size ownership record
 is retained and `unload()` can be retried; the associated bundle is cleared
 before any backing allocation is released.
 
-This is deliberately a provider contract, not an implementation of a native
-Haiku firmware filesystem API. Haiku's `firmware_get()/firmware_put()`
-interface inspected here belongs to the FreeBSD network compatibility layer
-and is not linked into this native graphics driver. A future native provider
-must be supplied by a reviewed platform integration; this adapter does not
-open files, allocate kernel memory, authenticate firmware, or submit PSP
-commands. Provider callbacks must run in thread context and must obey the
-ownership contract in the header.
+The generic provider remains independently injectable, and
+`amdgpu_psp_firmware_haiku.cpp` now supplies a concrete platform adapter using
+Haiku's existing `firmware_get()/firmware_put()` implementation from
+`libfreebsd_network.a`. The AMDGPU driver links that static library and
+defines the compatibility metadata required by the loader. The firmware API
+resolves files below
+`<system-data>/firmware/amdgpu/` (with the system non-packaged data directory
+checked first), so the expected installed paths are
+`/boot/system/data/firmware/amdgpu/vega10_sos.bin` and
+`/boot/system/data/firmware/amdgpu/vega10_asd.bin`, or their non-packaged
+counterparts. The adapter accepts only those two basenames, retains each
+`struct firmware` handle until the matching release callback, and rejects
+empty or larger-than-16-MiB images before parsing. The size cap is checked
+after `firmware_get()` has read the file, because the compatibility API
+currently performs the allocation and read internally.
+
+Call `amdgpu_psp_firmware_haiku_context_init()` on caller-owned context
+storage, then use `amdgpu_psp_firmware_provider_load_haiku()`. Keep the
+context, provider, and bundle alive until
+`amdgpu_psp_firmware_provider_unload()` succeeds. Firmware lookup and release
+are thread-context operations; do not call them from interrupt context or
+while holding a spinlock. This adapter loads and validates files only: it
+does not authenticate firmware or submit PSP commands.
 
 The `amdgpu_psp_firmware_provider_test` target injects load and release
 callbacks. It covers the two firmware names, successful load/unload ordering,

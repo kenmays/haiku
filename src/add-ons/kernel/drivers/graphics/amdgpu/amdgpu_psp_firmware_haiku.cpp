@@ -6,8 +6,10 @@
  */
 #include <string.h>
 
+extern "C" {
 #include <sys/firmware.h>
 #include <sys/haiku-module.h>
+}
 
 #include "amdgpu_psp_firmware_provider.h"
 

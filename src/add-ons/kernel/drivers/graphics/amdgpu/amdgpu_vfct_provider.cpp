@@ -34,6 +34,7 @@ amdgpu_get_vbios_from_vfct(acpi_table_module_info* acpi,
 	if (acpi->get_table == NULL || acpi->put_table == NULL)
 		return B_NOT_SUPPORTED;
 
+	size_t copiedSize = 0;
 	void* table = NULL;
 	status_t status = acpi->get_table("VFCT", 1, &table);
 	if (status != B_OK)
@@ -67,6 +68,7 @@ amdgpu_get_vbios_from_vfct(acpi_table_module_info* acpi,
 				} else {
 					memcpy(biosBuffer, bytes + parsed.image_offset,
 						parsed.image_size);
+					copiedSize = parsed.image_size;
 					*info = parsed;
 				}
 			}
@@ -74,8 +76,18 @@ amdgpu_get_vbios_from_vfct(acpi_table_module_info* acpi,
 	}
 
 	status_t releaseStatus = acpi->put_table(table);
-	if (releaseStatus != B_OK)
+	if (releaseStatus != B_OK) {
+		/*
+		 * Do not return data whose backing ACPI table could not be
+		 * released cleanly. In particular, a successful image copy must
+		 * not survive a failed put_table().
+		 */
+		if (copiedSize != 0)
+			memset(biosBuffer, 0, copiedSize);
+		*biosSize = 0;
+		memset(info, 0, sizeof(*info));
 		return releaseStatus;
+	}
 
 	return status;
 }

@@ -3,6 +3,7 @@
  * Distributed under the terms of the MIT License.
  */
 #include "../amdgpu_firmware_context.h"
+#include "../amdgpu_vbios_stage.h"
 #include "../amdgpu_vfct_provider.h"
 
 #include <stdio.h>
@@ -250,6 +251,40 @@ main()
 		&& context.magic == 0
 		&& context.state == AMDGPU_FIRMWARE_UNINITIALIZED,
 		"context reset clears state");
+
+	/*
+	 * The init-sequence adapter stages only the validated PCI option ROM.
+	 * It does not implement PSP firmware submission or execution.
+	 */
+	amdgpu_firmware_context stagedContext;
+	memset(&stagedContext, 0, sizeof(stagedContext));
+	uint8 stagingBuffer[kTestImageSize];
+	memset(stagingBuffer, 0x5a, sizeof(stagingBuffer));
+	amdgpu_vbios_stage stage;
+	success &= Check(amdgpu_firmware_context_init(&stagedContext, &device)
+		== B_OK && amdgpu_vbios_stage_init(&stage, &stagedContext,
+			stagingBuffer, sizeof(stagingBuffer)) == B_OK,
+		"initialize bounded VBIOS stage");
+	success &= Check(amdgpu_vbios_stage_load_callback(&stage) == B_OK
+		&& stage.loaded && stage.image_size == kTestImageSize
+		&& stagedContext.state == AMDGPU_FIRMWARE_LOADED,
+		"coordinator callback loads and validates bounded option ROM");
+	success &= Check(amdgpu_vbios_stage_unload_callback(&stage) == B_OK
+		&& !stage.loaded && stage.image_size == 0
+		&& stagedContext.state == AMDGPU_FIRMWARE_DEVICE_IDENTIFIED
+		&& stagingBuffer[0] == 0
+		&& stagingBuffer[sizeof(stagingBuffer) - 1] == 0,
+		"unload callback clears staging allocation and resets context");
+
+	amdgpu_vbios_stage smallStage;
+	uint8 smallStagingBuffer[32];
+	success &= Check(amdgpu_firmware_context_init(&stagedContext, &device)
+		== B_OK && amdgpu_vbios_stage_init(&smallStage, &stagedContext,
+			smallStagingBuffer, sizeof(smallStagingBuffer)) == B_OK
+		&& amdgpu_vbios_stage_load_callback(&smallStage) == B_BUFFER_OVERFLOW
+		&& !smallStage.loaded
+		&& stagedContext.state == AMDGPU_FIRMWARE_SIZE_KNOWN,
+		"undersized VBIOS staging allocation is rejected before copy");
 
 	sMismatchIdentity = true;
 	success &= Check(amdgpu_firmware_context_init(&context, &device) == B_OK

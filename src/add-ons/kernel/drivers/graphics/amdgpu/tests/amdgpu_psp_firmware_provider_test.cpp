@@ -145,6 +145,17 @@ main()
 	memset(&fake, 0, sizeof(fake));
 	BuildSOS(fake.sos, sizeof(fake.sos));
 	BuildASD(fake.asd, sizeof(fake.asd));
+	fake.fail_load_number = 1;
+	amdgpu_psp_firmware_provider_init(&provider);
+	amdgpu_psp_firmware_bundle_init(&bundle);
+	success &= Check(amdgpu_psp_firmware_provider_load(&provider, &bundle,
+		&ops, &fake, &policy) == B_ENTRY_NOT_FOUND && fake.releases == 0
+		&& provider.bundle == NULL && !provider.ready,
+		"SOS acquisition failure leaves no owned buffers or bundle state");
+
+	memset(&fake, 0, sizeof(fake));
+	BuildSOS(fake.sos, sizeof(fake.sos));
+	BuildASD(fake.asd, sizeof(fake.asd));
 	fake.fail_load_number = 2;
 	amdgpu_psp_firmware_provider_init(&provider);
 	amdgpu_psp_firmware_bundle_init(&bundle);

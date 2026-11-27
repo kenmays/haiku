@@ -35,6 +35,22 @@ status_t amdgpu_parse_vega10_psp_firmware(const void* data, size_t size,
 status_t amdgpu_parse_vega10_asd_firmware(const void* data, size_t size,
 	amdgpu_psp_firmware_info* info);
 
+/*
+ * Explicit caller-selected compatibility bounds. The project does not yet
+ * ship authoritative minimum versions for every Vega 10 board/firmware set;
+ * callers must populate these from a validated platform policy.
+ */
+struct amdgpu_psp_firmware_version_policy {
+	uint32 sos_firmware_min;
+	uint32 sos_firmware_max;
+	uint32 sos_feature_min;
+	uint32 sos_feature_max;
+	uint32 asd_firmware_min;
+	uint32 asd_firmware_max;
+	uint32 asd_feature_min;
+	uint32 asd_feature_max;
+};
+
 /* Borrowed firmware views; source buffers remain owned by the caller. */
 struct amdgpu_psp_firmware_segment {
 	const uint8* data;
@@ -63,5 +79,8 @@ status_t amdgpu_psp_firmware_bundle_load(
 	size_t sos_size, const void* asd_data, size_t asd_size);
 status_t amdgpu_psp_firmware_bundle_unload(
 	amdgpu_psp_firmware_bundle* bundle);
+status_t amdgpu_psp_firmware_bundle_check_versions(
+	const amdgpu_psp_firmware_bundle* bundle,
+	const amdgpu_psp_firmware_version_policy* policy);
 
 #endif

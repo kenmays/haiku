@@ -189,6 +189,40 @@ main()
 	success &= Check(amdgpu_firmware_context_query(&context) == B_BUSY,
 		"loaded context cannot be queried again");
 
+	/*
+	 * Two devices may be queried and loaded independently. Interleave their
+	 * operations to catch accidental shared firmware identity or size state.
+	 */
+	amdgpu_pci_device secondDevice = device;
+	secondDevice.pci.device_id = 0x731f;
+	secondDevice.pci.device = 4;
+	amdgpu_firmware_context secondContext;
+	memset(&secondContext, 0, sizeof(secondContext));
+	success &= Check(amdgpu_firmware_context_reset(&context) == B_OK
+		&& amdgpu_firmware_context_init(&context, &device) == B_OK
+		&& amdgpu_firmware_context_init(&secondContext, &secondDevice) == B_OK
+		&& amdgpu_firmware_context_query(&context) == B_OK
+		&& amdgpu_firmware_context_query(&secondContext) == B_OK,
+		"two PCI functions maintain independent queried firmware state");
+	sRomDeviceId = 0x73bf;
+	success &= Check(amdgpu_firmware_context_load(&context, image,
+		sizeof(image)) == B_OK,
+		"first GPU loads its own option ROM");
+	sRomDeviceId = 0x731f;
+	success &= Check(amdgpu_firmware_context_load(&secondContext, image,
+		sizeof(image)) == B_OK
+		&& secondContext.info.vbios.device_id == 0x731f
+		&& context.info.vbios.device_id == 0x73bf,
+		"second GPU load does not overwrite first GPU firmware identity");
+	amdgpu_pci_device invalidDevice = secondDevice;
+	invalidDevice.pci.vendor_id = 0x1234;
+	success &= Check(amdgpu_firmware_context_init(&secondContext,
+		&invalidDevice) == B_BAD_VALUE
+		&& secondContext.magic == 0
+		&& secondContext.state == AMDGPU_FIRMWARE_UNINITIALIZED
+		&& context.state == AMDGPU_FIRMWARE_LOADED,
+		"failed reinitialization clears only the target context");
+	sRomDeviceId = 0x73bf;
 
 	success &= Check(amdgpu_firmware_context_reset(&context) == B_OK
 		&& amdgpu_firmware_context_init(&context, &device) == B_OK

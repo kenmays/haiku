@@ -10,6 +10,8 @@
 static const uint32 AMDGPU_PSP_FIRMWARE_PROVIDER_MAGIC = 0x41505350;
 static const uint32 AMDGPU_PSP_FIRMWARE_HAIKU_CONTEXT_MAGIC = 0x4150484B;
 
+struct firmware;
+
 /*
  * load() transfers one independently releasable buffer to the caller only
  * when it returns B_OK. On success, data must be non-NULL and size nonzero.
@@ -18,8 +20,8 @@ static const uint32 AMDGPU_PSP_FIRMWARE_HAIKU_CONTEXT_MAGIC = 0x4150484B;
  */
 struct amdgpu_psp_firmware_haiku_context {
 	uint32 magic;
-	const void* sos_handle;
-	const void* asd_handle;
+	const firmware* sos_handle;
+	const firmware* asd_handle;
 };
 
 

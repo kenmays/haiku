@@ -505,7 +505,7 @@ of existing Haiku Radeon drivers unless a deliberate migration is designed.
 
 1. Buildable, non-binding PCI discovery and dormant resource helpers.
 2. Bounded discovery-binary and IP-table parsers (implemented; not yet hardware-wired).
-3. Integrate firmware/ROM providers and validate real binary fixtures (bounded source reader, reference-safe ACPI VFCT provider, and caller-owned per-device VBIOS state machine implemented; real firmware fixtures remain).
+3. Integrate firmware/ROM providers and validate real binary fixtures (bounded discovery source reader, reference-safe ACPI VFCT provider, caller-owned VBIOS state machine, and Vega 10 PSP firmware-filesystem acquisition adapter implemented; real firmware fixtures and authentication policy remain).
 4. Add a real device node and accelerant; the per-function context and reverse-order cleanup coordinator are implemented, but node binding and active hardware initialization remain deferred.
 5. Expand and verify ASIC/IP discovery tables, including revision and subsystem quirks.
 6. Firmware parser and secure firmware loading.
@@ -741,9 +741,12 @@ rejects reload while loaded. Its source allocations remain caller-owned and
 must remain valid until unload; the bundle does not zero or free them. No PSP
 command is issued and no firmware is executed.
 
-This is metadata validation and borrowed-view staging only. Firmware discovery
-from Haiku's firmware filesystem, version/signature policy, PSP ring setup,
-command submission, and hardware execution remain unimplemented and disabled.
+This is metadata validation and borrowed-view staging only. A native Haiku
+firmware-filesystem provider for the Vega 10 SOS and ASD files is now
+implemented in the following acquisition section. Compatibility still
+depends on caller-supplied version ranges; firmware authentication/signature
+policy, PSP ring setup, command submission, and hardware execution remain
+unimplemented and disabled.
 The `amdgpu_psp_firmware_test` target covers valid SOS and ASD metadata,
 malformed sizes/versions/payload ranges, SOS segment bounds, bundle lifecycle,
 and all-or-nothing publication when ASD validation fails. It is registered

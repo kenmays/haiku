@@ -706,9 +706,19 @@ checks that the declared file size equals the supplied firmware size; this
 Haiku parser adds explicit structural bounds checks. It does not claim
 cryptographic authenticity or verify the header CRC field.
 
+The separate `amdgpu_parse_vega10_asd_firmware()` path validates the ASD
+common firmware header and its single contiguous payload. This follows Linux's
+`parse_psp_v1_bin_descriptor()` behavior for ASD: the payload begins at
+`ucode_array_offset_bytes` and has `ucode_size_bytes`; ASD is not parsed as
+an SOS package and has no SYS/SOS segment descriptor. Both parsers currently
+require header version 1.0 and MP0 IP version 9.0, and validate the declared
+file size, header extent, and payload bounds. The CRC field is not verified and
+these checks do not establish firmware authenticity.
+
 This is metadata validation only. Firmware discovery from Haiku's firmware
-filesystem, per-file ASD validation, version policy, PSP ring setup, command
-submission, and hardware execution remain unimplemented and disabled. The
-`amdgpu_psp_firmware_test` target covers valid metadata and malformed sizes,
-versions, payload ranges, and SOS ranges; it is registered but has not been
-run in a native Haiku build environment.
+filesystem, version/signature policy, caller-owned multi-file staging, PSP ring
+setup, command submission, and hardware execution remain unimplemented and
+disabled. The `amdgpu_psp_firmware_test` target covers valid SOS and ASD
+metadata plus malformed sizes, versions, payload ranges, and SOS segment
+ranges; it is registered but has not been run in a native Haiku build
+environment.

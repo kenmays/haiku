@@ -6,8 +6,8 @@
  */
 #include <string.h>
 
-#include <compat/sys/firmware.h>
-#include <compat/sys/haiku-module.h>
+#include <sys/firmware.h>
+#include <sys/haiku-module.h>
 
 #include "amdgpu_psp_firmware_provider.h"
 
@@ -55,7 +55,7 @@ LoadHaikuFirmware(void* cookie, const char* name, const void** data,
 	*data = NULL;
 	*size = 0;
 
-	const void** handleSlot = NULL;
+	const firmware** handleSlot = NULL;
 	if (strcmp(name, "vega10_sos.bin") == 0)
 		handleSlot = &context->sos_handle;
 	else if (strcmp(name, "vega10_asd.bin") == 0)
@@ -93,18 +93,16 @@ ReleaseHaikuFirmware(void* cookie, const void* data, size_t size)
 		|| data == NULL || size == 0)
 		return B_BAD_VALUE;
 
-	const struct firmware** handleSlot = NULL;
+	const firmware** handleSlot = NULL;
 	if (context->asd_handle != NULL) {
-		const struct firmware* firmware
-			= (const struct firmware*)context->asd_handle;
+		const firmware* firmware = context->asd_handle;
 		if (firmware->data == data && firmware->datasize == size)
-			handleSlot = (const struct firmware**)&context->asd_handle;
+			handleSlot = &context->asd_handle;
 	}
 	if (handleSlot == NULL && context->sos_handle != NULL) {
-		const struct firmware* firmware
-			= (const struct firmware*)context->sos_handle;
+		const firmware* firmware = context->sos_handle;
 		if (firmware->data == data && firmware->datasize == size)
-			handleSlot = (const struct firmware**)&context->sos_handle;
+			handleSlot = &context->sos_handle;
 	}
 	if (handleSlot == NULL)
 		return B_BAD_VALUE;

@@ -788,6 +788,6 @@ does not authenticate firmware or submit PSP commands.
 
 The `amdgpu_psp_firmware_provider_test` target injects load and release
 callbacks. It covers the two firmware names, successful load/unload ordering,
-ASD acquisition failure after SOS acquisition, version-policy rejection,
+SOS and ASD acquisition failures, version-policy rejection,
 and retry after a release failure. These tests are registered but have not
 been run in a native Haiku build environment.

@@ -283,8 +283,10 @@ main()
 			smallStagingBuffer, sizeof(smallStagingBuffer)) == B_OK
 		&& amdgpu_vbios_stage_load_callback(&smallStage) == B_BUFFER_OVERFLOW
 		&& !smallStage.loaded
-		&& stagedContext.state == AMDGPU_FIRMWARE_SIZE_KNOWN,
-		"undersized VBIOS staging allocation is rejected before copy");
+		&& stagedContext.state == AMDGPU_FIRMWARE_SIZE_KNOWN
+		&& smallStagingBuffer[0] == 0
+		&& smallStagingBuffer[sizeof(smallStagingBuffer) - 1] == 0,
+		"undersized VBIOS staging allocation is rejected and cleared");
 
 	sMismatchIdentity = true;
 	success &= Check(amdgpu_firmware_context_init(&context, &device) == B_OK

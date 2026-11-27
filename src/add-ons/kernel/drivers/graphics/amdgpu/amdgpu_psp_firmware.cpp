@@ -29,7 +29,6 @@ amdgpu_parse_vega10_psp_firmware(const void* data, size_t size,
 	 * common_firmware_header is 32 bytes; PSP v1.0 adds one
 	 * 12-byte psp_fw_legacy_bin_desc (fw_version, offset, size).
 	 */
-	static const size_t kCommonHeaderSize = 32;
 	static const size_t kPSPv10HeaderSize = 44;
 	static const uint16 kExpectedHeaderMajor = 1;
 	static const uint16 kExpectedHeaderMinor = 0;

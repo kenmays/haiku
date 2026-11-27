@@ -16,6 +16,7 @@ KernelAddon amdgpu :
 	amdgpu_vfct_module.cpp
 	amdgpu_firmware_context.cpp
 	amdgpu_vbios_stage.cpp
+	amdgpu_psp_firmware.cpp
 	amdgpu_init_sequence.cpp
 	amdgpu_vega10_profile.cpp
 	amdgpu_vega10_registers.cpp

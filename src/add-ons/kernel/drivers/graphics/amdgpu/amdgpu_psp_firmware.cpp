@@ -192,8 +192,9 @@ amdgpu_psp_firmware_bundle_load(amdgpu_psp_firmware_bundle* bundle,
 	bundle->sys.data = sosBytes + sosInfo.payload_offset
 		+ sosInfo.sys_offset;
 	bundle->sys.size = sosInfo.sys_size;
-	bundle->sys.firmware_version = sosInfo.firmware_version;
-	bundle->sys.feature_version = sosInfo.feature_version;
+	/* SYS is a payload prefix; the legacy header has no SYS version field. */
+	bundle->sys.firmware_version = 0;
+	bundle->sys.feature_version = 0;
 
 	bundle->sos.data = sosBytes + sosInfo.payload_offset
 		+ sosInfo.sos_offset;

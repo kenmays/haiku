@@ -28,4 +28,11 @@ struct amdgpu_psp_firmware_info {
 status_t amdgpu_parse_vega10_psp_firmware(const void* data, size_t size,
 	amdgpu_psp_firmware_info* info);
 
+/*
+ * ASD uses a common_firmware_header followed by one contiguous microcode
+ * payload. Its descriptor is not the SOS legacy segment descriptor.
+ */
+status_t amdgpu_parse_vega10_asd_firmware(const void* data, size_t size,
+	amdgpu_psp_firmware_info* info);
+
 #endif

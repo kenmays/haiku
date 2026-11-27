@@ -6,8 +6,8 @@
 
 #include "amdgpu_psp_firmware_provider.h"
 
-static const char* const kSOSFirmwareName = "amdgpu/vega10_sos.bin";
-static const char* const kASDFirmwareName = "amdgpu/vega10_asd.bin";
+static const char* const kSOSFirmwareName = "vega10_sos.bin";
+static const char* const kASDFirmwareName = "vega10_asd.bin";
 
 
 void

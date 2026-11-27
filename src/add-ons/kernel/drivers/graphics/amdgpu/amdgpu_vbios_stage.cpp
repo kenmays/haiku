@@ -33,6 +33,9 @@ amdgpu_vbios_stage_load_callback(void* cookie)
 	if (stage->loaded)
 		return B_BUSY;
 
+	/* A retry starts from a clean, fully bounded staging allocation. */
+	memset(stage->buffer, 0, stage->capacity);
+	stage->image_size = 0;
 	status_t status = amdgpu_firmware_context_query(stage->context);
 	if (status != B_OK)
 		return status;
@@ -42,7 +45,8 @@ amdgpu_vbios_stage_load_callback(void* cookie)
 	status = amdgpu_firmware_context_load(stage->context, stage->buffer,
 		stage->capacity);
 	if (status != B_OK) {
-		/* The context load boundary clears partial provider output. */
+		/* Keep the complete staging allocation free of partial output. */
+		memset(stage->buffer, 0, stage->capacity);
 		stage->image_size = 0;
 		return status;
 	}

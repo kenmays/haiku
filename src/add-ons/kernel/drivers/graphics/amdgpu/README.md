@@ -748,3 +748,31 @@ The `amdgpu_psp_firmware_test` target covers valid SOS and ASD metadata,
 malformed sizes/versions/payload ranges, SOS segment bounds, bundle lifecycle,
 and all-or-nothing publication when ASD validation fails. It is registered
 but has not been run in a native Haiku build environment.
+
+
+### Vega 10 PSP firmware acquisition adapter
+
+`amdgpu_psp_firmware_provider.h/.cpp` adds a callback-based acquisition layer
+for the two upstream Vega 10 PSP 3.1 filenames:
+`amdgpu/vega10_sos.bin` and `amdgpu/vega10_asd.bin`. The adapter requests
+each image independently, transfers ownership only on a successful provider
+callback, validates both containers, and applies the caller-supplied version
+policy before setting its `ready` state. It releases buffers in reverse
+acquisition order. If a release fails, the exact pointer/size ownership record
+is retained and `unload()` can be retried; the associated bundle is cleared
+before any backing allocation is released.
+
+This is deliberately a provider contract, not an implementation of a native
+Haiku firmware filesystem API. Haiku's `firmware_get()/firmware_put()`
+interface inspected here belongs to the FreeBSD network compatibility layer
+and is not linked into this native graphics driver. A future native provider
+must be supplied by a reviewed platform integration; this adapter does not
+open files, allocate kernel memory, authenticate firmware, or submit PSP
+commands. Provider callbacks must run in thread context and must obey the
+ownership contract in the header.
+
+The `amdgpu_psp_firmware_provider_test` target injects load and release
+callbacks. It covers the two firmware names, successful load/unload ordering,
+ASD acquisition failure after SOS acquisition, version-policy rejection,
+and retry after a release failure. These tests are registered but have not
+been run in a native Haiku build environment.

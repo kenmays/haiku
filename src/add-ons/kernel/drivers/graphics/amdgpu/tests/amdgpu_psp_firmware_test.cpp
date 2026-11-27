@@ -45,6 +45,23 @@ BuildFirmware(uint8* data, size_t size)
 }
 
 
+static void
+BuildASDFirmware(uint8* data, size_t size)
+{
+	memset(data, 0, size);
+	WriteLE32(data, (uint32)size);
+	WriteLE32(data + 4, 32);
+	WriteLE16(data + 8, 1);
+	WriteLE16(data + 10, 0);
+	WriteLE16(data + 12, 9);
+	WriteLE16(data + 14, 0);
+	WriteLE32(data + 16, 0x55667788);
+	WriteLE32(data + 20, 96);
+	WriteLE32(data + 24, 64);
+	WriteLE32(data + 28, 0); // CRC is not authenticated by this parser.
+}
+
+
 static bool
 Check(bool condition, const char* name)
 {
@@ -123,6 +140,53 @@ main()
 	success &= Check(amdgpu_parse_vega10_psp_firmware(firmware,
 		sizeof(firmware), &info) == B_BAD_DATA,
 		"header size shorter than PSP v1.0 structure rejected");
+
+	/*
+	 * ASD is a separate common-header image with one contiguous payload.
+	 * It must not be interpreted as the SOS SYS/SOS legacy descriptor.
+	 */
+	uint8 asdFirmware[160];
+	BuildASDFirmware(asdFirmware, sizeof(asdFirmware));
+	success &= Check(amdgpu_parse_vega10_asd_firmware(asdFirmware,
+		sizeof(asdFirmware), &info) == B_OK
+		&& info.firmware_version == 0x55667788
+		&& info.payload_offset == 64 && info.payload_size == 96
+		&& info.sys_size == 0 && info.sos_size == 0
+		&& info.ip_version_major == 9 && info.ip_version_minor == 0,
+		"valid Vega10 ASD common-header image parsed");
+
+	success &= Check(amdgpu_parse_vega10_asd_firmware(asdFirmware, 31,
+		&info) == B_BAD_VALUE,
+		"truncated ASD common header rejected");
+	WriteLE32(asdFirmware, sizeof(asdFirmware) - 1);
+	success &= Check(amdgpu_parse_vega10_asd_firmware(asdFirmware,
+		sizeof(asdFirmware), &info) == B_BAD_DATA,
+		"ASD declared file size mismatch rejected");
+	BuildASDFirmware(asdFirmware, sizeof(asdFirmware));
+	WriteLE32(asdFirmware + 4, 28);
+	success &= Check(amdgpu_parse_vega10_asd_firmware(asdFirmware,
+		sizeof(asdFirmware), &info) == B_BAD_DATA,
+		"ASD undersized header declaration rejected");
+	BuildASDFirmware(asdFirmware, sizeof(asdFirmware));
+	WriteLE16(asdFirmware + 10, 1);
+	success &= Check(amdgpu_parse_vega10_asd_firmware(asdFirmware,
+		sizeof(asdFirmware), &info) == B_BAD_DATA,
+		"unsupported ASD header minor version rejected");
+	BuildASDFirmware(asdFirmware, sizeof(asdFirmware));
+	WriteLE16(asdFirmware + 12, 10);
+	success &= Check(amdgpu_parse_vega10_asd_firmware(asdFirmware,
+		sizeof(asdFirmware), &info) == B_BAD_DATA,
+		"non-Vega10 ASD IP version rejected");
+	BuildASDFirmware(asdFirmware, sizeof(asdFirmware));
+	WriteLE32(asdFirmware + 24, 150);
+	success &= Check(amdgpu_parse_vega10_asd_firmware(asdFirmware,
+		sizeof(asdFirmware), &info) == B_BAD_DATA,
+		"ASD payload offset outside file rejected");
+	BuildASDFirmware(asdFirmware, sizeof(asdFirmware));
+	WriteLE32(asdFirmware + 20, 200);
+	success &= Check(amdgpu_parse_vega10_asd_firmware(asdFirmware,
+		sizeof(asdFirmware), &info) == B_BAD_DATA,
+		"ASD payload extending beyond file rejected");
 
 	if (!success)
 		return 1;

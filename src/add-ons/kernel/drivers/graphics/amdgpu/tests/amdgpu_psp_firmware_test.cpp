@@ -50,7 +50,7 @@ BuildASDFirmware(uint8* data, size_t size)
 {
 	memset(data, 0, size);
 	WriteLE32(data, (uint32)size);
-	WriteLE32(data + 4, 32);
+	WriteLE32(data + 4, 44);
 	WriteLE16(data + 8, 1);
 	WriteLE16(data + 10, 0);
 	WriteLE16(data + 12, 9);
@@ -59,6 +59,7 @@ BuildASDFirmware(uint8* data, size_t size)
 	WriteLE32(data + 20, 96);
 	WriteLE32(data + 24, 64);
 	WriteLE32(data + 28, 0); // CRC is not authenticated by this parser.
+	WriteLE32(data + 32, 0x00030004); // PSP v1.0 legacy feature version
 }
 
 
@@ -150,23 +151,24 @@ main()
 	success &= Check(amdgpu_parse_vega10_asd_firmware(asdFirmware,
 		sizeof(asdFirmware), &info) == B_OK
 		&& info.firmware_version == 0x55667788
+		&& info.feature_version == 0x00030004
 		&& info.payload_offset == 64 && info.payload_size == 96
 		&& info.sys_size == 0 && info.sos_size == 0
 		&& info.ip_version_major == 9 && info.ip_version_minor == 0,
 		"valid Vega10 ASD common-header image parsed");
 
-	success &= Check(amdgpu_parse_vega10_asd_firmware(asdFirmware, 31,
+	success &= Check(amdgpu_parse_vega10_asd_firmware(asdFirmware, 43,
 		&info) == B_BAD_VALUE,
-		"truncated ASD common header rejected");
+		"truncated ASD PSP v1.0 descriptor rejected");
 	WriteLE32(asdFirmware, sizeof(asdFirmware) - 1);
 	success &= Check(amdgpu_parse_vega10_asd_firmware(asdFirmware,
 		sizeof(asdFirmware), &info) == B_BAD_DATA,
 		"ASD declared file size mismatch rejected");
 	BuildASDFirmware(asdFirmware, sizeof(asdFirmware));
-	WriteLE32(asdFirmware + 4, 28);
+	WriteLE32(asdFirmware + 4, 32);
 	success &= Check(amdgpu_parse_vega10_asd_firmware(asdFirmware,
 		sizeof(asdFirmware), &info) == B_BAD_DATA,
-		"ASD undersized header declaration rejected");
+		"ASD header omitting the legacy descriptor rejected");
 	BuildASDFirmware(asdFirmware, sizeof(asdFirmware));
 	WriteLE16(asdFirmware + 10, 1);
 	success &= Check(amdgpu_parse_vega10_asd_firmware(asdFirmware,
@@ -214,7 +216,9 @@ main()
 		&& bundle.sos.firmware_version == 0x10203040
 		&& bundle.sos.feature_version == 0x00010002
 		&& bundle.asd.data == bundleASD + 64
-		&& bundle.asd.size == 96,
+		&& bundle.asd.size == 96
+		&& bundle.asd.firmware_version == 0x55667788
+		&& bundle.asd.feature_version == 0x00030004,
 		"validated bundle exposes independent SYS SOS and ASD views");
 	success &= Check(amdgpu_psp_firmware_bundle_load(&bundle, bundleSOS,
 		sizeof(bundleSOS), bundleASD, sizeof(bundleASD)) == B_BUSY,

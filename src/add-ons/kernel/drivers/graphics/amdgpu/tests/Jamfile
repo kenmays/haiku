@@ -24,6 +24,7 @@ SimpleTest amdgpu_vfct_test :
 SimpleTest amdgpu_firmware_context_test :
 	amdgpu_firmware_context_test.cpp
 	../amdgpu_firmware_context.cpp
+	../amdgpu_vbios_stage.cpp
 	../amdgpu_vbios.cpp
 ;
 

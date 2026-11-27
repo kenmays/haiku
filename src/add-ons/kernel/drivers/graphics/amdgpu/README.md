@@ -706,14 +706,18 @@ checks that the declared file size equals the supplied firmware size; this
 Haiku parser adds explicit structural bounds checks. It does not claim
 cryptographic authenticity or verify the header CRC field.
 
-The separate `amdgpu_parse_vega10_asd_firmware()` path validates the ASD
-common firmware header and its single contiguous payload. This follows Linux's
-`parse_psp_v1_bin_descriptor()` behavior for ASD: the payload begins at
-`ucode_array_offset_bytes` and has `ucode_size_bytes`; ASD is not parsed as
-an SOS package and has no SYS/SOS segment descriptor. Both parsers currently
-require header version 1.0 and MP0 IP version 9.0, and validate the declared
-file size, header extent, and payload bounds. The CRC field is not verified and
-these checks do not establish firmware authenticity.
+The separate `amdgpu_parse_vega10_asd_firmware()` path validates the
+standalone ASD payload but requires the complete PSP v1.0 firmware header:
+the 32-byte common header plus the 12-byte legacy descriptor. This distinction
+matters because Linux's shared `parse_psp_v1_bin_descriptor()` reads
+`sos.fw_version` (the feature-version field at offset 32) even for ASD.
+The ASD payload itself remains contiguous and is described by
+`ucode_array_offset_bytes` and `ucode_size_bytes`; the legacy descriptor's
+SOS offset and size are not used to split ASD. The Haiku parser now extracts
+and exposes that ASD feature version and rejects 32-byte-only headers.
+Both parsers require header version 1.0 and MP0 IP version 9.0, and validate
+the declared file size, full header extent, and payload bounds. The CRC field
+is not verified and these checks do not establish firmware authenticity.
 
 `amdgpu_psp_firmware_bundle` combines the two validated containers without
 allocating or copying memory. It publishes three borrowed views: SYS (the

@@ -95,10 +95,13 @@ amdgpu_parse_vega10_asd_firmware(const void* data, size_t size,
 	amdgpu_psp_firmware_info* info)
 {
 	/*
-	 * Linux parse_psp_v1_bin_descriptor() treats ASD as a common firmware
-	 * header with a single contiguous ucode array, not as an SOS package.
+	 * Linux parses ASD through psp_firmware_header_v1_0. That structure
+	 * includes the common 32-byte header and the 12-byte legacy SOS
+	 * descriptor; parse_psp_v1_bin_descriptor() reads sos.fw_version even
+	 * for standalone ASD images. The ASD payload itself remains one
+	 * contiguous ucode array.
 	 */
-	static const size_t kCommonHeaderSize = 32;
+	static const size_t kPSPv10HeaderSize = 44;
 	static const uint16 kExpectedHeaderMajor = 1;
 	static const uint16 kExpectedHeaderMinor = 0;
 	static const uint16 kVega10MP0Major = 9;
@@ -107,7 +110,7 @@ amdgpu_parse_vega10_asd_firmware(const void* data, size_t size,
 	if (info == NULL)
 		return B_BAD_VALUE;
 	memset(info, 0, sizeof(*info));
-	if (data == NULL || size < kCommonHeaderSize)
+	if (data == NULL || size < kPSPv10HeaderSize)
 		return B_BAD_VALUE;
 
 	const uint8* bytes = (const uint8*)data;
@@ -120,8 +123,9 @@ amdgpu_parse_vega10_asd_firmware(const void* data, size_t size,
 	const uint32 firmwareVersion = ReadLE32(bytes + 16);
 	const uint32 payloadSize = ReadLE32(bytes + 20);
 	const uint32 payloadOffset = ReadLE32(bytes + 24);
+	const uint32 featureVersion = ReadLE32(bytes + 32);
 
-	if (fileSize != size || headerSize < kCommonHeaderSize
+	if (fileSize != size || headerSize < kPSPv10HeaderSize
 		|| headerSize > fileSize || headerMajor != kExpectedHeaderMajor
 		|| headerMinor != kExpectedHeaderMinor
 		|| ipMajor != kVega10MP0Major || ipMinor != kVega10MP0Minor)
@@ -133,6 +137,7 @@ amdgpu_parse_vega10_asd_firmware(const void* data, size_t size,
 		return B_BAD_DATA;
 
 	info->firmware_version = firmwareVersion;
+	info->feature_version = featureVersion;
 	info->payload_offset = payloadOffset;
 	info->payload_size = payloadSize;
 	info->ip_version_major = ipMajor;

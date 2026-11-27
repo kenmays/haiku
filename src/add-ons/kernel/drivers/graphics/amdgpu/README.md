@@ -715,10 +715,19 @@ require header version 1.0 and MP0 IP version 9.0, and validate the declared
 file size, header extent, and payload bounds. The CRC field is not verified and
 these checks do not establish firmware authenticity.
 
-This is metadata validation only. Firmware discovery from Haiku's firmware
-filesystem, version/signature policy, caller-owned multi-file staging, PSP ring
-setup, command submission, and hardware execution remain unimplemented and
-disabled. The `amdgpu_psp_firmware_test` target covers valid SOS and ASD
-metadata plus malformed sizes, versions, payload ranges, and SOS segment
-ranges; it is registered but has not been run in a native Haiku build
-environment.
+`amdgpu_psp_firmware_bundle` combines the two validated containers without
+allocating or copying memory. It publishes three borrowed views: SYS (the
+prefix of the SOS payload), SOS (the descriptor-selected SOS segment), and
+ASD (the separate ASD image payload). Both files must validate before any
+view is published. The bundle has an explicit init/load/unload lifecycle and
+rejects reload while loaded. Its source allocations remain caller-owned and
+must remain valid until unload; the bundle does not zero or free them. No PSP
+command is issued and no firmware is executed.
+
+This is metadata validation and borrowed-view staging only. Firmware discovery
+from Haiku's firmware filesystem, version/signature policy, PSP ring setup,
+command submission, and hardware execution remain unimplemented and disabled.
+The `amdgpu_psp_firmware_test` target covers valid SOS and ASD metadata,
+malformed sizes/versions/payload ranges, SOS segment bounds, bundle lifecycle,
+and all-or-nothing publication when ASD validation fails. It is registered
+but has not been run in a native Haiku build environment.

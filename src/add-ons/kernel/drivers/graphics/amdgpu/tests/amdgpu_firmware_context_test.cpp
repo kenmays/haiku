@@ -9,6 +9,7 @@
 #include <string.h>
 
 static bool sMismatchIdentity = false;
+static bool sChangedRecordMetadata = false;
 static const size_t kTestImageSize = 512;
 static size_t sLoadedImageSize = kTestImageSize;
 static status_t sQueryStatus = B_BUFFER_OVERFLOW;
@@ -111,6 +112,8 @@ amdgpu_load_vbios_for_pci_device(const amdgpu_pci_device* device,
 	*biosSize = sLoadedImageSize;
 	FillInfo(device, info);
 	info->image_size = sLoadedImageSize;
+	if (sChangedRecordMetadata)
+		info->entry_offset++;
 	return B_OK;
 }
 
@@ -231,6 +234,18 @@ main()
 		&& image[0] == 0 && image[kTestImageSize - 1] == 0,
 		"changed identity between query and load rejected and image cleared");
 	sMismatchIdentity = false;
+
+	sChangedRecordMetadata = true;
+	memset(image, 0x5a, sizeof(image));
+	success &= Check(amdgpu_firmware_context_load(&context, image,
+		sizeof(image)) == B_BAD_DATA
+		&& context.state == AMDGPU_FIRMWARE_SIZE_KNOWN
+		&& image[0] == 0 && image[kTestImageSize - 1] == 0,
+		"changed VFCT record metadata between query and load is rejected");
+	sChangedRecordMetadata = false;
+	success &= Check(amdgpu_firmware_context_load(&context, image,
+		sizeof(image)) == B_OK,
+		"firmware load recovers after changed VFCT record is rejected");
 
 	success &= Check(amdgpu_firmware_context_reset(&context) == B_OK
 		&& amdgpu_firmware_context_init(&context, &device) == B_OK

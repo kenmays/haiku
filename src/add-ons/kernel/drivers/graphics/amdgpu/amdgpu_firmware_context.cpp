@@ -55,16 +55,28 @@ status_t
 amdgpu_firmware_context_init(amdgpu_firmware_context* context,
 	const amdgpu_pci_device* device)
 {
-	if (context == NULL || device == NULL)
+	if (context == NULL)
 		return B_BAD_VALUE;
 
+	/*
+	 * Snapshot the candidate before clearing the destination. This also
+	 * supports reinitializing a context from its own device field.
+	 */
+	amdgpu_pci_device candidate;
+	if (device == NULL) {
+		memset(context, 0, sizeof(*context));
+		return B_BAD_VALUE;
+	}
+	candidate = *device;
+	memset(context, 0, sizeof(*context));
+
 	amdgpu_vfct_device identity;
-	status_t status = amdgpu_vfct_device_from_pci_device(device, &identity);
+	status_t status = amdgpu_vfct_device_from_pci_device(&candidate,
+		&identity);
 	if (status != B_OK)
 		return status;
 
-	memset(context, 0, sizeof(*context));
-	context->device = *device;
+	context->device = candidate;
 	context->state = AMDGPU_FIRMWARE_DEVICE_IDENTIFIED;
 	context->magic = AMDGPU_FIRMWARE_CONTEXT_MAGIC;
 	return B_OK;

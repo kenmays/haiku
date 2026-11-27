@@ -703,8 +703,21 @@ SOS segment boundaries from the PSP v1.0 header. The parser follows the
 corresponding common-header and legacy PSP descriptor layout documented in
 Linux `amdgpu_ucode.h`. The upstream generic firmware validation currently
 checks that the declared file size equals the supplied firmware size; this
-Haiku parser adds explicit structural bounds checks. It does not claim
-cryptographic authenticity or verify the header CRC field.
+Haiku parser adds explicit structural bounds checks. The common-header
+`crc32` field is defined by upstream Linux as a CRC32 checksum of the
+firmware payload. However, the generic Linux `amdgpu_ucode_validate()`
+routine in the inspected source checks only that the declared file size
+equals the supplied firmware size; it does not validate this CRC. Haiku
+therefore leaves CRC verification disabled rather than guessing a coverage
+or finalization convention. Neither these structural checks nor the CRC field
+establish firmware authenticity.
+
+The bundle exposes an explicit caller-supplied version policy through
+`amdgpu_psp_firmware_bundle_check_versions()`. It checks inclusive ranges
+for SOS firmware/feature versions and ASD firmware/feature versions. No
+default minimum or maximum versions are guessed: callers must supply bounds
+from a validated firmware/platform compatibility policy before treating a
+bundle as compatible. This check does not authenticate firmware.
 
 The separate `amdgpu_parse_vega10_asd_firmware()` path validates the
 standalone ASD payload but requires the complete PSP v1.0 firmware header:

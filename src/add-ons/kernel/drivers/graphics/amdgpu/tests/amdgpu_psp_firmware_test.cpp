@@ -188,6 +188,48 @@ main()
 		sizeof(asdFirmware), &info) == B_BAD_DATA,
 		"ASD payload extending beyond file rejected");
 
+	/*
+	 * The bundle exposes borrowed SYS/SOS slices from the SOS package and
+	 * the independent ASD payload. The source allocations remain caller-
+	 * owned and must outlive the bundle.
+	 */
+	uint8 bundleSOS[192];
+	uint8 bundleASD[160];
+	BuildFirmware(bundleSOS, sizeof(bundleSOS));
+	BuildASDFirmware(bundleASD, sizeof(bundleASD));
+	amdgpu_psp_firmware_bundle bundle;
+	memset(&bundle, 0, sizeof(bundle));
+	success &= Check(amdgpu_psp_firmware_bundle_load(&bundle, bundleSOS,
+		sizeof(bundleSOS), bundleASD, sizeof(bundleASD)) == B_BAD_VALUE,
+		"uninitialized PSP bundle rejected");
+	amdgpu_psp_firmware_bundle_init(&bundle);
+	success &= Check(amdgpu_psp_firmware_bundle_load(&bundle, bundleSOS,
+		sizeof(bundleSOS), bundleASD, sizeof(bundleASD)) == B_OK
+		&& bundle.loaded && bundle.sys.data == bundleSOS + 64
+		&& bundle.sys.size == 64
+		&& bundle.sos.data == bundleSOS + 128
+		&& bundle.sos.size == 64
+		&& bundle.asd.data == bundleASD + 64
+		&& bundle.asd.size == 96,
+		"validated bundle exposes independent SYS SOS and ASD views");
+	success &= Check(amdgpu_psp_firmware_bundle_load(&bundle, bundleSOS,
+		sizeof(bundleSOS), bundleASD, sizeof(bundleASD)) == B_BUSY,
+		"loaded PSP bundle cannot be overwritten");
+	BuildASDFirmware(bundleASD, sizeof(bundleASD));
+	WriteLE32(bundleASD + 24, 159);
+	success &= Check(amdgpu_psp_firmware_bundle_unload(&bundle) == B_OK
+		&& !bundle.loaded && bundle.sys.data == NULL
+		&& bundle.sos.data == NULL && bundle.asd.data == NULL,
+		"PSP bundle unload clears all borrowed references");
+	amdgpu_psp_firmware_bundle_init(&bundle);
+	success &= Check(amdgpu_psp_firmware_bundle_load(&bundle, bundleSOS,
+		sizeof(bundleSOS), bundleASD, sizeof(bundleASD)) == B_BAD_DATA
+		&& !bundle.loaded && bundle.sys.data == NULL
+		&& bundle.sos.data == NULL && bundle.asd.data == NULL,
+		"invalid ASD prevents publication of a partial firmware bundle");
+	success &= Check(amdgpu_psp_firmware_bundle_unload(&bundle) == B_OK,
+		"empty initialized PSP bundle unload is safe");
+
 	if (!success)
 		return 1;
 	printf("AMDGPU PSP firmware parser tests passed.\n");

@@ -134,8 +134,8 @@ main()
 	success &= Check(amdgpu_psp_firmware_provider_load(&provider, &bundle,
 		&ops, &fake, &policy) == B_OK && provider.ready && bundle.loaded,
 		"both named firmware images load and pass version policy");
-	success &= Check(strcmp(fake.names[0], "amdgpu/vega10_sos.bin") == 0
-		&& strcmp(fake.names[1], "amdgpu/vega10_asd.bin") == 0,
+	success &= Check(strcmp(fake.names[0], "vega10_sos.bin") == 0
+		&& strcmp(fake.names[1], "vega10_asd.bin") == 0,
 		"provider requests upstream Vega10 PSP firmware names");
 	success &= Check(amdgpu_psp_firmware_provider_unload(&provider) == B_OK
 		&& fake.releases == 2 && fake.released[0] == fake.asd

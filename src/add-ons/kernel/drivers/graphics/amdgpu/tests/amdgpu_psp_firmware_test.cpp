@@ -207,8 +207,12 @@ main()
 		sizeof(bundleSOS), bundleASD, sizeof(bundleASD)) == B_OK
 		&& bundle.loaded && bundle.sys.data == bundleSOS + 64
 		&& bundle.sys.size == 64
+		&& bundle.sys.firmware_version == 0
+		&& bundle.sys.feature_version == 0
 		&& bundle.sos.data == bundleSOS + 128
 		&& bundle.sos.size == 64
+		&& bundle.sos.firmware_version == 0x10203040
+		&& bundle.sos.feature_version == 0x00010002
 		&& bundle.asd.data == bundleASD + 64
 		&& bundle.asd.size == 96,
 		"validated bundle exposes independent SYS SOS and ASD views");

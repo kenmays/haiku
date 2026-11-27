@@ -216,6 +216,39 @@ amdgpu_psp_firmware_bundle_load(amdgpu_psp_firmware_bundle* bundle,
 }
 
 
+static bool
+VersionInRange(uint32 version, uint32 minimum, uint32 maximum)
+{
+	return minimum <= maximum && version >= minimum && version <= maximum;
+}
+
+
+status_t
+amdgpu_psp_firmware_bundle_check_versions(
+	const amdgpu_psp_firmware_bundle* bundle,
+	const amdgpu_psp_firmware_version_policy* policy)
+{
+	if (bundle == NULL || bundle->magic != AMDGPU_PSP_FIRMWARE_BUNDLE_MAGIC
+		|| policy == NULL)
+		return B_BAD_VALUE;
+	if (!bundle->loaded || bundle->sos.data == NULL
+		|| bundle->asd.data == NULL)
+		return B_NOT_ALLOWED;
+
+	if (!VersionInRange(bundle->sos.firmware_version,
+			policy->sos_firmware_min, policy->sos_firmware_max)
+		|| !VersionInRange(bundle->sos.feature_version,
+			policy->sos_feature_min, policy->sos_feature_max)
+		|| !VersionInRange(bundle->asd.firmware_version,
+			policy->asd_firmware_min, policy->asd_firmware_max)
+		|| !VersionInRange(bundle->asd.feature_version,
+			policy->asd_feature_min, policy->asd_feature_max))
+		return B_NOT_SUPPORTED;
+
+	return B_OK;
+}
+
+
 status_t
 amdgpu_psp_firmware_bundle_unload(amdgpu_psp_firmware_bundle* bundle)
 {

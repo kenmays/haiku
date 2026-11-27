@@ -143,8 +143,8 @@ main()
 		"header size shorter than PSP v1.0 structure rejected");
 
 	/*
-	 * ASD is a separate common-header image with one contiguous payload.
-	 * It must not be interpreted as the SOS SYS/SOS legacy descriptor.
+	 * ASD has the full PSP v1.0 header (including its legacy descriptor),
+	 * but its payload remains one contiguous image, not split into SYS/SOS.
 	 */
 	uint8 asdFirmware[160];
 	BuildASDFirmware(asdFirmware, sizeof(asdFirmware));
@@ -155,7 +155,7 @@ main()
 		&& info.payload_offset == 64 && info.payload_size == 96
 		&& info.sys_size == 0 && info.sos_size == 0
 		&& info.ip_version_major == 9 && info.ip_version_minor == 0,
-		"valid Vega10 ASD common-header image parsed");
+		"valid Vega10 ASD PSP v1.0 image parsed");
 
 	success &= Check(amdgpu_parse_vega10_asd_firmware(asdFirmware, 43,
 		&info) == B_BAD_VALUE,

@@ -263,6 +263,15 @@ main()
 		"provider releases ACPI table after parse failure");
 	sProviderTable[45] ^= 1;
 
+	/* Reject a non-VFCT signature before interpreting the length field. */
+	sProviderTable[0] = 'X';
+	putsBefore = sPutTableCalls;
+	success &= Check(amdgpu_get_vbios_from_vfct(&fakeACPI, &device,
+		&copiedBIOS[0], copiedBIOS.size(), &copiedBIOSSize, &info)
+		== B_BAD_VALUE && sPutTableCalls == putsBefore + 1,
+		"provider rejects invalid ACPI table signature and releases table");
+	sProviderTable[0] = 'V';
+
 	sFailGetTable = true;
 	putsBefore = sPutTableCalls;
 	success &= Check(amdgpu_get_vbios_from_vfct(&fakeACPI, &device,

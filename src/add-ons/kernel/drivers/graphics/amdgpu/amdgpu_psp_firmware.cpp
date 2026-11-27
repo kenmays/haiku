@@ -145,8 +145,10 @@ amdgpu_parse_vega10_asd_firmware(const void* data, size_t size,
 void
 amdgpu_psp_firmware_bundle_init(amdgpu_psp_firmware_bundle* bundle)
 {
-	if (bundle != NULL)
+	if (bundle != NULL) {
 		memset(bundle, 0, sizeof(*bundle));
+		bundle->magic = AMDGPU_PSP_FIRMWARE_BUNDLE_MAGIC;
+	}
 }
 
 
@@ -154,8 +156,9 @@ status_t
 amdgpu_psp_firmware_bundle_load(amdgpu_psp_firmware_bundle* bundle,
 	const void* sosData, size_t sosSize, const void* asdData, size_t asdSize)
 {
-	if (bundle == NULL || sosData == NULL || asdData == NULL
-		|| sosSize == 0 || asdSize == 0)
+	if (bundle == NULL || bundle->magic != AMDGPU_PSP_FIRMWARE_BUNDLE_MAGIC
+		|| sosData == NULL || asdData == NULL || sosSize == 0
+		|| asdSize == 0)
 		return B_BAD_VALUE;
 	if (bundle->loaded)
 		return B_BUSY;
@@ -210,7 +213,8 @@ amdgpu_psp_firmware_bundle_load(amdgpu_psp_firmware_bundle* bundle,
 status_t
 amdgpu_psp_firmware_bundle_unload(amdgpu_psp_firmware_bundle* bundle)
 {
-	if (bundle == NULL)
+	if (bundle == NULL
+		|| bundle->magic != AMDGPU_PSP_FIRMWARE_BUNDLE_MAGIC)
 		return B_BAD_VALUE;
 	amdgpu_psp_firmware_bundle_init(bundle);
 	return B_OK;

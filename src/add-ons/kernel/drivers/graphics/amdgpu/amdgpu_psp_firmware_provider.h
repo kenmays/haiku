@@ -8,6 +8,7 @@
 #include "amdgpu_psp_firmware.h"
 
 static const uint32 AMDGPU_PSP_FIRMWARE_PROVIDER_MAGIC = 0x41505350;
+static const uint32 AMDGPU_PSP_FIRMWARE_HAIKU_CONTEXT_MAGIC = 0x4150484B;
 
 /*
  * load() transfers one independently releasable buffer to the caller only
@@ -15,6 +16,13 @@ static const uint32 AMDGPU_PSP_FIRMWARE_PROVIDER_MAGIC = 0x41505350;
  * release() must accept exactly the pointer and size returned by load().
  * A failed load must not transfer ownership. Callbacks run in thread context.
  */
+struct amdgpu_psp_firmware_haiku_context {
+	uint32 magic;
+	const void* sos_handle;
+	const void* asd_handle;
+};
+
+
 struct amdgpu_psp_firmware_provider_ops {
 	status_t (*load)(void* cookie, const char* name, const void** data,
 		size_t* size);
@@ -48,5 +56,13 @@ status_t amdgpu_psp_firmware_provider_load(
 	const amdgpu_psp_firmware_version_policy* policy);
 status_t amdgpu_psp_firmware_provider_unload(
 	amdgpu_psp_firmware_provider* provider);
+
+void amdgpu_psp_firmware_haiku_context_init(
+	amdgpu_psp_firmware_haiku_context* context);
+status_t amdgpu_psp_firmware_provider_load_haiku(
+	amdgpu_psp_firmware_provider* provider,
+	amdgpu_psp_firmware_bundle* bundle,
+	amdgpu_psp_firmware_haiku_context* context,
+	const amdgpu_psp_firmware_version_policy* policy);
 
 #endif

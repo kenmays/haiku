@@ -223,6 +223,29 @@ main()
 	success &= Check(amdgpu_psp_firmware_bundle_load(&bundle, bundleSOS,
 		sizeof(bundleSOS), bundleASD, sizeof(bundleASD)) == B_BUSY,
 		"loaded PSP bundle cannot be overwritten");
+
+	amdgpu_psp_firmware_version_policy policy;
+	policy.sos_firmware_min = 0x10203040;
+	policy.sos_firmware_max = 0x10203040;
+	policy.sos_feature_min = 0x00010002;
+	policy.sos_feature_max = 0x00010002;
+	policy.asd_firmware_min = 0x55667788;
+	policy.asd_firmware_max = 0x55667788;
+	policy.asd_feature_min = 0x00030004;
+	policy.asd_feature_max = 0x00030004;
+	success &= Check(amdgpu_psp_firmware_bundle_check_versions(&bundle,
+		&policy) == B_OK,
+		"caller-supplied exact firmware compatibility policy accepted");
+	policy.asd_feature_min++;
+	success &= Check(amdgpu_psp_firmware_bundle_check_versions(&bundle,
+		&policy) == B_NOT_SUPPORTED,
+		"incompatible ASD feature version rejected");
+	policy.asd_feature_min = 0x00030004;
+	policy.sos_firmware_min = 2;
+	policy.sos_firmware_max = 1;
+	success &= Check(amdgpu_psp_firmware_bundle_check_versions(&bundle,
+		&policy) == B_NOT_SUPPORTED,
+		"invalid version interval rejected");
 	BuildASDFirmware(bundleASD, sizeof(bundleASD));
 	WriteLE32(bundleASD + 24, 159);
 	success &= Check(amdgpu_psp_firmware_bundle_unload(&bundle) == B_OK

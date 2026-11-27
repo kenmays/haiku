@@ -125,6 +125,7 @@ static int sGetTableCalls = 0;
 static int sPutTableCalls = 0;
 static bool sFailGetTable = false;
 static bool sReturnNullTable = false;
+static bool sFailPutTable = false;
 
 
 static status_t
@@ -148,7 +149,7 @@ FakePutTable(void* tableHeader)
 		|| tableHeader != &sProviderTable[0]) {
 		return B_BAD_VALUE;
 	}
-	return B_OK;
+	return sFailPutTable ? B_IO_ERROR : B_OK;
 }
 
 
@@ -277,6 +278,22 @@ main()
 		== B_BAD_VALUE && sPutTableCalls == putsBefore + 1,
 		"provider pairs successful null-table result with release attempt");
 	sReturnNullTable = false;
+
+	/* A failed release invalidates both copied bytes and returned metadata. */
+	memset(&copiedBIOS[0], 0x5a, copiedBIOS.size());
+	memset(&info, 0x5a, sizeof(info));
+	copiedBIOSSize = 123;
+	sFailPutTable = true;
+	success &= Check(amdgpu_get_vbios_from_vfct(&fakeACPI, &device,
+		&copiedBIOS[0], copiedBIOS.size(), &copiedBIOSSize, &info)
+		== B_IO_ERROR, "provider propagates ACPI table release failure");
+	bool bufferCleared = true;
+	for (size_t i = 0; i < copiedBIOS.size(); i++)
+		bufferCleared &= copiedBIOS[i] == 0;
+	success &= Check(bufferCleared && copiedBIOSSize == 0
+		&& info.image_size == 0 && info.vendor_id == 0,
+		"failed ACPI release clears image and returned metadata");
+	sFailPutTable = false;
 
 	fakeACPI.put_table = NULL;
 	int getsBefore = sGetTableCalls;

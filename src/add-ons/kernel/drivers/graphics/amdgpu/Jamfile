@@ -3,6 +3,9 @@ SubDir HAIKU_TOP src add-ons kernel drivers graphics amdgpu ;
 UsePrivateHeaders graphics kernel ;
 UsePrivateKernelHeaders ;
 
+UseHeaders [ FDirName $(HAIKU_TOP) src libs compat freebsd_network ] : true ;
+UseHeaders [ FDirName $(HAIKU_TOP) src libs compat freebsd_network compat ] : true ;
+
 KernelAddon amdgpu :
 	driver.cpp
 	pci_device.cpp
@@ -18,6 +21,7 @@ KernelAddon amdgpu :
 	amdgpu_vbios_stage.cpp
 	amdgpu_psp_firmware.cpp
 	amdgpu_psp_firmware_provider.cpp
+	amdgpu_psp_firmware_haiku.cpp
 	amdgpu_init_sequence.cpp
 	amdgpu_vega10_profile.cpp
 	amdgpu_vega10_registers.cpp
@@ -25,6 +29,8 @@ KernelAddon amdgpu :
 	amdgpu_vega10_mmio.cpp
 	amdgpu_vega10_probe.cpp
 	amdgpu_register_aperture.cpp
+	:
+	libfreebsd_network.a
 ;
 
 SubInclude HAIKU_TOP src add-ons kernel drivers graphics amdgpu tests ;

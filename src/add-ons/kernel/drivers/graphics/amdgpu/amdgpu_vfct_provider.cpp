@@ -49,10 +49,17 @@ amdgpu_get_vbios_from_vfct(acpi_table_module_info* acpi,
 		 * the image copy have completed; no pointer into it escapes.
 		 */
 		const uint8* bytes = (const uint8*)table;
-		const uint32 tableSize = ReadLE32(bytes + 4);
-		if (tableSize < 76 || tableSize > kMaximumVFCTTableSize) {
+		/*
+		 * get_table() returns an ACPI table header. Check the signature
+		 * before trusting its declared length or passing it to the parser.
+		 */
+		if (memcmp(bytes, "VFCT", 4) != 0) {
 			status = B_BAD_VALUE;
 		} else {
+			const uint32 tableSize = ReadLE32(bytes + 4);
+			if (tableSize < 76 || tableSize > kMaximumVFCTTableSize) {
+				status = B_BAD_VALUE;
+			} else {
 			amdgpu_vfct_info parsed;
 			status = amdgpu_parse_vfct_table(table, tableSize, device,
 				&parsed);
@@ -71,6 +78,7 @@ amdgpu_get_vbios_from_vfct(acpi_table_module_info* acpi,
 					copiedSize = parsed.image_size;
 					*info = parsed;
 				}
+			}
 			}
 		}
 	}

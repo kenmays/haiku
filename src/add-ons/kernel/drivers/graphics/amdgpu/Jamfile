@@ -24,6 +24,7 @@ KernelAddon amdgpu :
 	amdgpu_psp_firmware_haiku.cpp
 	amdgpu_psp_ring_memory.cpp
 	amdgpu_vega10_memory_layout.cpp
+	amdgpu_vram_range_map.cpp
 	amdgpu_init_sequence.cpp
 	amdgpu_vega10_profile.cpp
 	amdgpu_vega10_registers.cpp

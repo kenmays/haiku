@@ -96,3 +96,8 @@ SimpleTest amdgpu_psp_ring_memory_test :
 	amdgpu_psp_ring_memory_test.cpp
 	../amdgpu_psp_ring_memory.cpp
 ;
+
+SimpleTest amdgpu_vega10_memory_layout_test :
+	amdgpu_vega10_memory_layout_test.cpp
+	../amdgpu_vega10_memory_layout.cpp
+;

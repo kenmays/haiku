@@ -101,3 +101,8 @@ SimpleTest amdgpu_vega10_memory_layout_test :
 	amdgpu_vega10_memory_layout_test.cpp
 	../amdgpu_vega10_memory_layout.cpp
 ;
+
+SimpleTest amdgpu_vram_range_map_test :
+	amdgpu_vram_range_map_test.cpp
+	../amdgpu_vram_range_map.cpp
+;

@@ -91,3 +91,8 @@ SimpleTest amdgpu_psp_firmware_provider_test :
 	../amdgpu_psp_firmware_provider.cpp
 	../amdgpu_psp_firmware.cpp
 ;
+
+SimpleTest amdgpu_psp_ring_memory_test :
+	amdgpu_psp_ring_memory_test.cpp
+	../amdgpu_psp_ring_memory.cpp
+;

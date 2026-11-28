@@ -43,7 +43,7 @@ struct amdgpu_psp_ring_memory {
  * Validate a backend-supplied Vega 10 PSP 3.1 ring allocation.
  *
  * The backend must guarantee a CPU mapping, a valid device-visible address,
- * contiguous VRAM backing, and a mechanism to make CPU writes visible to the
+ * contiguous device-visible VRAM backing, and a mechanism to make CPU writes visible to the
  * PSP before use. Haiku's generic system-memory physical map is not a
  * substitute for a VRAM allocation or a GPU bus address.
  */

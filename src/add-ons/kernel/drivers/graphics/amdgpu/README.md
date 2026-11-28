@@ -817,7 +817,7 @@ address is valid for PSP DMA. Therefore the driver must not treat a
 
 `amdgpu_psp_ring_memory.h/.cpp` now adds a hardware-independent contract
 validator for a future Vega 10 ring backend. It accepts only an exact 4 KiB
-allocation, 4 KiB-aligned GPU address, CPU mapping, contiguous VRAM backing,
+allocation, 4 KiB-aligned GPU address, CPU mapping, device-address-contiguous VRAM backing,
 a valid GPU address, and an explicit device-visibility synchronization
 capability. System-memory allocations and incomplete descriptors are
 rejected. This validator does not allocate or map memory, derive GPU
@@ -826,7 +826,7 @@ or authorize command submission. No PSP ring state is marked ready.
 
 The `amdgpu_psp_ring_memory_test` target covers valid descriptors, system
 RAM rejection, each missing capability, absent CPU mapping, wrong allocation
-size, misaligned addresses, and address-range overflow. It is registered but
+size, misaligned addresses, and the highest aligned address boundary. It is registered but
 has not been run in a native Haiku build environment.
 
 The next prerequisite is a reviewed VRAM/BO allocation and CPU-map path with

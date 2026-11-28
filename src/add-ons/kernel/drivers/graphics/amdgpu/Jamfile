@@ -22,6 +22,7 @@ KernelAddon amdgpu :
 	amdgpu_psp_firmware.cpp
 	amdgpu_psp_firmware_provider.cpp
 	amdgpu_psp_firmware_haiku.cpp
+	amdgpu_psp_ring_memory.cpp
 	amdgpu_init_sequence.cpp
 	amdgpu_vega10_profile.cpp
 	amdgpu_vega10_registers.cpp

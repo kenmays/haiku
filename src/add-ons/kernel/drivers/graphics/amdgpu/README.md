@@ -832,3 +832,35 @@ has not been run in a native Haiku build environment.
 The next prerequisite is a reviewed VRAM/BO allocation and CPU-map path with
 a device-visible address and documented synchronization semantics. Until
 that exists, PSP ring creation and firmware execution remain disabled.
+
+
+### Vega 10 GMC memory-layout metadata
+
+The Vega 10 upstream GMC path obtains total VRAM capacity from NBIO 6.1
+`RCC_CONFIG_MEMSIZE` in MiB. It obtains the inclusive framebuffer MC range
+from MMHUB 1.0 `MC_VM_FB_LOCATION_BASE/TOP`, whose fields are shifted by
+24 bits, and obtains the GPU framebuffer offset from GC 9.0
+`MC_VM_FB_OFFSET`, also shifted by 24 bits. The PCI BAR0 aperture is tracked
+separately as the CPU-visible framebuffer window. Its size is not a substitute
+for total VRAM capacity.
+
+`amdgpu_vega10_memory_layout.h/.cpp` implements a metadata-only validator
+for these independently sourced values. It checks nonzero capacity and BAR
+metadata, 16 MiB register-field alignment, inclusive framebuffer range
+ordering and capacity, and physical BAR0 range overflow. It computes visible
+VRAM as the smaller of total VRAM capacity and the supplied BAR0 aperture.
+It deliberately does not derive a PSP GPU address from BAR0, map VRAM, infer
+a VRAM allocator from the PCI BAR, or program GMC/GART registers.
+
+The caller must obtain the values through reviewed Vega 10 NBIO/MMHUB/GC
+register access. This stage does not read hardware and does not mark GMC
+initialized. The test target covers valid geometry, separate VRAM/aperture
+sizes, aperture capping, alignment, undersized MC ranges, missing BAR
+metadata, and address overflow. Tests are registered but have not been run
+in a native Haiku build environment.
+
+The remaining implementation dependencies are reviewed register definitions
+and access for the three source values, a VRAM manager that accounts for
+firmware/framebuffer reservations, a CPU mapping strategy for visible VRAM,
+and a GPU MC address calculation that matches the programmed hub
+translation. PSP ring allocation and firmware execution remain disabled.

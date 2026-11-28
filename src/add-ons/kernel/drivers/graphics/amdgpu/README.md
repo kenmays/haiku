@@ -864,3 +864,25 @@ and access for the three source values, a VRAM manager that accounts for
 firmware/framebuffer reservations, a CPU mapping strategy for visible VRAM,
 and a GPU MC address calculation that matches the programmed hub
 translation. PSP ring allocation and firmware execution remain disabled.
+
+
+### Bounded VRAM reservation map (metadata only)
+
+`amdgpu_vram_range_map.h/.cpp` adds a caller-storage-backed interval map for
+VRAM-relative offsets. It supports non-overlapping permanent reservations and
+first-fit aligned allocations, with generation-tagged handles for release and
+stale/double-release rejection. Bounds and alignment are checked without
+allocating memory or touching hardware. The intended consumers are future
+firmware, framebuffer, and driver-owned reservations once their VRAM-relative
+extents have been established from trusted hardware/firmware data.
+
+The map deliberately does not interpret offsets as CPU physical addresses,
+BAR offsets, or GPU MC addresses. It does not discover reserved extents,
+create a BO, map VRAM, establish cache policy, synchronize CPU/device access,
+or provide concurrency protection; callers must serialize access and keep the
+caller-owned range storage alive. A successful allocation is only a logical
+reservation in this metadata map and is not yet a usable GPU allocation. The
+test target covers reservation overlap, capacity bounds, aligned first-fit
+placement, adjacent allocations, release/reuse, stale handles, and invalid
+alignment. It is registered but has not been run in a native Haiku build
+environment.

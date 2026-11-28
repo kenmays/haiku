@@ -794,3 +794,41 @@ callbacks. It covers the two firmware names, successful load/unload ordering,
 SOS and ASD acquisition failures, version-policy rejection,
 and retry after a release failure. These tests are registered but have not
 been run in a native Haiku build environment.
+
+
+### Vega 10 PSP 3.1 ring-memory contract
+
+The upstream Linux Vega 10 PSP 3.1 path allocates a 4 KiB kernel-mode PSP
+ring from the VRAM domain, keeps both a CPU mapping and a GPU/MC address, and
+programs the address and size through the PSP mailbox before requesting ring
+creation. The ring is not just an arbitrary host buffer. The PSP command path
+writes ring frames through the CPU mapping, while the PSP consumes the same
+storage through the device-visible address.
+
+Haiku exposes generic memory primitives such as `create_area()`,
+`get_memory_map()`, `get_memory_map_etc()`, and
+`map_physical_memory()`. The existing NVIDIA and Radeon code demonstrates
+system-memory contiguous-area techniques, and NVMe uses locked-memory
+physical-entry lists. Those interfaces do not, by themselves, allocate GPU
+VRAM, provide an AMD GPU MC address, or establish that a system physical
+address is valid for PSP DMA. Therefore the driver must not treat a
+`B_32_BIT_CONTIGUOUS` system area or the first entry from
+`get_memory_map()` as a PSP ring allocation.
+
+`amdgpu_psp_ring_memory.h/.cpp` now adds a hardware-independent contract
+validator for a future Vega 10 ring backend. It accepts only an exact 4 KiB
+allocation, 4 KiB-aligned GPU address, CPU mapping, contiguous VRAM backing,
+a valid GPU address, and an explicit device-visibility synchronization
+capability. System-memory allocations and incomplete descriptors are
+rejected. This validator does not allocate or map memory, derive GPU
+addresses, synchronize caches, program PSP mailbox registers, create a ring,
+or authorize command submission. No PSP ring state is marked ready.
+
+The `amdgpu_psp_ring_memory_test` target covers valid descriptors, system
+RAM rejection, each missing capability, absent CPU mapping, wrong allocation
+size, misaligned addresses, and address-range overflow. It is registered but
+has not been run in a native Haiku build environment.
+
+The next prerequisite is a reviewed VRAM/BO allocation and CPU-map path with
+a device-visible address and documented synchronization semantics. Until
+that exists, PSP ring creation and firmware execution remain disabled.

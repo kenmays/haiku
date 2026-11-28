@@ -32,7 +32,8 @@ status_t
 amdgpu_vram_range_map_init(amdgpu_vram_range_map* map, uint64 capacity,
 	amdgpu_vram_range* storage, uint32 storageCount)
 {
-	if (map == NULL || storage == NULL || capacity == 0 || storageCount == 0)
+	if (map == NULL || storage == NULL || capacity == 0 || storageCount == 0
+		|| (size_t)storageCount > (size_t)-1 / sizeof(amdgpu_vram_range))
 		return B_BAD_VALUE;
 
 	memset(storage, 0, sizeof(amdgpu_vram_range) * storageCount);

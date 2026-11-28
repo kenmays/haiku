@@ -76,9 +76,10 @@ main()
 		== B_BAD_VALUE, "rejects a misaligned GPU address");
 	memory.gpu_address--;
 
-	memory.gpu_address = UINT64_MAX & ~(uint64)(AMDGPU_PSP_VEGA10_RING_ALIGNMENT - 1);
-	success &= Check(amdgpu_psp_validate_vega10_ring_memory(&memory)
-		== B_BAD_VALUE, "rejects a GPU address range that wraps");
+	memory.gpu_address = UINT64_MAX
+		& ~(uint64)(AMDGPU_PSP_VEGA10_RING_ALIGNMENT - 1);
+	success &= Check(amdgpu_psp_validate_vega10_ring_memory(&memory) == B_OK,
+		"accepts the highest aligned 4 KiB address without range wrap");
 	memory.gpu_address = 0x100000;
 
 	memory.capabilities |= 1u << 31;
